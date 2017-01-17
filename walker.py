@@ -3,11 +3,48 @@ A GdbWalker class that produces an iterator over something to be part of a
 pipeline.
 
 '''
+
+import enum
 import gdb
 import abc
-import enum
+import re
 
 gdb.walkers = {}
+
+# This is just the first guess, 
+uintptr_t = gdb.lookup_type('unsigned long')
+def find_ptr_t():
+    '''
+    Find the equivalent of uintptr_t and store it in the global namespace.
+
+    '''
+    # We need the size of a pointer in order to do pointer arithmetic.
+    #
+    # Because the size of a pointer is not known until we are connected to a
+    # process, and gdb can switch between processes, we need to update the
+    # current uintptr_t object we have each time Pipeline is called.
+    global uintptr_t
+    # Note, we can't rely on every program including "stdint.h", so we have a
+    # little logic to find the size of a pointer here.
+    try:
+        uintptr_t = gdb.lookup_type('uintptr_t')
+        # TODO should make the below except clause only trigger if the error
+        # was because uintptr_t could not be found.
+    except gdb.error:
+        pointer_size = int(gdb.parse_and_eval('sizeof(char *)'))
+        int_type = gdb.lookup_type('unsigned int')
+        long_type = gdb.lookup_type('unsigned long')
+        if int_type.sizeof == pointer_size:
+            uintptr_t = int_type
+        elif long_type.sizeof == pointer_size:
+            uintptr_t = long_type
+        else:
+            # TODO I *should* think more about this -- I have the feeling I'm
+            # missing a lot of cases and that it's likely to break in many special
+            # cases.
+            # On the other hand, I can't see it being a problem soon, and hence
+            # can't see this being a priority soon.
+            raise GdbWalkerError('Failed to find size of pointer type')
 
 
 class GdbWalkerError(gdb.GdbError):
@@ -23,18 +60,44 @@ class GdbWalkerValueError(GdbWalkerError):
 class Pipeline(gdb.Command):
     '''
     `pipe` command to string multiple commands together.
+
+    Usage:
+        pipe walker1 | walker2 | walker3 ...
+
+    Use:
+        (gdb) python print([name for name in gdb.walkers])
+    to see what walkers are available.
+
+    Use:
+        (gdb) python print(gdb.walkers[name].__doc__)
+    to show the help for that walker.
     '''
     def __init__(self):
         super(Pipeline, self).__init__('pipe', gdb.COMMAND_USER)
-        # Make this a parameter set inside gdb
-        self.default = 'address'
+        # TODO Make this a parameter you can set inside gdb
+        self.default = 'eval'
 
     def create_walker(self, walker_def, first=False, last=False):
+        '''
+        Find walker called for by walker_def, initialise it with the walker_def
+        arguments.
+
+        Treat the first word in a walker definition as the walker name.
+        Look up the walker registered under that name, if it exists then use
+        that walker, otherwise put the first word back into the walker
+        arguments and use the default walker.
+
+        When initialising the walker, tell it if it is the first walker and/or
+        if it's the last walker.
+
+        '''
         command_split = walker_def.strip().split(None, maxsplit=1)
+
+        assert(len(command_split) <= 2)
         walker_name = command_split[0]
         args = command_split[1] if len(command_split) == 2 else ''
 
-        # Default walker is to get the address
+        # Default walker is to evaluate the expression
         if walker_name not in gdb.walkers:
             args = walker_name + ' ' + args
             walker_name = self.default
@@ -45,26 +108,49 @@ class Pipeline(gdb.Command):
                                       'an output and has been put somewhere '
                                       'where this is not given to it.'.format(
                                           walker_name))
-        if walker.require_args and not args:
-            raise GdbWalkerValueError('Walker "{}" requires arguments.'.format(
-                walker_name))
-
         # May raise GdbWalkerValueError if the walker doesn't like the arguments
         # it's been given.
-        return walker(args, first, last)
+        return walker(args if args else None, first, last)
 
     def connect_pipe(self, source, segments, drain):
+        '''
+        Each walker in the pipe is called with the iterator returned by its
+        predecessor.
+
+        Return the iterator that the last walker returns.
+
+        '''
+        # If there is one element in the pipe, we are given
+        # source=element, segments=[], drain=None
+        #
+        # If there are two elements in the pipe, we are given
+        # source=first, segments=[], drain=second
+        #
+        # Otherwise we are given
+        # source=first, segments=[rest], drain=last
+
         walker = source.make_iter(inpipe=[])
         if not segments and not drain:
             return walker
+
         for segment in segments:
             walker = segment.make_iter(inpipe=walker)
-        if drain:
-            walker = drain.make_iter(inpipe=walker)
 
+        walker = drain.make_iter(inpipe=walker)
         return walker
 
     def invoke(self, arg, from_tty):
+        '''
+        Split our arguments into walker definitions.
+        Instantiate the walkers with these definitions.
+        Join the walkers together.
+
+        Iterate over all elements coming out the end of the pipe, printing them
+        out as a hex value to screen.
+        '''
+        # Call the global function to register the current uintptr_t type in
+        # the global namespace.
+        find_ptr_t()
         # XXX allow escaped `|` chars to be used in segments.
         self.dont_repeat()
         args = arg.split('|')
@@ -78,12 +164,15 @@ class Pipeline(gdb.Command):
 
         pipeline_end = self.connect_pipe(first_val, middle, end)
 
-        # element should be an gdb.Value of type address
+        # element should be an integer
         for element in pipeline_end:
             print(hex(element))
 
 
 # TODO
+#    Make the helper functions in GdbWalker() classmethods.
+#       It just makes more sense that people can use them without instantiating
+#       anything.
 #    ArrayWalker should be able to take a terminating condition.
 #        at least should be able to say NULL terminate instead of providing a
 #        count
@@ -96,8 +185,8 @@ class Pipeline(gdb.Command):
 #    Error messages are stored in the class.
 #    Help is stored in docstring
 #    Tags for searching amongst walkers are stored in self.tags
-#    Pass dictionaries instead of just an address
-#        Each dictionary should have an 'address' element, but can include other
+#    Pass dictionaries instead of just an integer
+#        Each dictionary should have a 'point' element, but can include other
 #        data.
 #    Maybe make_iter should wrap the iter_def() call with a function that
 #    ensures every element in the iterator is a gdb.Value with type 'char_u *'
@@ -108,7 +197,6 @@ class Pipeline(gdb.Command):
 #        During instantiation or when called?
 #
 
-
 def register_walker(walker_class):
     if gdb.walkers.setdefault(walker_class.name, walker_class) != walker_class:
         raise GdbWalkerExistsError('A walker with the name "{}" already '
@@ -117,13 +205,27 @@ def register_walker(walker_class):
 
 class GdbWalker(abc.ABC):
     '''
+    Class for a walker type.
+
+    These walkers should be registered with register_walker() so that they can
+    be used with the `pipe` command.
+
+    Each walker class is instantiated with the arguments given to it as a
+    string, and two parameters indicating whether it is first or last in a
+    pipeline (it can be both).
+
+    A walker is required to implement the method `iter_def(self, inpipe)`.
+    This method is passed the previous iterator as `inpipe` (this may be None
+    if the walker is first in a command line). 
+    It is required to return an iterator over python integers.
+    These integers usually represent addresses in the program space.
+
     '''
     require_input = False
     require_output = False
-    require_args = True
 
     @abc.abstractmethod
-    def __init__(self, args, flags):
+    def __init__(self, args, first, last):
         pass
 
     @abc.abstractmethod
@@ -133,32 +235,67 @@ class GdbWalker(abc.ABC):
     def make_iter(self, inpipe, flags={}):
         '''
         '''
+        # Shouldn't be needed -- self.iter_def() should always return an
+        # iterator...
         if self.require_input and not inpipe:
             raise GdbWalkerValueError(self.name + ' requires input from a pipe')
         return self.iter_def(inpipe)
 
-    # In the future this will remove escaped backslashes and evaluate everything
-    # inside a $() brace. For now it just splits the string
-    def parse_args(self, args, nargs=None, split_string=None,
+    @staticmethod
+    def eval_int(description):
+        '''
+        Return the integer value of `description`
+
+        This is to be used over `int(gdb.parse_and_eval(description))` to
+        account for the given description being a symbol.
+
+        '''
+        return int(gdb.parse_and_eval(description).cast(uintptr_t))
+
+    @classmethod
+    def eval_user_expressions(cls, string):
+        return_parts = []
+        # TODO Make this a 'proper' parser -- for now I just hope no-one's
+        # using '#' characters in their gdb expressions.
+        pattern = r'\$#([^#]*)#'
+        prev_end = 0
+        for match in re.finditer(pattern, string):
+            return_parts.append(string[prev_end:match.start()])
+            return_parts.append(hex(cls.eval_int(match.group(1))))
+            prev_end = match.end()
+
+        return_parts.append(string[prev_end:])
+        return ''.join(return_parts)
+
+    @classmethod
+    def parse_args(cls, args, nargs=None, split_string=None,
                    strip_whitespace=True, maxsplit=-1):
+        if not args: return []
+        # Replace ${} covered expressions in the string with gdb 
+        args = cls.eval_user_expressions(args)
+
+        # TODO Ignore escaped versions of split_string, then remove the escape
+        # characters (i.e. backslashes) after splitting.
         retval = args.split(split_string, maxsplit)
         argc = len(retval)
         if nargs is not None and (argc < nargs[0] or argc > nargs[1]):
             raise GdbWalkerValueError('Walker "{}" takes between {} and {} '
-                                      'arguments.'.format(self.name, nargs[0],
+                                      'arguments.'.format(cls.name, nargs[0],
                                                           nargs[1]))
         if strip_whitespace:
             retval = [val.strip() for val in retval]
         return retval
 
-    def parse_command_template(self, args):
-        cmd_parts = self.parse_args(args, None, '{}', False)
+    @classmethod
+    def parse_command_template(cls, args):
+        cmd_parts = cls.parse_args(args, None, '{}', False)
         if len(cmd_parts) == 1:
             cmd_parts[0] += ' '
             cmd_parts.append('')
         return cmd_parts
 
-    def form_command(self, cmd_parts, element):
+    @staticmethod
+    def form_command(cmd_parts, element):
         addr_str = '{}'.format(hex(int(element)))
         return addr_str.join(cmd_parts)
 
@@ -167,7 +304,7 @@ class EvalWalker(GdbWalker):
     '''
     Parse args as a gdb expression.
 
-    Replaces occurances of `{}` in the argument string with the addresses from a
+    Replaces occurances of `{}` in the argument string with the values from a
     previous walker.
     Parses the resulting gdb expression, and outputs the value to the next
     walker.
@@ -175,19 +312,21 @@ class EvalWalker(GdbWalker):
     If `{}` does not appear in the argument string, takes no input and outputs
     one value.
 
+    Use:
+        eval  <gdb expression>
+
+    Example:
+        eval  {} + 8
+        eval ((struct complex_type *){})->field
+
     '''
 
-    name = 'address'
+    name = 'eval'
 
     def __init__(self, args, first, last):
         # XXX allow escaping '{}' here
         if first:
-            self.command_parts = self.parse_args(args, None, '{}', False)
-            if len(self.command_parts) != 1:
-                raise GdbWalkerValueError("Can't have input position in "
-                                          "address walker when it's the "
-                                          "first walker")
-
+            self.command_parts = self.parse_args(args, [1, 1], '{}', False)
             self.__iter_helper = self.__iter_without_input
             return
 
@@ -195,25 +334,33 @@ class EvalWalker(GdbWalker):
         self.__iter_helper = self.__iter_with_input
 
     def __iter_without_input(self, _):
-        yield int(gdb.parse_and_eval(self.command_parts[0]))
+        yield self.eval_int(self.command_parts[0])
 
     def __iter_with_input(self, inpipe):
         for element in inpipe:
-            yield int(gdb.parse_and_eval(
-                self.form_command(self.command_parts, element)))
+            yield self.eval_int(self.form_command(self.command_parts, element))
 
     def iter_def(self, inpipe):
         return self.__iter_helper(inpipe)
 
-class PrintWalker(GdbWalker):
+
+class ShowWalker(GdbWalker):
     '''
     Parse the expression as a gdb command, and print its output.
 
     This must have input, and it re-uses that input as its output.
     If this is the last command it doesn't output anything.
 
+    Use:
+        show <gdb command>
+
+    Example:
+        show print {}
+        show print (char *){}
+        show print ((struct complex_type *){})->field
+
     '''
-    name = 'print'
+    name = 'show'
     require_input = True
 
     def __init__(self, args, _, last):
@@ -227,6 +374,7 @@ class PrintWalker(GdbWalker):
             print(gdb_output, end='')
             if not self.is_last:
                 yield element
+
 
 class InstructionWalker(GdbWalker):
     '''
@@ -242,22 +390,27 @@ class InstructionWalker(GdbWalker):
     If we're first in the pipeline, `start-address` is required, otherwise it is
     assumed to be the address given to us in the previous pipeline.
 
+    Example:
+        instructions main, main+10
+        instructions main, NULL, 100
+        // A pointless reimplementation of `disassemble`
+        pipe instructions main, NULL, 10 | show x/i {}
+
     '''
     name = 'instructions'
 
     def __init__(self, args, first, _):
-        cmd_parts = [gdb.parse_and_eval(val) if val != 'NULL' else 'NULL'
-                     for val in
+        cmd_parts = [val for val in
                      self.parse_args(args, [2,3] if first else [1,2], ',')]
         # TODO Find a way to get the architecture without requiring the program
         # to be running.
         frame = gdb.selected_frame()
         self.arch = frame.architecture()
 
-        if first: self.start_address = int(cmd_parts.pop(0))
+        if first: self.start_address = self.eval_int(cmd_parts.pop(0))
         end = cmd_parts.pop(0)
-        self.end_address = None if end == 'NULL' else int(end)
-        self.count = int(cmd_parts.pop(0)) if cmd_parts else None
+        self.end_address = None if end == 'NULL' else self.eval_int(end)
+        self.count = self.eval_int(cmd_parts.pop(0)) if cmd_parts else None
 
     def disass(self, start_address):
         '''
@@ -288,7 +441,6 @@ class InstructionWalker(GdbWalker):
                     yield instruction['addr']
 
 
-
 class IfWalker(GdbWalker):
     '''
     Reproduces items that satisfy a condition.
@@ -300,6 +452,7 @@ class IfWalker(GdbWalker):
 
     Example:
         if $_streq("Hello", (char_u *){})
+        if ((complex_type *){}).field == 10
 
     '''
     name = 'if'
@@ -311,7 +464,7 @@ class IfWalker(GdbWalker):
     def iter_def(self, inpipe):
         for element in inpipe:
             command = self.form_command(self.command_parts, element)
-            if int(gdb.parse_and_eval(command)):
+            if self.eval_int(command):
                 yield element
 
 
@@ -319,7 +472,7 @@ class HeadWalker(GdbWalker):
     '''
     Only take first `N` items of the pipeline.
 
-    Usage;
+    Usage:
        head [N]
 
     '''
@@ -327,7 +480,9 @@ class HeadWalker(GdbWalker):
     require_input = True
 
     def __init__(self, args, *_):
-        self.limit = int(self.parse_args(args, [1, 1])[0])
+        # Use eval_int() so  user can use variables from the inferior without
+        # having to wrap them in $##.
+        self.limit = self.eval_int(self.parse_args(args, [1, 1])[0])
 
     def iter_def(self, inpipe):
         for count, element in enumerate(inpipe):
@@ -348,12 +503,35 @@ class TailWalker(GdbWalker):
     require_input = True
 
     def __init__(self, args, *_):
-        self.limit = int(self.parse_args(args, [1, 1])[0])
+        self.limit = self.eval_int(self.parse_args(args, [1, 1])[0])
 
     def iter_def(self, inpipe):
         all_elements = list(inpipe)
         for element in all_elements[-self.limit:]:
             yield element
+
+
+class CountWalker(GdbWalker):
+    '''
+    Count how many elements were in the previous walker.
+
+    Usage:
+        count
+
+    Example:
+        pipe instructions main, main+100 | count
+
+    '''
+    name = 'count'
+    require_input = True
+
+    def __init__(self, args, *_):
+        pass
+
+    def iter_def(self, inpipe):
+        for i, _ in enumerate(inpipe):
+            pass
+        yield i + 1
 
 
 class ArrayWalker(GdbWalker):
@@ -362,32 +540,35 @@ class ArrayWalker(GdbWalker):
 
     Usage:
         If this is the first walker:
-            array type start_address count
+            array type, start_address, count
 
         Otherwise:
-            array type count
+            array type, count
+
+    Example:
+        array char *, argv, argc
 
     '''
     name = 'array'
 
     def __init__(self, args, first, _):
         if first:
-            typename, start_addr, count = self.parse_args(args, [3, 3])
-            self.start_addr = int(start_addr)
+            typename, start_addr, count = self.parse_args(args, [3, 3], ',')
+            self.start_addr = self.eval_int(start_addr)
             self.__iter_helper = self.__iter_first
         else:
-            typename, count = self.parse_args(args, [2, 2])
+            typename, count = self.parse_args(args, [2, 2], ',')
             self.start_addr = None
             self.__iter_helper = self.__iter_pipe
 
+        # TODO This is hacky, and we don't handle char[], &char that users
+        # might like to use.
         if typename.find('*') != -1:
-            # TODO This is hacky, and we don't handle char[], &char that users
-            # might like to use.
-            self.element_size = gdb.lookup_type('char').pointer().sizeof
+            self.element_size = uintptr_t.sizeof
         else:
             self.element_size = gdb.lookup_type(typename).sizeof
 
-        self.count = int(count)
+        self.count = self.eval_int(count)
 
     def __iter_first(self, _):
         num_left = self.count
@@ -405,30 +586,58 @@ class ArrayWalker(GdbWalker):
     def iter_def(self, inpipe):
         return self.__iter_helper(inpipe)
 
-# class NextWalker(GdbWalker):
-#     '''
-#     Uses given expression to find 'next' address.
 
-#     Follows these 'next' expressions until we get a NULL value.
+class TerminatedWalker(GdbWalker):
+    '''
+    Uses given expression to find the "next" pointer in a sequence, follows
+    this expression until a terminating value is reached.
+    The terminating value is determined by checking if a `test-expression`
+    returns true.
 
-#     '''
+    Usage:
+        follow-until <test-expression>, <follow-expression>
+        follow-until start-addr, <test-expression>, <follow-expression>
 
-# class WalkerFilter(GdbWalker):
-#     def __init__(self):
-#         super(GdbWalker, self).__init__('if', {
-#             require_input=True,
-#             require_output=False,
-#             num_args='*'
-#         })
+    Example:
+        follow-until argv, *{} == 0, {} + sizeof(char **)
+        pipe eval *(char **)argv \\
+            | follow-until *(char *){} == 0, {} + sizeof(char) \\
+            | show x/c {}
 
-#     def setup(self, args):
+    '''
+    name = 'follow-until'
+
+    def __init__(self, args, first, _):
+        if first:
+            start, test_expr, follow_expr = self.parse_args(args, [3, 3], ',')
+            self.start = self.eval_int(start)
+        else:
+            test_expr, follow_expr = self.parse_args(args, [2, 2], ',')
+            self.start = None
+        
+        # Here we split the arguments into something that will form the
+        # arguments next.
+        self.test_cmd = self.parse_command_template(test_expr)
+        self.follow_cmd = self.parse_command_template(follow_expr)
+
+    def follow_to_termination(self, start):
+        while self.eval_int(self.form_command(self.test_cmd, start)) == 0:
+            yield start
+            start = self.eval_int(self.form_command(self.follow_cmd, start))
+
+    def iter_def(self, inpipe):
+        if self.start:
+            assert not inpipe
+            yield from self.follow_to_termination(self.start)
+        else:
+            for element in inpipe:
+                yield from self.follow_to_termination(element)
 
 
-#     def __iter__(self,
-#         retval = gdb.parse_and_eval(args)
 
-for walker in [EvalWalker, PrintWalker, InstructionWalker, HeadWalker,
-               TailWalker, IfWalker, ArrayWalker]:
+for walker in [EvalWalker, ShowWalker, InstructionWalker, HeadWalker,
+               TailWalker, IfWalker, ArrayWalker, CountWalker, TerminatedWalker]:
     register_walker(walker)
+
 
 Pipeline()
