@@ -14,7 +14,7 @@ import gdb
 import subprocess as sp
 
 class ShellPipe(gdb.Command):
-    '''
+    '''Pass the output of a gdb command into a shell command.
     `shellpipe` pipes the output of a gdb command into a shell command.
 
     '''

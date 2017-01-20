@@ -58,7 +58,8 @@ class GdbWalkerValueError(GdbWalkerError):
 
 
 class Pipeline(gdb.Command):
-    '''
+    '''Combine logical filters to work on many addresses in sequence.
+
     `pipe` command to string multiple commands together.
 
     Usage:

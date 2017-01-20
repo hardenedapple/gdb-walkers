@@ -3,7 +3,8 @@ import subprocess as sp
 import re
 
 class AttachMatching(gdb.Command):
-    '''
+    '''Attach to a process whose arguments match a regular expression.
+
     `attach-matching` searches for processes whose command line matches an
     argument. If there is only one matching process, attach to it, otherwise
     print out the process ID's and command lines of each process.
