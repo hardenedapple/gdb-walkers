@@ -166,6 +166,9 @@ class Pipeline(gdb.Command):
         pipeline_end = self.connect_pipe(first_val, middle, end)
 
         # element should be an integer
+        if pipeline_end is None:
+            return
+
         for element in pipeline_end:
             print(hex(element))
 
@@ -197,6 +200,14 @@ class Pipeline(gdb.Command):
 #    first/last?
 #        During instantiation or when called?
 #
+#    Rename everything to match the functional paradigm? The question is really
+#    what names would be most helpful for me (or anyone else) when searching
+#    for a walker that matches my needs?
+#       eval => map
+#       if   => filter
+#       I could have double names for some -- I would just need to change
+#       register_walker so that it checks for 'name' and 'functional_name'
+#       items in the class.
 
 def register_walker(walker_class):
     if gdb.walkers.setdefault(walker_class.name, walker_class) != walker_class:
@@ -287,14 +298,6 @@ class GdbWalker(abc.ABC):
             retval = [val.strip() for val in retval]
         return retval
 
-    @classmethod
-    def parse_command_template(cls, args):
-        cmd_parts = cls.parse_args(args, None, '{}', False)
-        if len(cmd_parts) == 1:
-            cmd_parts[0] += ' '
-            cmd_parts.append('')
-        return cmd_parts
-
     @staticmethod
     def form_command(cmd_parts, element):
         addr_str = '{}'.format(hex(int(element)))
@@ -318,7 +321,8 @@ class EvalWalker(GdbWalker):
 
     Example:
         eval  {} + 8
-        eval ((struct complex_type *){})->field
+        eval  {} != 0 && ((struct complex_type *){})->field
+        eval  $saved_var->field
 
     '''
 
@@ -331,7 +335,7 @@ class EvalWalker(GdbWalker):
             self.__iter_helper = self.__iter_without_input
             return
 
-        self.command_parts = self.parse_command_template(args)
+        self.command_parts = self.parse_args(args, None, '{}', False)
         self.__iter_helper = self.__iter_with_input
 
     def __iter_without_input(self, _):
@@ -366,7 +370,7 @@ class ShowWalker(GdbWalker):
 
     def __init__(self, args, _, last):
         self.is_last = last
-        self.command_parts = self.parse_command_template(args)
+        self.command_parts = self.parse_args(args, None, '{}', False)
 
     def iter_def(self, inpipe):
         for element in inpipe:
@@ -454,13 +458,14 @@ class IfWalker(GdbWalker):
     Example:
         if $_streq("Hello", (char_u *){})
         if ((complex_type *){}).field == 10
+        if $count++ < 10
 
     '''
     name = 'if'
     require_input = True
 
     def __init__(self, args, *_):
-        self.command_parts = self.parse_command_template(args)
+        self.command_parts = self.parse_args(args, None, '{}', False)
 
     def iter_def(self, inpipe):
         for element in inpipe:
@@ -536,18 +541,17 @@ class CountWalker(GdbWalker):
 
 
 class ArrayWalker(GdbWalker):
-    '''
-    Iterate over each element in an array.
+    '''Iterate over each element in an array.
 
     Usage:
         If this is the first walker:
-            array type, start_address, count
+            array type; start_address; count
 
         Otherwise:
-            array type, count
+            array type; count
 
     Example:
-        array char *, argv, argc
+        array char *; argv; argc
 
     '''
     name = 'array'
@@ -588,6 +592,49 @@ class ArrayWalker(GdbWalker):
         return self.__iter_helper(inpipe)
 
 
+class UntilWalker(GdbWalker):
+    '''Accept and pass through elements until a condition is broken.
+
+    Can't be the first walker.
+
+    Usage:
+        pipe ... | take-while ((struct *){})->field != marker
+
+    '''
+    name = 'take-while'
+    require_input = True
+
+    def __init__(self, args, *_):
+        self.command_parts = self.parse_args(args, None, '{}', False)
+
+    def iter_def(self, inpipe):
+        for element in inpipe:
+            if self.eval_int(self.form_command(self.command_parts, element)):
+                yield element
+
+
+class SinceWalker(GdbWalker):
+    '''Skip items until a condition is satisfied.
+
+    Usage:
+        pipe ... | skip-until ((struct *){})->field == $#marker#
+
+
+    '''
+    name = 'skip-until'
+    require_input = True
+
+    def __init__(self, args, *_):
+        self.command_parts = self.parse_args(args, None, '{}', False)
+
+    def iter_def(self, inpipe):
+        for element in inpipe:
+            if self.eval_int(self.form_command(self.command_parts, element)):
+                break
+        for element in inpipe:
+            yield element
+
+
 class TerminatedWalker(GdbWalker):
     '''
     Uses given expression to find the "next" pointer in a sequence, follows
@@ -618,8 +665,8 @@ class TerminatedWalker(GdbWalker):
         
         # Here we split the arguments into something that will form the
         # arguments next.
-        self.test_cmd = self.parse_command_template(test_expr)
-        self.follow_cmd = self.parse_command_template(follow_expr)
+        self.test_cmd = self.parse_args(test_expr, None, '{}', False)
+        self.follow_cmd = self.parse_args(follow_expr, None, '{}', False)
 
     def follow_to_termination(self, start):
         while self.eval_int(self.form_command(self.test_cmd, start)) == 0:
@@ -635,9 +682,27 @@ class TerminatedWalker(GdbWalker):
                 yield from self.follow_to_termination(element)
 
 
+class DevnullWalker(GdbWalker):
+    '''Completely consume the previous walker, but yield nothing.
+
+    Usage:
+        pipe ... | devnull
+
+    '''
+    name = 'devnull'
+    require_input = True
+    
+    def __init__(self, args, *_):
+        pass
+
+    def iter_def(self, inpipe):
+        for element in inpipe:
+            pass
+
 
 for walker in [EvalWalker, ShowWalker, InstructionWalker, HeadWalker,
-               TailWalker, IfWalker, ArrayWalker, CountWalker, TerminatedWalker]:
+               TailWalker, IfWalker, ArrayWalker, CountWalker, TerminatedWalker,
+               UntilWalker, DevnullWalker, SinceWalker]:
     register_walker(walker)
 
 
