@@ -26,6 +26,11 @@ much just a for loop).
 (gdb) set variable $count = 0
 (gdb) // The below differs from the above because the iteration is cut short.
 (gdb) pipe follow-until 1; {} > 100; {} + 1 | take-while $count++ < 10
+(gdb) set variable $count = 0
+(gdb) // NOTE Here we have to go to great lengths to avoid the | character
+(gdb) // because I haven't written a proper parser.
+(gdb) // instead of using   {} % 2 == 0 || $count++ <= 4   we use the below.
+(gdb) pipe array char; 1; 100| take-while !({} % 2 != 0 && $count++ > 4)
 ```
 
 ## Other tricks

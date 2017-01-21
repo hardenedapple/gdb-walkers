@@ -609,8 +609,9 @@ class UntilWalker(GdbWalker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if self.eval_int(self.form_command(self.command_parts, element)):
-                yield element
+            if not self.eval_int(self.form_command(self.command_parts, element)):
+                break
+            yield element
 
 
 class SinceWalker(GdbWalker):
