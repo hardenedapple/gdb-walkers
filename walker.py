@@ -382,7 +382,7 @@ class InstructionWalker(GdbWalker):
     Next `count` instructions starting at `start-address`.
 
     Usage:
-        instructions [start-address], [end-address], [count]
+        instructions [start-address]; [end-address]; [count]
 
     See gdb info Architecture.disassemble() for the meaning of arguments.
     `end-address` may be `None` to only use `count` as a limit on the number of
@@ -392,8 +392,8 @@ class InstructionWalker(GdbWalker):
     assumed to be the address given to us in the previous pipeline.
 
     Example:
-        instructions main, main+10
-        instructions main, NULL, 100
+        instructions main; main+10
+        instructions main; NULL; 100
         // A pointless reimplementation of `disassemble`
         pipe instructions main, NULL, 10 | show x/i {}
 
@@ -402,7 +402,7 @@ class InstructionWalker(GdbWalker):
 
     def __init__(self, args, first, _):
         cmd_parts = [val for val in
-                     self.parse_args(args, [2,3] if first else [1,2], ',')]
+                     self.parse_args(args, [2,3] if first else [1,2], ';')]
         # TODO Find a way to get the architecture without requiring the program
         # to be running.
         frame = gdb.selected_frame()
@@ -554,11 +554,11 @@ class ArrayWalker(GdbWalker):
 
     def __init__(self, args, first, _):
         if first:
-            typename, start_addr, count = self.parse_args(args, [3, 3], ',')
+            typename, start_addr, count = self.parse_args(args, [3, 3], ';')
             self.start_addr = self.eval_int(start_addr)
             self.__iter_helper = self.__iter_first
         else:
-            typename, count = self.parse_args(args, [2, 2], ',')
+            typename, count = self.parse_args(args, [2, 2], ';')
             self.start_addr = None
             self.__iter_helper = self.__iter_pipe
 
@@ -596,13 +596,13 @@ class TerminatedWalker(GdbWalker):
     returns true.
 
     Usage:
-        follow-until <test-expression>, <follow-expression>
-        follow-until start-addr, <test-expression>, <follow-expression>
+        follow-until <test-expression>; <follow-expression>
+        follow-until start-addr; <test-expression>; <follow-expression>
 
     Example:
-        follow-until argv, *{} == 0, {} + sizeof(char **)
+        follow-until argv; *{} == 0; {} + sizeof(char **)
         pipe eval *(char **)argv \\
-            | follow-until *(char *){} == 0, {} + sizeof(char) \\
+            | follow-until *(char *){} == 0; {} + sizeof(char) \\
             | show x/c {}
 
     '''
@@ -610,10 +610,10 @@ class TerminatedWalker(GdbWalker):
 
     def __init__(self, args, first, _):
         if first:
-            start, test_expr, follow_expr = self.parse_args(args, [3, 3], ',')
+            start, test_expr, follow_expr = self.parse_args(args, [3, 3], ';')
             self.start = self.eval_int(start)
         else:
-            test_expr, follow_expr = self.parse_args(args, [2, 2], ',')
+            test_expr, follow_expr = self.parse_args(args, [2, 2], ';')
             self.start = None
         
         # Here we split the arguments into something that will form the
