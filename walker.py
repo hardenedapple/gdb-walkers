@@ -152,9 +152,10 @@ class Pipeline(gdb.Command):
         # Call the global function to register the current uintptr_t type in
         # the global namespace.
         find_ptr_t()
-        # XXX allow escaped `|` chars to be used in segments.
         self.dont_repeat()
-        args = arg.split('|')
+        # XXX allow escaped `|` chars by removing the escaped characters after
+        # splitting.
+        args = arg.split(' | ')
         # Create the first walker with an argument that tells it it's going to
         # be the first.
         only_one = len(args) == 1
@@ -512,6 +513,11 @@ class TailWalker(GdbWalker):
         self.limit = self.eval_int(self.parse_args(args, [1, 1])[0])
 
     def iter_def(self, inpipe):
+        # Could have the supposedly constant memory version of having a list
+        # of the number of elements required, and setting each of those values
+        # in turn, wrapping around when reaching the end.
+        # In practice, it turns out this doesn't actually change the running
+        # time.
         all_elements = list(inpipe)
         for element in all_elements[-self.limit:]:
             yield element
@@ -701,9 +707,32 @@ class DevnullWalker(GdbWalker):
             pass
 
 
+class ReverseWalker(GdbWalker):
+    '''Reverse the iteration from the previous command.
+
+    Usage:
+        pipe ... | reverse
+
+    Examples:
+        pipe array char; 1; 10 | reverse
+
+    '''
+    name = 'reverse'
+    require_input = True
+
+    def __init__(self, args, *_):
+        pass
+    
+    def iter_def(self, inpipe):
+        all_elements = list(inpipe)
+        all_elements.reverse()
+        for element in all_elements:
+            yield element
+
+
 for walker in [EvalWalker, ShowWalker, InstructionWalker, HeadWalker,
                TailWalker, IfWalker, ArrayWalker, CountWalker, TerminatedWalker,
-               UntilWalker, DevnullWalker, SinceWalker]:
+               UntilWalker, DevnullWalker, SinceWalker, ReverseWalker]:
     register_walker(walker)
 
 
