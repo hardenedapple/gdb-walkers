@@ -8,44 +8,9 @@ import enum
 import gdb
 import abc
 import re
+import collections
 
 gdb.walkers = {}
-
-# This is just the first guess, 
-uintptr_t = gdb.lookup_type('unsigned long')
-def find_ptr_t():
-    '''
-    Find the equivalent of uintptr_t and store it in the global namespace.
-
-    '''
-    # We need the size of a pointer in order to do pointer arithmetic.
-    #
-    # Because the size of a pointer is not known until we are connected to a
-    # process, and gdb can switch between processes, we need to update the
-    # current uintptr_t object we have each time Pipeline is called.
-    global uintptr_t
-    # Note, we can't rely on every program including "stdint.h", so we have a
-    # little logic to find the size of a pointer here.
-    try:
-        uintptr_t = gdb.lookup_type('uintptr_t')
-        # TODO should make the below except clause only trigger if the error
-        # was because uintptr_t could not be found.
-    except gdb.error:
-        pointer_size = int(gdb.parse_and_eval('sizeof(char *)'))
-        int_type = gdb.lookup_type('unsigned int')
-        long_type = gdb.lookup_type('unsigned long')
-        if int_type.sizeof == pointer_size:
-            uintptr_t = int_type
-        elif long_type.sizeof == pointer_size:
-            uintptr_t = long_type
-        else:
-            # TODO I *should* think more about this -- I have the feeling I'm
-            # missing a lot of cases and that it's likely to break in many special
-            # cases.
-            # On the other hand, I can't see it being a problem soon, and hence
-            # can't see this being a priority soon.
-            raise GdbWalkerError('Failed to find size of pointer type')
-
 
 class GdbWalkerError(gdb.GdbError):
     pass
@@ -175,31 +140,18 @@ class Pipeline(gdb.Command):
 
 
 # TODO
-#    Make the helper functions in GdbWalker() classmethods.
-#       It just makes more sense that people can use them without instantiating
-#       anything.
-#    ArrayWalker should be able to take a terminating condition.
-#        at least should be able to say NULL terminate instead of providing a
-#        count
-#    Make general function to split strings.
-#        this function should also evaluate any maths inside a $() brace.
-#        i.e. parse('$(main+4 + 8) {} right', split='{}')
-#        would give something like ['0x400552 ', '', ' right']
-#        This would also handle not splitting on escaped characters and removing
-#        the backslash that escapes them.
 #    Error messages are stored in the class.
 #    Help is stored in docstring
 #    Tags for searching amongst walkers are stored in self.tags
-#    Pass dictionaries instead of just an integer
-#        Each dictionary should have a 'point' element, but can include other
-#        data.
-#    Maybe make_iter should wrap the iter_def() call with a function that
-#    ensures every element in the iterator is a gdb.Value with type 'char_u *'
-#    Set default walker (when called without a walker name) inside gdb with
-#        `set ...`
-#    When should the walkers get the information that they're going to be
-#    first/last?
-#        During instantiation or when called?
+#
+#    I should be able to get the current 'Architecture' type from the file
+#    without having to have started the program.
+#       This would mean InstructionWalker could be called without starting the
+#       inferior process.
+#
+#   I should be able to find the size of a symbol.
+#       'disassemble main' works fine -- (even without having started the
+#       process) I should be able to do this!!!
 #
 #    Rename everything to match the functional paradigm? The question is really
 #    what names would be most helpful for me (or anyone else) when searching
@@ -406,8 +358,7 @@ class InstructionWalker(GdbWalker):
     name = 'instructions'
 
     def __init__(self, args, first, _):
-        cmd_parts = [val for val in
-                     self.parse_args(args, [2,3] if first else [1,2], ';')]
+        cmd_parts = self.parse_args(args, [2,3] if first else [1,2], ';')
         # TODO Find a way to get the architecture without requiring the program
         # to be running.
         frame = gdb.selected_frame()
@@ -541,6 +492,7 @@ class CountWalker(GdbWalker):
         pass
 
     def iter_def(self, inpipe):
+        i = 0
         for i, _ in enumerate(inpipe):
             pass
         yield i + 1
@@ -730,9 +682,114 @@ class ReverseWalker(GdbWalker):
             yield element
 
 
+class FunctionsWalker(GdbWalker):
+    '''Walk through the call tree of all functions.
+
+    Given a function name/address, walk over all functions this function calls,
+    and all functions called by those etc up to maxdepth.
+
+    It skips all functions defined in a file that doesn't match file-regex.
+    This part is very important as it avoids searching all functions in
+    used libraries.
+
+    NOTE:
+        This walker is far from perfect. It does not account for calling a
+        function using the "jmp" instructions, or for calling a function
+        indirectly.
+
+        If gdb can't tell what function something is calling with the
+        `disassemble` command (i.e. if the disassembly instructions aren't
+        annotated with the function name) then this function will not pick it
+        up.
+
+    Usage:
+        called-functions [funcname | funcaddr]; [file-regex]; [maxdepth]
+
+    '''
+    name = 'called-functions'
+
+    def __init__(self, args, first, _):
+        self.cmd_parts = self.parse_args(args, [3,3] if first else [2,2], ';')
+        self.maxdepth = self.eval_int(self.cmd_parts[-1])
+        self.file_regex = self.cmd_parts[-2].strip()
+
+        self.func_queue = collections.deque()
+        self.seen_funcs = set()
+        if first: self.__add_addr(self.eval_int(self.cmd_parts[0]), 0)
+        self.arch = gdb.selected_frame().architecture()
+
+    def __add_addr(self, addr, depth):
+        if addr and addr not in self.seen_funcs:
+            self.seen_funcs.add(addr)
+            self.func_queue.append((addr, depth))
+
+    @staticmethod
+    def __func_addr(instruction):
+        elements = instruction['asm'].split()
+        # Make sure the format for this instruction is
+        # call... addr <func_name>
+        # Ignore those functions with @plt in them.
+        # Return the address converted to a number.
+        if re.match('<[^@]*>', elements[-1]) and len(elements) == 3 and \
+                elements[0].startswith('call'):
+            # Just assume it's always hex -- I can't see any way it isn't, but
+            # this assumption makes me a little uneasy.
+            return int(elements[1], base=16)
+        return None
+
+    def __iter_helper(self):
+        while len(self.func_queue) != 0:
+            func_addr, depth = self.func_queue.popleft()
+            if depth >= self.maxdepth:
+                break
+
+            yield func_addr
+
+            try:
+                func_block = gdb.block_for_pc(func_addr)
+            except RuntimeError as e:
+                # Cannot locate object file for block
+                if e.args == ('Cannot locate object file for block.', ):
+                    func_block = None
+                else:
+                    raise e
+
+            # Catches not found block and block where object file was not
+            # found.
+            if not func_block:
+                continue
+
+            func_file = func_block.function.symtab.filename
+            if not re.match(self.file_regex, func_file):
+                continue
+
+            for val in self.arch.disassemble(func_block.start,
+                                             func_block.end)[:-1]:
+                new_addr = self.__func_addr(val)
+                self.__add_addr(new_addr, depth + 1)
+
+    def iter_def(self, inpipe):
+        if not inpipe:
+            yield from self.__iter_helper()
+        else:
+            # Deal with each given function (and all their descendants) in
+            # turn.
+            for element in inpipe:
+                # Reset seen functions each time.
+                # This means that we may very well get duplicates for each of
+                # the function addresses we start with, but at least the user
+                # knows what's happening (i.e. doesn't go away thinking that
+                # function X never calls function Y because function A called
+                # it and we didn't report the duplicate in function X).
+                self.seen_funcs.clear()
+                self.__add_addr(element)
+                yield from self.__iter_helper()
+
+
 for walker in [EvalWalker, ShowWalker, InstructionWalker, HeadWalker,
                TailWalker, IfWalker, ArrayWalker, CountWalker, TerminatedWalker,
-               UntilWalker, DevnullWalker, SinceWalker, ReverseWalker]:
+               UntilWalker, DevnullWalker, SinceWalker, ReverseWalker,
+               FunctionsWalker]:
     register_walker(walker)
 
 
