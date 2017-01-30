@@ -114,9 +114,6 @@ class Pipeline(gdb.Command):
         Iterate over all elements coming out the end of the pipe, printing them
         out as a hex value to screen.
         '''
-        # Call the global function to register the current uintptr_t type in
-        # the global namespace.
-        find_ptr_t()
         self.dont_repeat()
         # XXX allow escaped `|` chars by removing the escaped characters after
         # splitting.
@@ -141,17 +138,15 @@ class Pipeline(gdb.Command):
 
 # TODO
 #    Error messages are stored in the class.
+#       (so that self.parse_args() gives useful error messages)
 #    Help is stored in docstring
 #    Tags for searching amongst walkers are stored in self.tags
+#       Make 'help' and 'apropos' equivalents 'walker help' and 'walker apropos'
 #
 #    I should be able to get the current 'Architecture' type from the file
 #    without having to have started the program.
 #       This would mean InstructionWalker could be called without starting the
 #       inferior process.
-#
-#   I should be able to find the size of a symbol.
-#       'disassemble main' works fine -- (even without having started the
-#       process) I should be able to do this!!!
 #
 #    Rename everything to match the functional paradigm? The question is really
 #    what names would be most helpful for me (or anyone else) when searching
@@ -313,9 +308,9 @@ class ShowWalker(GdbWalker):
         show <gdb command>
 
     Example:
-        show print {}
-        show print (char *){}
-        show print ((struct complex_type *){})->field
+        show output {}
+        show output (char *){}
+        show output ((struct complex_type *){})->field
 
     '''
     name = 'show'

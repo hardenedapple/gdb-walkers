@@ -25,10 +25,7 @@ import re
 # the global value with what makes sense.
 uintptr_t = gdb.lookup_type('unsigned long')
 def find_ptr_t():
-    '''
-    Find the equivalent of uintptr_t and store it in the global namespace.
-
-    '''
+    '''Find a uintptr_t equivalent and store it in the global namespace.'''
     # We need the size of a pointer in order to do pointer arithmetic.
     #
     # Because the size of a pointer is not known until we are connected to a
@@ -56,6 +53,22 @@ def find_ptr_t():
             # On the other hand, I can't see it being a problem soon, and hence
             # can't see this being a priority soon.
             raise GdbWalkerError('Failed to find size of pointer type')
+
+
+def start_handler(event):
+    '''Upon startup, find the pointer type for this program'''
+    find_ptr_t()
+    # Remove us from the stop handler -- there is no reason to keep finding the
+    # same pointer type.
+    # NOTE:
+    #   This may have trouble when switching between a 32bit and 64 bit process
+    #   in the same gdb session.
+    #   In that case, just manually run
+    #      (gdb) python find_ptr_t()
+    #   and you should be fine.
+    gdb.events.stop.disconnect(start_handler)
+
+gdb.events.stop.connect(start_handler)
 
 
 class ShellPipe(gdb.Command):
@@ -152,8 +165,6 @@ class WhereAmI(gdb.Command):
         super(WhereAmI, self).__init__('whereami', gdb.COMMAND_FILES)
 
     def invoke(self, arg, _):
-        # TODO complain if given any arguments.
-        find_ptr_t() # NOTE Using a function from walkers.py
         cur_pos = gdb.find_pc_line(int(
             gdb.parse_and_eval('*$pc').cast(uintptr_t)))
         print(cur_pos.symtab.filename + ':' + str(cur_pos.line))
@@ -334,6 +345,8 @@ class GlobalUsed(gdb.Command):
 
     def complete(self, *_):
         return gdb.COMPLETE_SYMBOL
+
+
 
 
 AttachMatching()
