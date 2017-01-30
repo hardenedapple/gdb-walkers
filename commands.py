@@ -55,6 +55,11 @@ def find_ptr_t():
             raise GdbWalkerError('Failed to find size of pointer type')
 
 
+def eval_int(gdb_expr):
+    '''Return a python integer representing the gdb expression '''
+    return int(gdb.parse_and_eval(gdb_expr).cast(uintptr_t))
+
+
 def start_handler(event):
     '''Upon startup, find the pointer type for this program'''
     find_ptr_t()
@@ -149,25 +154,6 @@ class AttachMatching(gdb.Command):
             print(len(matching_processes), ' matching processes')
             for pid, cmdline in matching_processes:
                 print(pid, cmdline)
-
-
-class WhereAmI(gdb.Command):
-    '''Print the current line number.
-
-    `whereami` prints the current line number.
-
-    Usage:
-        whereami
-
-    '''
-
-    def __init__(self):
-        super(WhereAmI, self).__init__('whereami', gdb.COMMAND_FILES)
-
-    def invoke(self, arg, _):
-        cur_pos = gdb.find_pc_line(int(
-            gdb.parse_and_eval('*$pc').cast(uintptr_t)))
-        print(cur_pos.symtab.filename + ':' + str(cur_pos.line))
 
 
 class GlobalUsed(gdb.Command):
@@ -318,9 +304,9 @@ class GlobalUsed(gdb.Command):
     def invoke(self, arg, _):
         args = gdb.string_to_argv(arg)
         arch = gdb.selected_frame().architecture()
-        func_addr = gdb.parse_and_eval(''.join(args[:-1])).cast(uintptr_t)
+        func_addr = eval_int(''.join(args[:-1]))
         # Let error raise -- user needs to know something went wrong.
-        func_block = gdb.block_for_pc(int(func_addr))
+        func_block = gdb.block_for_pc(func_addr)
         if not func_block:
             print('Block for {} could not be found'.format(
                 ''.join(args[:-1])))
@@ -347,9 +333,6 @@ class GlobalUsed(gdb.Command):
         return gdb.COMPLETE_SYMBOL
 
 
-
-
 AttachMatching()
-WhereAmI()
 ShellPipe()
 GlobalUsed()
