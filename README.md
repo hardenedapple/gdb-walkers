@@ -41,3 +41,19 @@ fit together right does it?)
 (gdb) pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {}, {} | devnull
 (gdb) print $sum
 ```
+
+Find the indices of an array that match some condition
+```
+(gdb) start 20 100 Hello there this is a test
+(gdb) set variable $i = -1
+(gdb) pipe array char*; argv; argc  | if $i++, $_output_contains("print/s *(char **){}", "t") | show print $i
+$103 = 0
+$108 = 4
+$110 = 5
+$114 = 8
+(gdb) print argv[4]
+$118 = 0x7fffffffe897 "there"
+(gdb) print argv[5]
+$117 = 0x7fffffffe89d "this"
+(gdb) 
+```
