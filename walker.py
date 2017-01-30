@@ -703,12 +703,14 @@ class FunctionsWalker(GdbWalker):
     '''
     name = 'called-functions'
 
+    # TODO
+    #   Allow default arguments?
     def __init__(self, args, first, _):
         self.cmd_parts = self.parse_args(args, [3,3] if first else [2,2], ';')
         self.maxdepth = self.eval_int(self.cmd_parts[-1])
         self.file_regex = self.cmd_parts[-2].strip()
 
-        self.func_queue = collections.deque()
+        self.func_stack = []
         self.seen_funcs = set()
         if first: self.__add_addr(self.eval_int(self.cmd_parts[0]), 0)
         self.arch = gdb.selected_frame().architecture()
@@ -716,7 +718,7 @@ class FunctionsWalker(GdbWalker):
     def __add_addr(self, addr, depth):
         if addr and addr not in self.seen_funcs:
             self.seen_funcs.add(addr)
-            self.func_queue.append((addr, depth))
+            self.func_stack.append((addr, depth))
 
     @staticmethod
     def __func_addr(instruction):
@@ -733,9 +735,9 @@ class FunctionsWalker(GdbWalker):
         return None
 
     def __iter_helper(self):
-        while len(self.func_queue) != 0:
-            func_addr, depth = self.func_queue.popleft()
-            if depth >= self.maxdepth:
+        while len(self.func_stack) != 0:
+            func_addr, depth = self.func_stack.pop()
+            if self.maxdepth >= 0 and depth >= self.maxdepth:
                 break
 
             yield func_addr
