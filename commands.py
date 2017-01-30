@@ -336,12 +336,6 @@ class GlobalUsed(gdb.Command):
         return gdb.COMPLETE_SYMBOL
 
 
-class GlobUsedFunc(gdb.Function):
-    '''Is a global used?
-    '''
-    raise NotImplementedError
-
-
 AttachMatching()
 WhereAmI()
 ShellPipe()
