@@ -61,11 +61,11 @@ $117 = 0x7fffffffe89d "this"
 List all functions called by main (probably a bad idea in anything but the
 smallest program) and their source code file name and line number.
 ```
-(gdb) pipe called-functions main; .*; -1 | show printf "%s %s\n", $_function_of({}), $_whereis({})
-main demos/tree.c:85
-free_tree demos/tree.c:53
-create_random_tree demos/tree.c:69
-insert_entry demos/tree.c:23
-create_tree demos/tree.c:62
+(gdb) pipe called-functions main; .*; -1 | show printf "%18s\t%s\n", $_function_of({}), $_whereis({})
+              main	demos/tree.c:85
+         free_tree	demos/tree.c:53
+create_random_tree	demos/tree.c:69
+      insert_entry	demos/tree.c:23
+       create_tree	demos/tree.c:62
 (gdb) 
 ```
