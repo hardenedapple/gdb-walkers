@@ -95,14 +95,14 @@ class Pipeline(gdb.Command):
         # Otherwise we are given
         # source=first, segments=[rest], drain=last
 
-        walker = source.make_iter(inpipe=[])
+        walker = source.iter_def(inpipe=[])
         if not segments and not drain:
             return walker
 
         for segment in segments:
-            walker = segment.make_iter(inpipe=walker)
+            walker = segment.iter_def(inpipe=walker)
 
-        walker = drain.make_iter(inpipe=walker)
+        walker = drain.iter_def(inpipe=walker)
         return walker
 
     def invoke(self, arg, from_tty):
@@ -184,22 +184,12 @@ class GdbWalker(abc.ABC):
     require_input = False
     require_output = False
 
-    @abc.abstractmethod
     def __init__(self, args, first, last):
         pass
 
     @abc.abstractmethod
     def iter_def(self, inpipe):
         pass
-
-    def make_iter(self, inpipe, flags={}):
-        '''
-        '''
-        # Shouldn't be needed -- self.iter_def() should always return an
-        # iterator...
-        if self.require_input and not inpipe:
-            raise GdbWalkerValueError(self.name + ' requires input from a pipe')
-        return self.iter_def(inpipe)
 
     @staticmethod
     def eval_int(description):
@@ -483,9 +473,6 @@ class CountWalker(GdbWalker):
     name = 'count'
     require_input = True
 
-    def __init__(self, args, *_):
-        pass
-
     def iter_def(self, inpipe):
         i = 0
         for i, _ in enumerate(inpipe):
@@ -646,9 +633,6 @@ class DevnullWalker(GdbWalker):
     name = 'devnull'
     require_input = True
     
-    def __init__(self, args, *_):
-        pass
-
     def iter_def(self, inpipe):
         for element in inpipe:
             pass
@@ -667,9 +651,6 @@ class ReverseWalker(GdbWalker):
     name = 'reverse'
     require_input = True
 
-    def __init__(self, args, *_):
-        pass
-    
     def iter_def(self, inpipe):
         all_elements = list(inpipe)
         all_elements.reverse()
