@@ -206,7 +206,7 @@ class WalkerHelp(gdb.Command):
     def one_walker(self, name):
         walker = gdb.walkers.get(name)
         if not walker:
-            raise gdb.GdbError('No walker {} found'.format(name))
+            raise GdbWalkerExistsError('No walker {} found'.format(name))
         print(walker.__doc__)
 
     def invoke(self, args, _):
@@ -910,10 +910,40 @@ class FunctionsWalker(GdbWalker):
                 yield from self.__iter_helper()
 
 
+class FileWalker(GdbWalker):
+    '''Walk over numbers read in from a file.
+
+    Yields addresses read in from a file, one line at a time.
+    Addresses in the file sholud be hexadecimal strings.
+
+    Often used to concatenate two walkers.
+        shellpipe pipe walker1 [args1 ..] ! cat > output.txt
+        shellpipe pipe walker2 [args2 ..] ! cat >> output.txt
+        pipe file output.txt | ...
+
+    Usage:
+        pipe file addresses.txt | ...
+
+    '''
+    name = 'file'
+    tags = ['general']
+
+    def __init__(self, args, first, _):
+        if not first:
+            raise GdbWalkerValueError('`file` walker cannot take input')
+        self.filenames = gdb.string_to_argv(args)
+
+    def iter_def(self, inpipe):
+        for filename in self.filenames:
+            with open(filename, 'r') as infile:
+                for line in infile:
+                    yield int(line, base=16)
+
+
 for walker in [EvalWalker, ShowWalker, InstructionWalker, HeadWalker,
                TailWalker, IfWalker, ArrayWalker, CountWalker, TerminatedWalker,
                UntilWalker, DevnullWalker, SinceWalker, ReverseWalker,
-               FunctionsWalker]:
+               FunctionsWalker, FileWalker]:
     register_walker(walker)
 
 
