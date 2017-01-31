@@ -1,7 +1,6 @@
 import gdb
 import re
 
-
 class OutputMatches(gdb.Function):
     '''Report whether the output of a given command includes some regex.
 
@@ -87,6 +86,41 @@ class FunctionOf(gdb.Function):
         return block.function.name + offset_str
 
 
+# The functions below are taken from here
+# https://github.com/tromey/gdb-helpers/blob/master/gdbhelpers
+# thanks go to github user tromey for putting the functions online.
+class Python(gdb.Function):
+    '''$_python - evaluate a Python expression
+
+    Usage:
+        $_python(STR)
+
+    This function evaluates a Python expression and returns
+    the result to gdb.  STR is a string which is parsed and evalled.
+    '''
+    def __init__(self):
+        super(Python, self).__init__('_python')
+
+    def invoke(self, expr):
+        return eval(expr.string())
+
+
+class Typeof(gdb.Function):
+    '''$_typeof - return the type of a value as a string.
+
+    Usage:
+        $_typeof(EXP)
+    '''
+    def __init__(self):
+        super(Typeof, self).__init__('_typeof')
+
+    def invoke(self, val):
+        return str(val.dynamic_type)
+
+
+
 OutputMatches()
 WhereIs()
 FunctionOf()
+Python()
+Typeof()
