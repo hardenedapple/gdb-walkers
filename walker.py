@@ -139,6 +139,111 @@ class Pipeline(gdb.Command):
         return [key for key in gdb.walkers if key.startswith(word)]
 
 
+class Walker(gdb.Command):
+    '''Prefix command for walker introspection commands.
+
+    There are two subcommands under `walker`.
+        walker help -- ask for help on specific walkers
+        walker apropos -- list walkers whose documentation matches a string.
+
+    '''
+    def __init__(self):
+        super(Walker, self).__init__('walker', gdb.COMMAND_USER,
+                                     gdb.COMPLETE_COMMAND, True)
+
+    def invoke(self, *_):
+        pass
+
+class WalkerHelp(gdb.Command):
+    '''Get help on a walker
+
+    This command has a few different forms.
+        (gdb) walker help [walker]
+            Prints the full help string for a walker to the screen.
+        (gdb) walker help walkers
+            Prints all walkers have been given to the screen.
+        (gdb) walker help tags
+            Prints all walker tags to the screen.
+        (gdb) walker help tag [tag]
+            Prints walkers registered with the given tag and their one-line
+            summary to the screen.
+
+    '''
+    def __init__(self):
+        super(WalkerHelp, self).__init__('walker help', gdb.COMMAND_SUPPORT)
+        self.options_dict = {
+            'walkers':  self.all_walkers,
+            'tags':     self.all_tags,
+            'tag':      self.one_tag,
+        }
+
+    def all_walkers(self, _):
+        for walker in gdb.walkers.items():
+            print(walker[0], '--', walker[1].__doc__.split('\n', 1)[0])
+
+    def all_tags(self, _):
+        # NOTE I know this is extremely wasteful, but the likelyhood we're
+        # going to have a huge number of walkers is small.
+        all_tags = set()
+        for walker in gdb.walkers.values():
+            all_tags.update(set(walker.tags))
+        for tag in sorted(list(all_tags)):
+            print(tag)
+
+    def one_tag(self, name):
+        for walker in gdb.walkers.items():
+            if name in walker[1].tags:
+                print(walker[0], '--', walker[1].__doc__.split('\n', 1)[0])
+
+    def one_walker(self, name):
+        walker = gdb.walkers.get(name)
+        if not walker:
+            raise gdb.GdbError('No walker {} found'.format(name))
+        print(walker.__doc__)
+
+    def invoke(self, args, _):
+        argv = gdb.string_to_argv(args)
+        num_args = len(argv)
+        if num_args != 1 and not (num_args == 2 and argv[0] == 'tag'):
+            print(self.__doc__)
+            raise gdb.GdbError('Invalid arguments to `walker help`')
+
+        if num_args == 2:
+            subcommand = argv[0]
+            argument = argv[1]
+        else:
+            subcommand = argument = argv[0]
+
+        action = self.options_dict.get(subcommand, self.one_walker)
+        action(argument)
+
+    def complete(self, text, word):
+        # It's strange, but it appears that this function is called twice when
+        # asking for all completions.
+        # The two print statements below demonstrate this nicely.
+        # I guess it doesn't matter.
+        # print('Text: ', text, len(text))
+        # print('Word: ', word, len(word))
+        num_words = len(text.split())
+        if num_words > 1 or num_words == 1 and not word:
+            if num_words > 2:
+                return []
+            if num_words == 2 and not word:
+                return []
+            # Completion is a tag -- find all tags and return those matching
+            # the start of this word.
+            matching_tags = set()
+            for walker in gdb.walkers.values():
+                matching_tags.update({val for val in walker.tags
+                                      if val.startswith(word)})
+            return matching_tags
+
+        matching_walkers = [val for val in gdb.walkers if val.startswith(word)]
+        matching_walkers.extend(val for val in ['tag', 'tags', 'walkers']
+                                if val.startswith(word))
+        return matching_walkers
+
+
 # TODO
 #    Error messages are stored in the class.
 #       (so that self.parse_args() gives useful error messages)
@@ -246,8 +351,7 @@ class GdbWalker(abc.ABC):
 
 
 class EvalWalker(GdbWalker):
-    '''
-    Parse args as a gdb expression.
+    '''Parse args as a gdb expression.
 
     Replaces occurances of `{}` in the argument string with the values from a
     previous walker.
@@ -291,8 +395,7 @@ class EvalWalker(GdbWalker):
 
 
 class ShowWalker(GdbWalker):
-    '''
-    Parse the expression as a gdb command, and print its output.
+    '''Parse the expression as a gdb command, and print its output.
 
     This must have input, and it re-uses that input as its output.
     If this is the last command it doesn't output anything.
@@ -323,8 +426,7 @@ class ShowWalker(GdbWalker):
 
 
 class InstructionWalker(GdbWalker):
-    '''
-    Next `count` instructions starting at `start-address`.
+    '''Next `count` instructions starting at `start-address`.
 
     Usage:
         instructions [start-address]; [end-address]; [count]
@@ -387,8 +489,7 @@ class InstructionWalker(GdbWalker):
 
 
 class IfWalker(GdbWalker):
-    '''
-    Reproduces items that satisfy a condition.
+    '''Reproduces items that satisfy a condition.
 
     Replaces occurances of `{}` with the input address.
 
@@ -415,8 +516,7 @@ class IfWalker(GdbWalker):
 
 
 class HeadWalker(GdbWalker):
-    '''
-    Only take first `N` items of the pipeline.
+    '''Only take first `N` items of the pipeline.
 
     Usage:
        head [N]
@@ -438,8 +538,7 @@ class HeadWalker(GdbWalker):
 
 
 class TailWalker(GdbWalker):
-    '''
-    Limit walker to last `N` items of pipeline.
+    '''Limit walker to last `N` items of pipeline.
 
     Usage:
         tail [N]
@@ -463,8 +562,7 @@ class TailWalker(GdbWalker):
 
 
 class CountWalker(GdbWalker):
-    '''
-    Count how many elements were in the previous walker.
+    '''Count how many elements were in the previous walker.
 
     Usage:
         count
@@ -580,7 +678,8 @@ class SinceWalker(GdbWalker):
 
 
 class TerminatedWalker(GdbWalker):
-    '''
+    '''Follow "next" pointer until reach terminating condition.
+
     Uses given expression to find the "next" pointer in a sequence, follows
     this expression until a terminating value is reached.
     The terminating value is determined by checking if a `test-expression`
@@ -775,3 +874,5 @@ for walker in [EvalWalker, ShowWalker, InstructionWalker, HeadWalker,
 
 
 Pipeline()
+Walker()
+WalkerHelp()
