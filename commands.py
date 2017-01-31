@@ -120,7 +120,8 @@ class GlobalUsed(gdb.Command):
 
     '''
     def __init__(self):
-        super(GlobalUsed, self).__init__('global-used', gdb.COMMAND_FILES)
+        super(GlobalUsed, self).__init__(
+            'global-used', gdb.COMMAND_FILES, gdb.COMPLETE_SYMBOL)
 
     # TODO
     #   gdb misses the direct encoding of a global variable.
@@ -273,8 +274,6 @@ class GlobalUsed(gdb.Command):
                 func_block.function.name, glob_name))
             print('\n'.join(glob_uses))
 
-    def complete(self, *_):
-        return gdb.COMPLETE_SYMBOL
 
 
 AttachMatching()
