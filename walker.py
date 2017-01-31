@@ -135,6 +135,9 @@ class Pipeline(gdb.Command):
         for element in pipeline_end:
             print(hex(element))
 
+    def complete(self, _, word):
+        return [key for key in gdb.walkers if key.startswith(word)]
+
 
 # TODO
 #    Error messages are stored in the class.
