@@ -37,7 +37,7 @@ class WhereIs(gdb.Function):
     in a vim buffer.
 
     Usage:
-        $_whereis(some_function) => <symbol>:line#
+        $_whereis(some_function) => <file>:line#
 
     '''
     def __init__(self):

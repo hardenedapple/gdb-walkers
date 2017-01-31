@@ -6,7 +6,9 @@ source ~/.config/gdb/commands.py
 source ~/.config/gdb/functions.py
 source ~/.config/gdb/walker.py
 
-# Really often used variation of whereis.
+define wheresthis
+    printf "%s %s\n", $_function_of($arg0), $_whereis($arg0)
+end
 define whereami
-    printf "%s %s\n", $_function_of($pc), $_whereis($pc)
+    wheresthis $pc
 end
