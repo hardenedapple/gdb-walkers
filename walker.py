@@ -148,23 +148,31 @@ class Walker(gdb.Command):
 
     '''
     def __init__(self):
-        super(Walker, self).__init__('walker', gdb.COMMAND_USER,
-                                     gdb.COMPLETE_COMMAND, True)
+        # It doesn't say anywhere, but -1 appears to be the constant to give
+        # so that I can provide the PREFIX argument while still using the
+        # complete() function to provide manual completion.
+        super(Walker, self).__init__('walker', gdb.COMMAND_USER, -1, True)
 
     def invoke(self, *_):
         pass
+
+    def complete(self, text, word):
+        num_words = len(gdb.string_to_argv(text))
+        if num_words > 1:
+            return []
+        return [val for val in ['help', 'apropos'] if val.startswith(word)]
 
 class WalkerHelp(gdb.Command):
     '''Get help on a walker
 
     This command has a few different forms.
-        (gdb) walker help [walker]
+        walker help [walker]
             Prints the full help string for a walker to the screen.
-        (gdb) walker help walkers
+        walker help walkers
             Prints all walkers have been given to the screen.
-        (gdb) walker help tags
+        walker help tags
             Prints all walker tags to the screen.
-        (gdb) walker help tag [tag]
+        walker help tag [tag]
             Prints walkers registered with the given tag and their one-line
             summary to the screen.
 
@@ -178,8 +186,8 @@ class WalkerHelp(gdb.Command):
         }
 
     def all_walkers(self, _):
-        for walker in gdb.walkers.items():
-            print(walker[0], '--', walker[1].__doc__.split('\n', 1)[0])
+        for name, walker in gdb.walkers.items():
+            print(name, '--', walker.__doc__.split('\n', 1)[0])
 
     def all_tags(self, _):
         # NOTE I know this is extremely wasteful, but the likelyhood we're
@@ -190,10 +198,10 @@ class WalkerHelp(gdb.Command):
         for tag in sorted(list(all_tags)):
             print(tag)
 
-    def one_tag(self, name):
-        for walker in gdb.walkers.items():
-            if name in walker[1].tags:
-                print(walker[0], '--', walker[1].__doc__.split('\n', 1)[0])
+    def one_tag(self, tagname):
+        for name, walker in gdb.walkers.items():
+            if tagname in walker.tags:
+                print(name, '--', walker.__doc__.split('\n', 1)[0])
 
     def one_walker(self, name):
         walker = gdb.walkers.get(name)
@@ -224,7 +232,7 @@ class WalkerHelp(gdb.Command):
         # I guess it doesn't matter.
         # print('Text: ', text, len(text))
         # print('Word: ', word, len(word))
-        num_words = len(text.split())
+        num_words = len(gdb.string_to_argv(text))
         if num_words > 1 or num_words == 1 and not word:
             if num_words > 2:
                 return []
@@ -243,13 +251,30 @@ class WalkerHelp(gdb.Command):
                                 if val.startswith(word))
         return matching_walkers
 
+class WalkerApropos(gdb.Command):
+    '''Search for walkers matching REGEXP
+
+    walker apropos prints walkers matching REGEXP and their short description.
+    It matches REGEXP on walker names, walker tags, and walker documentation.
+    We use python regular expressions.
+
+    Usage:
+        walker apropos REGEXP
+
+    '''
+    def __init__(self):
+        super(WalkerApropos, self).__init__('walker apropos', gdb.COMMAND_SUPPORT)
+
+    def invoke(self, args, _):
+        for name, walker in gdb.walkers.items():
+            strings = walker.tags + [name, walker.__doc__]
+            if any(re.search(args, val, re.IGNORECASE) for val in strings):
+                print(name, '--', walker.__doc__.split('\n', 1)[0])
+
 
 # TODO
 #    Error messages are stored in the class.
 #       (so that self.parse_args() gives useful error messages)
-#    Help is stored in docstring
-#    Tags for searching amongst walkers are stored in self.tags
-#       Make 'help' and 'apropos' equivalents 'walker help' and 'walker apropos'
 #
 #    I should be able to get the current 'Architecture' type from the file
 #    without having to have started the program.
@@ -291,6 +316,7 @@ class GdbWalker(abc.ABC):
     '''
     require_input = False
     require_output = False
+    tags = []
 
     def __init__(self, args, first, last):
         pass
@@ -361,6 +387,9 @@ class EvalWalker(GdbWalker):
     If `{}` does not appear in the argument string, takes no input and outputs
     one value.
 
+    This is essentially a map command -- it modifies the stream of addresses in
+    place.
+
     Use:
         eval  <gdb expression>
 
@@ -372,6 +401,7 @@ class EvalWalker(GdbWalker):
     '''
 
     name = 'eval'
+    tags = ['general', 'interface']
 
     def __init__(self, args, first, last):
         # XXX allow escaping '{}' here
@@ -411,6 +441,7 @@ class ShowWalker(GdbWalker):
     '''
     name = 'show'
     require_input = True
+    tags = ['general', 'interface']
 
     def __init__(self, args, _, last):
         self.is_last = last
@@ -446,6 +477,7 @@ class InstructionWalker(GdbWalker):
 
     '''
     name = 'instructions'
+    tags = ['data']
 
     def __init__(self, args, first, _):
         cmd_parts = self.parse_args(args, [2,3] if first else [1,2], ';')
@@ -504,6 +536,7 @@ class IfWalker(GdbWalker):
     '''
     name = 'if'
     require_input = True
+    tags = ['general']
 
     def __init__(self, args, *_):
         self.command_parts = self.parse_args(args, None, '{}', False)
@@ -524,6 +557,7 @@ class HeadWalker(GdbWalker):
     '''
     name = 'head'
     require_input = True
+    tags = ['general']
 
     def __init__(self, args, *_):
         # Use eval_int() so  user can use variables from the inferior without
@@ -546,6 +580,7 @@ class TailWalker(GdbWalker):
     '''
     name = 'tail'
     require_input = True
+    tags = ['general']
 
     def __init__(self, args, *_):
         self.limit = self.eval_int(self.parse_args(args, [1, 1])[0])
@@ -573,6 +608,7 @@ class CountWalker(GdbWalker):
     '''
     name = 'count'
     require_input = True
+    tags = ['general']
 
     def iter_def(self, inpipe):
         i = 0
@@ -596,6 +632,7 @@ class ArrayWalker(GdbWalker):
 
     '''
     name = 'array'
+    tags = ['data']
 
     def __init__(self, args, first, _):
         if first:
@@ -644,6 +681,7 @@ class UntilWalker(GdbWalker):
     '''
     name = 'take-while'
     require_input = True
+    tags = ['general']
 
     def __init__(self, args, *_):
         self.command_parts = self.parse_args(args, None, '{}', False)
@@ -658,13 +696,15 @@ class UntilWalker(GdbWalker):
 class SinceWalker(GdbWalker):
     '''Skip items until a condition is satisfied.
 
+    Returns all items in a walker since a condition was satisfied.
+
     Usage:
         pipe ... | skip-until ((struct *){})->field == $#marker#
-
 
     '''
     name = 'skip-until'
     require_input = True
+    tags = ['general']
 
     def __init__(self, args, *_):
         self.command_parts = self.parse_args(args, None, '{}', False)
@@ -697,6 +737,7 @@ class TerminatedWalker(GdbWalker):
 
     '''
     name = 'follow-until'
+    tags = ['data']
 
     def __init__(self, args, first, _):
         if first:
@@ -734,6 +775,7 @@ class DevnullWalker(GdbWalker):
     '''
     name = 'devnull'
     require_input = True
+    tags = ['general']
     
     def iter_def(self, inpipe):
         for element in inpipe:
@@ -752,6 +794,7 @@ class ReverseWalker(GdbWalker):
     '''
     name = 'reverse'
     require_input = True
+    tags = ['general']
 
     def iter_def(self, inpipe):
         all_elements = list(inpipe)
@@ -785,6 +828,7 @@ class FunctionsWalker(GdbWalker):
 
     '''
     name = 'called-functions'
+    tags = ['data']
 
     # TODO
     #   Allow default arguments?
@@ -876,3 +920,4 @@ for walker in [EvalWalker, ShowWalker, InstructionWalker, HeadWalker,
 Pipeline()
 Walker()
 WalkerHelp()
+WalkerApropos()
