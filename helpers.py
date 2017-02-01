@@ -10,7 +10,7 @@ def find_uintptr_t():
     try:
         return size_and_types[voidptr_t.sizeof]
     except KeyError:
-        raise GdbWalkerError('Failed to find size of pointer type')
+        raise RuntimeError('Failed to find size of pointer type')
 
 
 # First guess -- on starting the program we update this.

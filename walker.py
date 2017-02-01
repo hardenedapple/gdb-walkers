@@ -12,16 +12,6 @@ import collections
 
 gdb.walkers = {}
 
-class GdbWalkerError(gdb.GdbError):
-    pass
-
-class GdbWalkerExistsError(GdbWalkerError):
-    pass
-
-class GdbWalkerValueError(GdbWalkerError):
-    pass
-
-
 class Pipeline(gdb.Command):
     '''Combine logical filters to work on many addresses in sequence.
 
@@ -70,12 +60,12 @@ class Pipeline(gdb.Command):
 
         walker = gdb.walkers[walker_name]
         if walker.require_input and first or walker.require_output and last:
-            raise GdbWalkerValueError('Walker "{}" either requires an input or '
+            raise ValueError('Walker "{}" either requires an input or '
                                       'an output and has been put somewhere '
                                       'where this is not given to it.'.format(
                                           walker_name))
-        # May raise GdbWalkerValueError if the walker doesn't like the arguments
-        # it's been given.
+        # May raise ValueError if the walker doesn't like the arguments it's
+        # been given.
         return walker(args if args else None, first, last)
 
     def connect_pipe(self, source, segments, drain):
@@ -206,7 +196,7 @@ class WalkerHelp(gdb.Command):
     def one_walker(self, name):
         walker = gdb.walkers.get(name)
         if not walker:
-            raise GdbWalkerExistsError('No walker {} found'.format(name))
+            raise KeyError('No walker {} found'.format(name))
         print(walker.__doc__)
 
     def invoke(self, args, _):
@@ -214,7 +204,7 @@ class WalkerHelp(gdb.Command):
         num_args = len(argv)
         if num_args != 1 and not (num_args == 2 and argv[0] == 'tag'):
             print(self.__doc__)
-            raise gdb.GdbError('Invalid arguments to `walker help`')
+            raise ValueError('Invalid arguments to `walker help`')
 
         if num_args == 2:
             subcommand = argv[0]
@@ -292,7 +282,7 @@ class WalkerApropos(gdb.Command):
 
 def register_walker(walker_class):
     if gdb.walkers.setdefault(walker_class.name, walker_class) != walker_class:
-        raise GdbWalkerExistsError('A walker with the name "{}" already '
+        raise KeyError('A walker with the name "{}" already '
                                    'exits!'.format(walker_class.name))
 
 
@@ -363,7 +353,7 @@ class GdbWalker(abc.ABC):
         retval = args.split(split_string, maxsplit)
         argc = len(retval)
         if nargs is not None and (argc < nargs[0] or argc > nargs[1]):
-            raise GdbWalkerValueError('Walker "{}" takes between {} and {} '
+            raise ValueError('Walker "{}" takes between {} and {} '
                                       'arguments.'.format(cls.name, nargs[0],
                                                           nargs[1]))
         if strip_whitespace:
@@ -930,7 +920,7 @@ class FileWalker(GdbWalker):
 
     def __init__(self, args, first, _):
         if not first:
-            raise GdbWalkerValueError('`file` walker cannot take input')
+            raise ValueError('`file` walker cannot take input')
         self.filenames = gdb.string_to_argv(args)
 
     def iter_def(self, inpipe):

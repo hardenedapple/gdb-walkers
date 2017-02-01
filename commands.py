@@ -250,7 +250,7 @@ class GlobalUsed(gdb.Command):
         args = gdb.string_to_argv(arg)
         arch = gdb.selected_frame().architecture()
         func_addr = eval_int(''.join(args[:-1]))
-        # Let error raise -- user needs to know something went wrong.
+        # Let possible error raise -- user needs to know something went wrong.
         func_block = gdb.block_for_pc(func_addr)
         if not func_block:
             print('Block for {} could not be found'.format(
