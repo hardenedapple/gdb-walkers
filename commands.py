@@ -275,6 +275,102 @@ class GlobalUsed(gdb.Command):
             print('\n'.join(glob_uses))
 
 
+class FuncGraph(gdb.Command):
+    '''Continues the program, printing out the function call graph.
+
+    Usage:
+        func-graph
+
+    Example;
+        vshcmd: > gdb demos/tree
+        vshcmd: > start  10
+        vshcmd: > func-graph
+        vshcmd: > watch $rbp
+        vshcmd: > command 2
+        vshcmd: > silent
+        vshcmd: > func-graph
+        vshcmd: > cont
+        vshcmd: > end
+        vshcmd: > cont
+
+    '''
+    # NOTE Don't use this
+    #   It's really slow.
+    #   It has a terrible user interface
+    #   It probably has a bunch of missed edge cases.
+    #   I only wrote it to see if it would work.
+    def __init__(self):
+        super(FuncGraph, self).__init__('func-graph', gdb.COMMAND_USER)
+        self.indent = 0
+        self.fp_stack = []
+
+    def update_fp_stack(self):
+        '''Update fp stack according to if $fp was seen before.
+
+        Return False if $fp was seen before (and hence if we think we are
+        leaving a function), True otherwise.
+
+        '''
+        curfp = eval_int('$rbp')
+        if not self.fp_stack or curfp < self.fp_stack[-1]:
+            self.fp_stack.append(curfp)
+            return True
+
+        # The frame pointer decreases upon entering a new function, and
+        # increases otherwise.
+        # Because strange things can happen with the indirected @plt functions,
+        # we take all frame pointers that are below the current one off our
+        # stack.
+        self.fp_stack.pop()
+        return False
+
+
+    def invoke(self, *_):
+        pos = eval_int('$pc')
+        line = gdb.find_pc_line(pos)
+        if not line.symtab:
+            return
+
+        try:
+            block = gdb.block_for_pc(pos)
+        except RuntimeError as e:
+            if e.args == ('Cannot locate object file for block.',):
+                return
+            raise
+        
+        if block.function is None:
+            print('First found block no function', pos)
+            return
+        while block.function.name is None:
+            if block.superblock:
+                block = block.superblock
+            else:
+                print('No superblock at', pos)
+                return
+            if block.function is None:
+                print('Function iterated to None in', pos)
+                return
+
+        offset = pos - block.start
+        offset_str = '+{}'.format(offset) if offset else ''
+
+        entering = self.update_fp_stack()
+
+        if entering:
+            curindent = self.indent
+            self.indent += 4
+            direction_string = '-->'
+        else:
+            self.indent -= 4
+            curindent = self.indent
+            direction_string = '<--'
+
+        print_str = '{}{}{}{} {}:{}'.format( ' '*curindent, direction_string,
+                                            block.function.name, offset_str,
+                                            line.symtab.filename, line.line)
+
+        print(print_str)
+
 
 AttachMatching()
 ShellPipe()
