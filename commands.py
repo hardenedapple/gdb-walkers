@@ -275,6 +275,18 @@ class GlobalUsed(gdb.Command):
             print('\n'.join(glob_uses))
 
 
+class PrintFuncStack(gdb.Command):
+    '''Print each function name and file position in hypothetical call stack.'''
+    def __init__(self):
+        super(PrintFuncStack, self).__init__('hypothetical-stack',
+                                             gdb.COMMAND_DATA)
+
+    def invoke(self, arg, _):
+        if arg and arg.split() != []:
+            raise ValueError('hypothetical-stack takes no arguments')
+        gdb.execute('pipe hypothetical-call-stack | show wheresthis {} | devnull')
+
+
 class FuncGraph(gdb.Command):
     '''Continues the program, printing out the function call graph.
 
@@ -375,3 +387,4 @@ class FuncGraph(gdb.Command):
 AttachMatching()
 ShellPipe()
 GlobalUsed()
+PrintFuncStack()

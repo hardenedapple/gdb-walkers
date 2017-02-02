@@ -803,14 +803,20 @@ class FunctionsWalker(GdbWalker):
     This part is very important as it avoids searching all functions in
     used libraries.
 
+    We avoid recursion by simply ignoring all functions already in the current
+    hypothetical stack.
+
+    This walker is often used with the `hypothetical-stack` command to print
+    the current hypothetical stack.
+
     NOTE:
-        This walker is far from perfect. It does not account for calling a
-        function using the "jmp" instructions, or for calling a function
-        indirectly.
+        This walker is far from perfect. It does not account for directly
+        jumping to a function (using the "jmp" instructions) or for calling a
+        function indirectly.
 
         If gdb can't tell what function something is calling with the
         `disassemble` command (i.e. if the disassembly instructions aren't
-        annotated with the function name) then this function will not pick it
+        annotated with the function name) then this walker will not pick it
         up.
 
     Usage:
@@ -820,6 +826,10 @@ class FunctionsWalker(GdbWalker):
     name = 'called-functions'
     tags = ['data']
 
+    # NOTE -- putting this in the class namespace is a hack so the
+    # hypothetical-call-stack walker can find it.
+    hypothetical_stack = []
+
     # TODO
     #   Allow default arguments?
     def __init__(self, args, first, _):
@@ -828,13 +838,16 @@ class FunctionsWalker(GdbWalker):
         self.file_regex = self.cmd_parts[-2].strip()
 
         self.func_stack = []
-        self.seen_funcs = set()
+        # hypothetical_stack checks for recursion, but also allows the
+        # hypothetical-call-stack walker to see what the current stack is.
+        type(self).hypothetical_stack = []
         if first: self.__add_addr(self.eval_int(self.cmd_parts[0]), 0)
         self.arch = gdb.selected_frame().architecture()
 
     def __add_addr(self, addr, depth):
-        if addr and addr not in self.seen_funcs:
-            self.seen_funcs.add(addr)
+        # Use reverse stack because recursion is more likely a short-term
+        # thing.
+        if addr and addr not in self.hypothetical_stack[::-1]:
             self.func_stack.append((addr, depth))
 
     @staticmethod
@@ -854,9 +867,12 @@ class FunctionsWalker(GdbWalker):
     def __iter_helper(self):
         while len(self.func_stack) != 0:
             func_addr, depth = self.func_stack.pop()
-            if self.maxdepth >= 0 and depth >= self.maxdepth:
-                break
+            if self.maxdepth >= 0 and depth > self.maxdepth:
+                continue
 
+            # Store the current value in the hypothetical_stack for someone
+            # else to query - remember to set the class attribute.
+            type(self).hypothetical_stack[depth:] = [func_addr]
             yield func_addr
 
             try:
@@ -877,27 +893,26 @@ class FunctionsWalker(GdbWalker):
             if not re.match(self.file_regex, func_file):
                 continue
 
+            # Go backwards through the list so that we pop off elements in the
+            # order they will be called.
+            # Remove the last element in the list because the disassemble
+            # function has been given the end of the block as it's end
+            # argument, which is past the last retq instruction of the block.
             for val in self.arch.disassemble(func_block.start,
-                                             func_block.end)[:-1]:
+                                             func_block.end)[-2::-1]:
                 new_addr = self.__func_addr(val)
                 self.__add_addr(new_addr, depth + 1)
 
     def iter_def(self, inpipe):
         if not inpipe:
             yield from self.__iter_helper()
-        else:
-            # Deal with each given function (and all their descendants) in
-            # turn.
-            for element in inpipe:
-                # Reset seen functions each time.
-                # This means that we may very well get duplicates for each of
-                # the function addresses we start with, but at least the user
-                # knows what's happening (i.e. doesn't go away thinking that
-                # function X never calls function Y because function A called
-                # it and we didn't report the duplicate in function X).
-                self.seen_funcs.clear()
-                self.__add_addr(element)
-                yield from self.__iter_helper()
+            return
+
+        # Deal with each given function (and all their descendants) in turn.
+        for element in inpipe:
+            type(self).hypothetical_stack = []
+            self.__add_addr(element, 0)
+            yield from self.__iter_helper()
 
 
 class FileWalker(GdbWalker):
@@ -930,10 +945,54 @@ class FileWalker(GdbWalker):
                     yield int(line, base=16)
 
 
+class HypotheticalStackWalker(GdbWalker):
+    '''Print the hypothetical function stack called-functions has created.
+
+    The `called-functions` walker creates a hypothetical stack each time it
+    looks at what functions could be called.
+    This hypothetical stack is kept around in the state of the called-functions
+    walker.
+    This walker prints out that stack.
+
+    This walker is mainly useful in a pipeline preceded by `called-functions`,
+    where it can print the current hypothetical position based on different
+    queries.
+
+    It yields all values it was given.
+
+    You can also use it to show the last hypothetical call stack from the
+    previous walker.
+
+    Usage:
+        pipe called-functions main; .*; -1 | 
+            if $_output_contains("global-used {} curwin", "curwin") |
+            hypothetical-call-stack
+
+        pipe called-functions main; .*; -1 | ...
+        pipe hypothetical-call-stack
+
+    '''
+    name = 'hypothetical-call-stack'
+    tags = ['general', 'data']
+
+    def __init__(self, args, *_):
+        if args and args.split() != []:
+            raise ValueError('hypothetical-call-stack takes no arguments')
+        self.called_funcs_class = gdb.walkers['called-functions']
+
+    def iter_def(self, inpipe):
+        if not inpipe:
+            yield from self.called_funcs_class.hypothetical_stack
+            return
+
+        for element in inpipe:
+            yield from self.called_funcs_class.hypothetical_stack
+
+
 for walker in [EvalWalker, ShowWalker, InstructionWalker, HeadWalker,
                TailWalker, IfWalker, ArrayWalker, CountWalker, TerminatedWalker,
                UntilWalker, DevnullWalker, SinceWalker, ReverseWalker,
-               FunctionsWalker, FileWalker]:
+               FunctionsWalker, FileWalker, HypotheticalStackWalker]:
     register_walker(walker)
 
 
