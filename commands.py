@@ -279,7 +279,7 @@ class GlobalUsed(gdb.Command):
 
 class PrintHypotheticalStack(gdb.Command):
     '''Print each function name and file position in hypothetical call stack.
-    
+
     NOTE:
         This command doesn't print the addresses where things were called, but
         the address of each function that was called. This makes things much
@@ -296,6 +296,38 @@ class PrintHypotheticalStack(gdb.Command):
         gdb.execute('pipe hypothetical-call-stack | show wheresthis {} | devnull')
 
 
+# Alternate thoughts about FuncGraph
+#
+#   Given a regexp, iterate through all functions in the symtab and on each
+#   function that matches put a break point.
+#
+#   Returning breakpoints are the problem.
+#   I am thinking of three different options
+#       1)  Don't do anything about them.
+#           On each breakpoint, search the current stack, if that function isn't
+#           at that position in the stack (known by looking at the stack
+#           pointer), then it must have returned in the intervening time.
+#
+#           Problems:
+#               The last set of returns won't be printed
+#               This could be overcome by putting a listener on gdb.events.stop
+#
+#       2)  disassemble the function and put a breakpoint on the return
+#           instruction.
+#           When the return instruction is hit, print a "leaving" thing.
+#
+#           Problems:
+#               How to define what should happen on the command.
+#               Would have to iterate over the entire function to find where
+#               the ret instruction is.
+#
+#       3)  Make a "finish" breakpoint for the current frame.
+#           This would print the "leaving" thing.
+#
+#           Problems:
+#               Same as above -- how to define the command.
+#               Would have to make a breakpoint each time a given function is
+#               called (as opposed to previous ones that don't).
 class FuncGraph(gdb.Command):
     '''Continues the program, printing out the function call graph.
 
@@ -358,7 +390,7 @@ class FuncGraph(gdb.Command):
             if e.args == ('Cannot locate object file for block.',):
                 return
             raise
-        
+
         if block.function is None:
             print('First found block no function', pos)
             return
