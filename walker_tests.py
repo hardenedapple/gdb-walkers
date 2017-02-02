@@ -4,39 +4,11 @@ A test framework for my gdb extensions desgined to be run from *outside* gdb.
 We mock the gdb package.
 
 '''
+# vimcmd: !python -m unittest walker_tests
 
 from types import ModuleType
 import unittest
 import unittest.mock as mock
-
-# Mock the gdb module
-# This is currently a very hackish mocking, it works because I know I only use
-# these functions/classes, and because I don't need to proove things have been
-# called as yet.
-class FakeGdbValue():
-    def __init__(self, _=None): pass
-    def __int__(self): return 1
-    def cast(self, _): return self
-
-
-class FakeGdbType():
-    def __init__(self, _=None): self.sizeof = 1
-    def pointer(self): return self
-
-
-class FakeGdbFrameArch():
-    '''Mocks both the Frame class *and* the Architecture class.'''
-    def __init__(self, _=None): pass
-    def architecture(self): return self
-    def disassemble(self, *_): return [{'addr': 1}]
-
-
-class FakeGdbCommand():
-    def __init__(self, name, command_type):
-        pass
-    def dont_repeat(self):
-        pass
-
 
 fake_gdb = mock.MagicMock()
 fake_gdb.COMMAND_USER = 1

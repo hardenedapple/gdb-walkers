@@ -107,7 +107,6 @@ class Pipeline(gdb.Command):
         Iterate over all elements coming out the end of the pipe, printing them
         out as a hex value to screen.
         '''
-        self.dont_repeat()
         # XXX allow escaped `|` chars by removing the escaped characters after
         # splitting.
         args = arg.split(' | ')

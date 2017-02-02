@@ -76,6 +76,7 @@ class AttachMatching(gdb.Command):
                                              gdb.COMMAND_RUNNING)
 
     def invoke(self, arg, _):
+        self.dont_repeat()
         argv = gdb.string_to_argv(arg)
         process = argv[0]
         search_pattern = ' '.join(argv[1:])
@@ -276,7 +277,7 @@ class GlobalUsed(gdb.Command):
             print('\n'.join(glob_uses))
 
 
-class PrintFuncStack(gdb.Command):
+class PrintHypotheticalStack(gdb.Command):
     '''Print each function name and file position in hypothetical call stack.
     
     NOTE:
@@ -286,8 +287,8 @@ class PrintFuncStack(gdb.Command):
 
     '''
     def __init__(self):
-        super(PrintFuncStack, self).__init__('hypothetical-stack',
-                                             gdb.COMMAND_DATA)
+        super(PrintHypotheticalStack, self).__init__('hypothetical-stack',
+                                                     gdb.COMMAND_DATA)
 
     def invoke(self, arg, _):
         if arg and arg.split() != []:
@@ -395,4 +396,4 @@ class FuncGraph(gdb.Command):
 AttachMatching()
 ShellPipe()
 GlobalUsed()
-PrintFuncStack()
+PrintHypotheticalStack()
