@@ -1,5 +1,6 @@
 import gdb
 import re
+from helpers import uintptr_t
 
 class OutputMatches(gdb.Function):
     '''Report whether the output of a given command includes some regex.

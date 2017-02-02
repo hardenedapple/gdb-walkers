@@ -11,6 +11,7 @@ The commands defined here are:
 import gdb
 import subprocess as sp
 import re
+from helpers import eval_int
 
 # TODO
 #   Why does gdb.lookup_global_symbol() not find global variables.
@@ -276,7 +277,14 @@ class GlobalUsed(gdb.Command):
 
 
 class PrintFuncStack(gdb.Command):
-    '''Print each function name and file position in hypothetical call stack.'''
+    '''Print each function name and file position in hypothetical call stack.
+    
+    NOTE:
+        This command doesn't print the addresses where things were called, but
+        the address of each function that was called. This makes things much
+        simpler in the implementation of the `called-functions` walker.
+
+    '''
     def __init__(self):
         super(PrintFuncStack, self).__init__('hypothetical-stack',
                                              gdb.COMMAND_DATA)

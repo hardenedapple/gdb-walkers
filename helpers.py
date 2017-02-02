@@ -19,7 +19,12 @@ def find_uintptr_t():
 uintptr_t = find_uintptr_t()
 
 def eval_int(gdb_expr):
-    '''Return a python integer representing the gdb expression '''
+    '''Return the python integer value of `gdb_expr`
+
+    This is to be used over `int(gdb.parse_and_eval(gdb_expr))` to
+    account for the given description being a symbol.
+
+    '''
     return int(gdb.parse_and_eval(gdb_expr).cast(uintptr_t))
 
 

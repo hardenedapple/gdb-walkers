@@ -40,6 +40,8 @@ fit together right does it?)
 (gdb) set variable $sum = 0
 (gdb) pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {}, {} | devnull
 (gdb) print $sum
+$1 = 5050
+(gdb) 
 ```
 
 Find the indices of an array that match some condition
@@ -68,4 +70,24 @@ create_random_tree	demos/tree.c:69
       insert_entry	demos/tree.c:23
        create_tree	demos/tree.c:62
 (gdb) 
+```
+
+List the hypothetical call stack of all functions called by main that use a
+global variable (in this case, use the global function `free_tree`).
+```
+(gdb) pipe called-functions main; .*; -1 | if $_output_contains("global-used {} free_tree", "free_tree") | show hypothetical-stack | show printf "\n"
+main demos/tree.c:85
+
+main demos/tree.c:85
+create_random_tree demos/tree.c:69
+
+main demos/tree.c:85
+create_random_tree demos/tree.c:69
+free_tree demos/tree.c:53
+
+main demos/tree.c:85
+free_tree demos/tree.c:53
+
+(gdb) 
+(gdb)
 ```
