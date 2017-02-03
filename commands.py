@@ -299,6 +299,23 @@ class PrintHypotheticalStack(gdb.Command):
 
 # Alternate thoughts about FuncGraph
 #
+#   Questions:
+#       How are the gdb `finish` statements implemented?
+#       What about the dtrace return probes?
+#           NOTE these include the position where the return instruction came?
+#           If I read the manual correctly, this is just the position of the
+#           ret instruction, not the position in the source code of the
+#           `return` statement.
+#           http://docs.oracle.com/cd/E19253-01/817-6223/chp-fbt/index.html
+#       stap return probes?
+#           watching the frame pointer $rbp?
+#           looking at the return address stored in the stack, and setting a
+#             breakpoint there? (would this break if calling that function
+#             recursively?)
+#           Finding all `ret` instructions of the function and placing
+#             breakpoints there?
+#
+#
 #   Given a regexp, iterate through all functions in the symtab and on each
 #   function that matches put a break point.
 #

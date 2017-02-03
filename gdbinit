@@ -1,9 +1,9 @@
 set python print-stack full
-source basic-config.py
-source commands.py
-source functions.py
-source walker.py
-source neovim_integration.py
+source ~/.config/gdb/basic-config.py
+source ~/.config/gdb/commands.py
+source ~/.config/gdb/functions.py
+source ~/.config/gdb/walker.py
+source ~/.config/gdb/neovim_integration.py
 
 define wheresthis
     printf "%s %s\n", $_function_of($arg0), $_whereis($arg0)
