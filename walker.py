@@ -141,28 +141,13 @@ class Pipeline(gdb.Command):
 
 
 class Walker(gdb.Command):
-    '''Prefix command for walker introspection commands.
-
-    There are two subcommands under `walker`.
-        walker help -- ask for help on specific walkers
-        walker apropos -- list walkers whose documentation matches a string.
-
-    '''
+    '''Prefix command for walker introspection commands.'''
     def __init__(self):
         # It doesn't say anywhere, but -1 appears to be the constant to give
         # so that I can provide the PREFIX argument while still using the
         # complete() function to provide manual completion.
-        super(Walker, self).__init__('walker', gdb.COMMAND_USER, -1, True)
-
-    def invoke(self, *_):
-        pass
-
-    def complete(self, text, word):
-        num_words = len(gdb.string_to_argv(text))
-        if num_words > 1:
-            return []
-        return [val for val in ['help', 'apropos'] if val.startswith(word)]
-
+        super(Walker, self).__init__('walker', gdb.COMMAND_USER,
+                                     gdb.COMPLETE_COMMAND, True)
 
 class WalkerHelp(gdb.Command):
     '''Get help on a walker
