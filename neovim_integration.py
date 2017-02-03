@@ -1,14 +1,22 @@
+import os
+import string
 import neovim
 import gdb
-import os
 from helpers import eval_int
-import string
+
 
 def get_nvim_instance():
     nvim_socket_path = os.getenv('NEOVIM_SOCKET_ADDR')
     if not nvim_socket_path:
         raise OSError('No socket path NEOVIM_SOCKET_ADDR in environment')
     return neovim.attach('socket', path=nvim_socket_path)
+
+
+def find_marked_window(nvim):
+    for win in nvim.current.tabpage.windows:
+        if win.vars.get('gdb_view'):
+            return win
+    return None
 
 
 class MarkStack(gdb.Command):
@@ -25,6 +33,8 @@ class MarkStack(gdb.Command):
 
     def invoke(self, arg, _):
         self.dont_repeat()
+        if len(gdb.string_to_argv(arg)):
+            raise ValueError('mark-stack takes no arguments')
         frame = gdb.selected_frame()
         nvim = get_nvim_instance()
         for mark in string.ascii_uppercase:
@@ -39,7 +49,8 @@ class MarkStack(gdb.Command):
                 # -- this command doesn't do anything if it has.
                 nvim.command('badd {}'.format(full_filename))
                 bufnr = nvim.funcs.bufnr(full_filename)
-                nvim.funcs.setpos("'{}".format(mark), [bufnr, pc_pos.line, 0, 0])
+                nvim.funcs.setpos("'{}".format(mark),
+                                  [bufnr, pc_pos.line, 0, 0])
             else:
                 nvim.command('delmark {}'.format(mark))
 
@@ -60,7 +71,7 @@ class GoHere(gdb.Command):
     Usage:
         # If there is a window with w:gdb_view set go there before moving to
         # current window.
-        # Otherwise, 
+        # Otherwise,
         gohere [default] [address]
         # Use current window
         gohere e [address]
@@ -84,7 +95,8 @@ class GoHere(gdb.Command):
         self.dont_repeat()
         args = gdb.string_to_argv(arg)
         if len(args) > 2:
-            raise ValueError('Usage: gohere [default | e | vnew | new] [address]')
+            raise ValueError(
+                'Usage: gohere [default | e | vnew | new] [address]')
 
         address = '$pc' if len(args) < 2 else args[1]
         open_method = 'default' if not args else args[0]
@@ -96,10 +108,9 @@ class GoHere(gdb.Command):
         nvim = get_nvim_instance()
 
         if open_method == 'default':
-            for win in nvim.current.tabpage.windows:
-                if win.vars.get('gdb_view'):
-                    nvim.command('{} wincmd w'.format(win.number))
-                    break
+            win = find_marked_window(nvim)
+            if win:
+                nvim.command('{} wincmd w'.format(win.number))
             open_method = 'e'
 
         nvim.command('{} +{} {}'.format(open_method, pos.line,
@@ -124,10 +135,21 @@ class ShowHere(gdb.Command):
         address = '$pc' if not args else args[0]
         nvim = get_nvim_instance()
         curwin = nvim.current.window
+        marked_win = find_marked_window(nvim)
+        if not marked_win:
+            tabwindows = list(nvim.current.tabpage.windows)
+            if curwin.number != 1:
+                tabwindows[curwin.number - 2].vars['gdb_view'] = 1
+            else:
+                try:
+                    tabwindows[curwin.number].vars['gdb_view'] = 1
+                except IndexError:
+                    nvim.command('wincmd v')
+                    nvim.current.window.vars['gdb_view'] = 1
+                    nvim.command('wincmd w')
+
         gdb.execute('gohere default {}'.format(address))
         nvim.command('{} wincmd w'.format(curwin.number))
-
-
 
 
 GoHere()
