@@ -11,6 +11,7 @@ The commands defined here are:
 import subprocess as sp
 import re
 import gdb
+import helpers
 from helpers import eval_int
 
 # TODO
@@ -346,7 +347,13 @@ class PrintHypotheticalStack(gdb.Command):
 #               Same as above -- how to define the command.
 #               Would have to make a breakpoint each time a given function is
 #               called (as opposed to previous ones that don't).
-class FuncGraph(gdb.Command):
+#
+#   My best answer is option (2) -- it is the fastest by far (though it has a
+#   higher startup cost).
+#   I've overcome the problem with defining what should happen on the command
+#   by defining the `stop()` function to print what I want, and always return
+#   False. This means I never actually stop, which makes it even faster!!
+class FuncGraph1(gdb.Command):
     '''Continues the program, printing out the function call graph.
 
     Usage:
@@ -371,7 +378,7 @@ class FuncGraph(gdb.Command):
     #   It probably has a bunch of missed edge cases.
     #   I only wrote it to see if it would work.
     def __init__(self):
-        super(FuncGraph, self).__init__('func-graph', gdb.COMMAND_USER)
+        super(FuncGraph1, self).__init__('func-graph', gdb.COMMAND_USER)
         self.indent = 0
         self.fp_stack = []
 
@@ -442,7 +449,201 @@ class FuncGraph(gdb.Command):
         print(print_str)
 
 
+def retpoints(symbol, arch):
+    '''Return a list of addresses for all ret instructions in function `symbol`
+
+    Disassembles the function that `symbol` refers to, and returns a list of
+    the position of those return instructions in a format ready for creating a
+    breakpoint with.
+    The specific format returned is `*<symbol-name>+<offset>`.
+
+    '''
+    func_block = gdb.block_for_pc(
+        int(symbol.value().cast(helpers.uintptr_t)))
+    return [
+        '*{}+{}'.format(symbol.name, val['addr'] - func_block.start)
+        for val in
+        arch.disassemble(func_block.start, func_block.end)[:-1]
+        if val['asm'].startswith('ret')
+    ]
+
+
+def add_tracers(regexp):
+    'Trace all functions matching `regexp` in the current symbol table.'
+    # Ensure we never end up with duplicate traced points (which would mess up
+    # our output)..
+    remove_tracers(regexp)
+    frame = gdb.selected_frame()
+    arch = frame.architecture()
+    glob_block = frame.find_sal().symtab.global_block()
+    matching_symbols = [sym for sym in glob_block
+                        if re.match(regexp, sym.name) and sym.is_function]
+    for symbol in matching_symbols:
+        CallGraph.entry_breakpoints.append(EntryBreak(symbol.name))
+        for retaddr in retpoints(symbol, arch):
+            CallGraph.return_breakpoints.append(ReturnBreak(retaddr))
+
+
+def remove_tracers(regexp):
+    'Remove all trace points matching `regexp` in the CallGraph class lists.'
+    remaining_entry_bps = []
+
+    for bp in CallGraph.entry_breakpoints:
+        if re.match(regexp, bp.location):
+            bp.delete()
+        else:
+            remaining_entry_bps.append(bp)
+
+    remaining_return_bps = []
+    for bp in CallGraph.return_breakpoints:
+        func_name = bp.location[1:bp.location.rfind('+')]
+        if re.match(regexp, func_name):
+            bp.delete()
+        else:
+            remaining_return_bps.append(bp)
+
+    CallGraph.entry_breakpoints = remaining_entry_bps
+    CallGraph.return_breakpoints = remaining_return_bps
+
+
+class EntryBreak(gdb.Breakpoint):
+    '''Subclass of gdb.Breakpoint that never stops execution and prints the
+    current function indentation.
+
+    This class prints a string representing _entering_ a function and adds an
+    indentation level from the CallGraph data.
+
+    '''
+    def __init__(self, name):
+        super(EntryBreak, self).__init__(name, gdb.BP_BREAKPOINT,
+                                         -1, True, False)
+
+    def stop(self):
+        CallGraph.indent_level += 4
+        print('{} --> {}'.format(' '*CallGraph.indent_level, self.location))
+        return False
+
+
+class ReturnBreak(gdb.Breakpoint):
+    '''Subclass of gdb.Breakpoint that never stops execution and prints the
+    current function indentation.
+
+    This class prints a string representing _exiting_ a function and removes an
+    indentation level from the CallGraph data.
+
+    '''
+    def __init__(self, loc):
+        super(ReturnBreak, self).__init__(loc, gdb.BP_BREAKPOINT,
+                                          -1, True, False)
+    def stop(self):
+        print('{} <-- {}'.format(' '*CallGraph.indent_level, self.location))
+        CallGraph.indent_level -= 4
+        return False
+
+
+class CallGraph(gdb.Command):
+    '''Prefix command for call graph tracing commands.'''
+    entry_breakpoints = []
+    return_breakpoints = []
+    indent_level = 0
+
+    @classmethod
+    def clear_previous_breakpoints(cls):
+        for bp in cls.entry_breakpoints:
+            bp.delete()
+        cls.entry_breakpoints = []
+        for bp in cls.return_breakpoints:
+            bp.delete()
+        cls.return_breakpoints = []
+        cls.indent_level = 0
+
+    def __init__(self):
+        super(CallGraph, self).__init__('call-graph', gdb.COMMAND_USER,
+                                        gdb.COMPLETE_COMMAND, True)
+
+
+class CallGraphClear(gdb.Command):
+    '''Remove the current call-flow tracing breakpoints.
+
+    This removes the current tracing implemented by `call-graph trace REGEXP`.
+    After this has been called, no tracing will be implemented.
+
+    Usage:
+        call-graph clear
+
+    '''
+    def __init__(self):
+        super(CallGraphClear, self).__init__('call-graph clear',
+                                             gdb.COMMAND_USER)
+
+    def invoke(self, *_):
+        self.dont_repeat()
+        CallGraph.clear_previous_breakpoints()
+
+
+class CallGraphInit(gdb.Command):
+    '''Trace execution flow through functions matching REGEXP.
+
+    This command is useful to view the flow of code as it is executed.
+    Only one set of tracers may be active at one time.
+
+    Usage:
+        call-graph init REGEXP
+        call-graph init REGEXP
+
+    '''
+    def __init__(self):
+        super(CallGraphInit, self).__init__('call-graph init',
+                                            gdb.COMMAND_USER)
+
+    def invoke(self, arg, _):
+        self.dont_repeat()
+        CallGraph.clear_previous_breakpoints()
+        add_tracers(arg)
+
+
+class CallGraphUpdate(gdb.Command):
+    '''Add or remove tracers matching REGEXP.
+
+    This command is useful to incrementally update the functions currently
+    traced. For example you might want to trace create_tree and free_tree but
+    not create_random_tree, you can run the following commands:
+        call-graph clear
+        call-graph update + create_tree
+        call-graph update + free_tree
+    Or you can run:
+        call-graph clear
+        call-graph init .*_tree
+        call-graph update - create_random_tree
+
+    Usage:
+        call-graph update [+ | -] REGEXP
+
+    '''
+    def __init__(self):
+        super(CallGraphUpdate, self).__init__('call-graph update',
+                                              gdb.COMMAND_USER)
+
+    def invoke(self, arg, _):
+        args = gdb.string_to_argv(arg)
+        if len(args) != 2:
+            raise ValueError('call-graph update must have two arguments')
+
+        if args[0] not in ['+', '-']:
+            raise ValueError('Usage: call-graph update [+ | -] REGEXP')
+
+        if args[0] == '+':
+            add_tracers(args[1])
+            return
+
+        remove_tracers(args[1])
+
+
 AttachMatching()
 ShellPipe()
 GlobalUsed()
 PrintHypotheticalStack()
+CallGraph()
+CallGraphClear()
+CallGraphInit()
+CallGraphUpdate()

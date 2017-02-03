@@ -91,3 +91,96 @@ free_tree demos/tree.c:53
 (gdb) 
 (gdb)
 ```
+
+## Call Graph
+
+This command emulates `dtrace -F`.
+
+Example
+
+```
+(gdb) gdb demos/tree
+Reading symbols from demos/tree...done.
+(gdb) start 10
+Temporary breakpoint 1 at 0x400963: file demos/tree.c, line 86.
+Starting program: /home/matthew/share/repos/gdb-config/demos/tree 10
+
+Temporary breakpoint 1, main (argc=2, argv=0x7fffffffe4d8) at demos/tree.c:86
+86	    if (argc != 2) {
+(gdb) call-graph init .*
+(gdb) cont
+Continuing.
+     --> create_random_tree
+         --> create_tree
+         <-- *create_tree+45
+         --> insert_entry
+         <-- *insert_entry+229
+         --> insert_entry
+         <-- *insert_entry+229
+         --> insert_entry
+         <-- *insert_entry+229
+         --> insert_entry
+         <-- *insert_entry+229
+         --> insert_entry
+         <-- *insert_entry+229
+         --> insert_entry
+         <-- *insert_entry+229
+         --> insert_entry
+         <-- *insert_entry+229
+         --> insert_entry
+         <-- *insert_entry+229
+         --> insert_entry
+         <-- *insert_entry+229
+         --> insert_entry
+         <-- *insert_entry+229
+     <-- *create_random_tree+136
+     --> free_tree
+         --> free_tree
+             --> free_tree
+                 --> free_tree
+                 <-- *free_tree+64
+                 --> free_tree
+                 <-- *free_tree+64
+             <-- *free_tree+64
+             --> free_tree
+                 --> free_tree
+                 <-- *free_tree+64
+                 --> free_tree
+                 <-- *free_tree+64
+             <-- *free_tree+64
+         <-- *free_tree+64
+         --> free_tree
+             --> free_tree
+             <-- *free_tree+64
+             --> free_tree
+                 --> free_tree
+                     --> free_tree
+                         --> free_tree
+                         <-- *free_tree+64
+                         --> free_tree
+                             --> free_tree
+                             <-- *free_tree+64
+                             --> free_tree
+                             <-- *free_tree+64
+                         <-- *free_tree+64
+                     <-- *free_tree+64
+                     --> free_tree
+                     <-- *free_tree+64
+                 <-- *free_tree+64
+                 --> free_tree
+                     --> free_tree
+                         --> free_tree
+                         <-- *free_tree+64
+                         --> free_tree
+                         <-- *free_tree+64
+                     <-- *free_tree+64
+                     --> free_tree
+                     <-- *free_tree+64
+                 <-- *free_tree+64
+             <-- *free_tree+64
+         <-- *free_tree+64
+     <-- *free_tree+64
+ <-- *main+117
+[Inferior 1 (process 10473) exited normally]
+(gdb) 
+```
