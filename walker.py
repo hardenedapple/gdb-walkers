@@ -4,16 +4,26 @@ pipeline.
 
 '''
 
-import gdb
 import re
-import sys
-import os
+import gdb
 
+# Define the framework for putting walkers into the gdb.walkers before loading
+# walker_defs (which will do this a lot).
 gdb.walkers = {}
+
+
+def register_walker(walker_class):
+    if gdb.walkers.setdefault(walker_class.name, walker_class) != walker_class:
+        raise KeyError('A walker with the name "{}" already exits!'.format(
+            walker_class.name))
+
+
+gdb.register_walker = register_walker
 
 # Keep these in their own module -- this avoids namespace clashes, and allows
 # naming things Whatever instead of WhateverWalker
 import walker_defs
+
 
 class Pipeline(gdb.Command):
     '''Combine logical filters to work on many addresses in sequence.
@@ -33,7 +43,6 @@ class Pipeline(gdb.Command):
     '''
     def __init__(self):
         super(Pipeline, self).__init__('pipe', gdb.COMMAND_USER)
-        # TODO Make this a parameter you can set inside gdb
         self.default = 'eval'
 
     def create_walker(self, walker_def, first=False, last=False):
@@ -63,15 +72,15 @@ class Pipeline(gdb.Command):
 
         walker = gdb.walkers[walker_name]
         if walker.require_input and first or walker.require_output and last:
-            raise ValueError('Walker "{}" either requires an input or '
-                                      'an output and has been put somewhere '
-                                      'where this is not given to it.'.format(
-                                          walker_name))
+            raise ValueError('Walker "{}" either requires an input or an '
+                             'output and has been put somewhere where this '
+                             'is not given to it.'.format(walker_name))
         # May raise ValueError if the walker doesn't like the arguments it's
         # been given.
         return walker(args if args else None, first, last)
 
-    def connect_pipe(self, source, segments, drain):
+    @staticmethod
+    def connect_pipe(source, segments, drain):
         '''
         Each walker in the pipe is called with the iterator returned by its
         predecessor.
@@ -98,7 +107,7 @@ class Pipeline(gdb.Command):
         walker = drain.iter_def(inpipe=walker)
         return walker
 
-    def invoke(self, arg, from_tty):
+    def invoke(self, arg, _):
         '''
         Split our arguments into walker definitions.
         Instantiate the walkers with these definitions.
@@ -154,6 +163,7 @@ class Walker(gdb.Command):
             return []
         return [val for val in ['help', 'apropos'] if val.startswith(word)]
 
+
 class WalkerHelp(gdb.Command):
     '''Get help on a walker
 
@@ -177,11 +187,13 @@ class WalkerHelp(gdb.Command):
             'tag':      self.one_tag,
         }
 
-    def all_walkers(self, _):
+    @staticmethod
+    def all_walkers(_):
         for name, walker in gdb.walkers.items():
             print(name, '--', walker.__doc__.split('\n', 1)[0])
 
-    def all_tags(self, _):
+    @staticmethod
+    def all_tags(_):
         # NOTE I know this is extremely wasteful, but the likelyhood we're
         # going to have a huge number of walkers is small.
         all_tags = set()
@@ -190,12 +202,14 @@ class WalkerHelp(gdb.Command):
         for tag in sorted(list(all_tags)):
             print(tag)
 
-    def one_tag(self, tagname):
+    @staticmethod
+    def one_tag(tagname):
         for name, walker in gdb.walkers.items():
             if tagname in walker.tags:
                 print(name, '--', walker.__doc__.split('\n', 1)[0])
 
-    def one_walker(self, name):
+    @staticmethod
+    def one_walker(name):
         walker = gdb.walkers.get(name)
         if not walker:
             raise KeyError('No walker {} found'.format(name))
@@ -243,6 +257,7 @@ class WalkerHelp(gdb.Command):
                                 if val.startswith(word))
         return matching_walkers
 
+
 class WalkerApropos(gdb.Command):
     '''Search for walkers matching REGEXP
 
@@ -255,7 +270,8 @@ class WalkerApropos(gdb.Command):
 
     '''
     def __init__(self):
-        super(WalkerApropos, self).__init__('walker apropos', gdb.COMMAND_SUPPORT)
+        super(WalkerApropos, self).__init__('walker apropos',
+                                            gdb.COMMAND_SUPPORT)
 
     def invoke(self, args, _):
         for name, walker in gdb.walkers.items():

@@ -8,9 +8,9 @@ The commands defined here are:
     `whereami`
 
 '''
-import gdb
 import subprocess as sp
 import re
+import gdb
 from helpers import eval_int
 
 # TODO
@@ -20,6 +20,7 @@ from helpers import eval_int
 #   Get current architecture without having started the process.
 #
 #   Find length of a pointer without having started the process.
+
 
 class ShellPipe(gdb.Command):
     '''Pass the output of a gdb command into a shell command.
@@ -377,7 +378,6 @@ class FuncGraph(gdb.Command):
         self.fp_stack.pop()
         return False
 
-
     def invoke(self, *_):
         pos = eval_int('$pc')
         line = gdb.find_pc_line(pos)
@@ -418,7 +418,7 @@ class FuncGraph(gdb.Command):
             curindent = self.indent
             direction_string = '<--'
 
-        print_str = '{}{}{}{} {}:{}'.format( ' '*curindent, direction_string,
+        print_str = '{}{}{}{} {}:{}'.format(' '*curindent, direction_string,
                                             block.function.name, offset_str,
                                             line.symtab.filename, line.line)
 

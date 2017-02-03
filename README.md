@@ -28,7 +28,7 @@ much just a for loop).
 (gdb) pipe follow-until 1; {} > 100; {} + 1 | take-while $count++ < 10
 (gdb) set variable $count = 0
 (gdb) pipe array char; 1; 100 | take-while {} % 2 == 0 || $count++ < 5
-(gdb) pipe follow-until 100; {} <= 0; {} - 1 | tail 11 | reverse
+(gdb) pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse
 ```
 
 ## Other tricks

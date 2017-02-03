@@ -1,12 +1,25 @@
-'''Helper functions -- used throughout the config files.'''
+'''Helper functions -- used throughout the config files.
+
+The uintptr_t variable has to be a global variable because other functions want
+to use it.
+
+If using `from helpers import uintptr_t`, the `start_handler()` function
+doesn't change the value everywhere else because these other modules get their
+own local copy -- I don't know the logic behind this.
+
+Hence I either have to import the module everywhere and use qualified names,
+or source it directly in the gdbinit file.
+
+'''
 import gdb
+
 
 def find_uintptr_t():
     '''Find a uintptr_t equivalent and store it in the global namespace.'''
     voidptr_t = gdb.parse_and_eval('(char *)0').type
-    size_and_types = { val.sizeof: val for val in
-                      map(gdb.lookup_type,
-                          ['unsigned int', 'unsigned long', 'unsigned long long']) }
+    size_and_types = {val.sizeof: val for val in
+                      map(gdb.lookup_type, ['unsigned int', 'unsigned long',
+                                            'unsigned long long'])}
     try:
         return size_and_types[voidptr_t.sizeof]
     except KeyError:
@@ -18,6 +31,7 @@ def find_uintptr_t():
 # attach to the process.
 uintptr_t = find_uintptr_t()
 
+
 def eval_int(gdb_expr):
     '''Return the python integer value of `gdb_expr`
 
@@ -28,7 +42,7 @@ def eval_int(gdb_expr):
     return int(gdb.parse_and_eval(gdb_expr).cast(uintptr_t))
 
 
-def start_handler(event):
+def start_handler(_):
     '''Upon startup, find the pointer type for this program'''
     global uintptr_t
     uintptr_t = find_uintptr_t()
@@ -42,6 +56,5 @@ def start_handler(event):
     #   and you should be fine.
     gdb.events.stop.disconnect(start_handler)
 
+
 gdb.events.stop.connect(start_handler)
-
-

@@ -1,12 +1,13 @@
-import gdb
 import re
-from helpers import uintptr_t
+import gdb
+import helpers
+
 
 class OutputMatches(gdb.Function):
     '''Report whether the output of a given command includes some regex.
 
     This function is most useful to force existing gdb commands into a
-    pipeline. So that one can do 
+    pipeline. So that one can do
         pipe ... |  if $_output_contains("info symbol {}", ".text") | ...
     to filter based on whether an address given is in the text segment.
 
@@ -31,7 +32,7 @@ class OutputMatches(gdb.Function):
 
 class WhereIs(gdb.Function):
     '''Return source file and location of a .text address
-    
+
     `$_whereis()` Returns the source file and line number of a .text memory
     address This is useful for piping into other commands, or running `gf` on
     in a vim buffer.
@@ -44,10 +45,10 @@ class WhereIs(gdb.Function):
         super(WhereIs, self).__init__('_whereis')
 
     def invoke(self, arg):
-        pos = gdb.find_pc_line(int(arg.cast(uintptr_t)))
+        pos = gdb.find_pc_line(int(arg.cast(helpers.uintptr_t)))
         if not pos.symtab:
             return " $_whereis() Can't find symtab of address"
-        return pos.symtab.filename + ':' + str(pos.line) 
+        return pos.symtab.filename + ':' + str(pos.line)
 
 
 class FunctionOf(gdb.Function):
@@ -63,7 +64,7 @@ class FunctionOf(gdb.Function):
         super(FunctionOf, self).__init__('_function_of')
 
     def invoke(self, arg):
-        pos_given = int(arg.cast(uintptr_t))
+        pos_given = int(arg.cast(helpers.uintptr_t))
 
         # If given @plt addresses (or other problematic functions) just ignore
         # them and return an error message -- (better than raising an error?)
@@ -117,7 +118,6 @@ class Typeof(gdb.Function):
 
     def invoke(self, val):
         return str(val.dynamic_type)
-
 
 
 OutputMatches()

@@ -1,7 +1,17 @@
-import gdb
+'''Contains the definitions for general walkers
+
+This module defines all the general walkers that can be applicable anywhere.
+When making your own walkers, define them anywhere, and load them into the
+gdb.walkers dictionary with gdb.register_walker().
+
+'''
 import abc
 import re
-from helpers import uintptr_t, eval_int
+import gdb
+# Need the global value so that we don't get a copy of helpers.uintptr_t, and
+# instead we see the updates made by start_handler().
+import helpers
+from helpers import eval_int
 
 # TODO
 #    Error messages are stored in the class.
@@ -22,12 +32,6 @@ from helpers import uintptr_t, eval_int
 #       items in the class.
 
 
-def register_walker(walker_class):
-    if gdb.walkers.setdefault(walker_class.name, walker_class) != walker_class:
-        raise KeyError('A walker with the name "{}" already '
-                                   'exits!'.format(walker_class.name))
-
-
 class GdbWalker(abc.ABC):
     '''
     Class for a walker type.
@@ -41,11 +45,12 @@ class GdbWalker(abc.ABC):
 
     A walker is required to implement the method `iter_def(self, inpipe)`.
     This method is passed the previous iterator as `inpipe` (this may be None
-    if the walker is first in a command line). 
+    if the walker is first in a command line).
     It is required to return an iterator over python integers.
     These integers usually represent addresses in the program space.
 
     '''
+    name = 'XXX Default XXX Must name this class XXXX'
     require_input = False
     require_output = False
     tags = []
@@ -59,6 +64,19 @@ class GdbWalker(abc.ABC):
 
     @classmethod
     def eval_user_expressions(cls, string):
+        '''Take argument `string` and replace all occurances of $#<expression>#
+        with the value of the enclosed expression as evaluated by
+        gdb.parse_and_eval() before being cast to an integer.
+
+        These valus are then put back into the input string as hexadecimal
+        constants.
+
+        e.g.
+            "hello there $#1 + 10#"
+            =>
+            "hello there 0xb"
+
+        '''
         return_parts = []
         # TODO Make this a 'proper' parser -- for now I just hope no-one's
         # using '#' characters in their gdb expressions.
@@ -75,8 +93,22 @@ class GdbWalker(abc.ABC):
     @classmethod
     def parse_args(cls, args, nargs=None, split_string=None,
                    strip_whitespace=True, maxsplit=-1):
-        if not args: return []
-        # Replace ${} covered expressions in the string with gdb 
+        '''General function for parsing walker arguments.
+
+        Replace occurances of $#<expression># with the evaluated expression,
+        then split based on the split string given (if None given split on
+        whitespace), then check the number of arguments are within nargs[0] and
+        nargs[1].
+
+        If strip_whitespace is given, then remove whitespace from all
+        arguments.
+
+        Return a list of strings as the arguments.
+
+        '''
+        if not args:
+            return []
+        # Replace $## covered expressions in the string with gdb
         args = cls.eval_user_expressions(args)
 
         # TODO Ignore escaped versions of split_string, then remove the escape
@@ -85,14 +117,14 @@ class GdbWalker(abc.ABC):
         argc = len(retval)
         if nargs is not None and (argc < nargs[0] or argc > nargs[1]):
             raise ValueError('Walker "{}" takes between {} and {} '
-                                      'arguments.'.format(cls.name, nargs[0],
-                                                          nargs[1]))
+                             'arguments.'.format(cls.name, nargs[0], nargs[1]))
         if strip_whitespace:
             retval = [val.strip() for val in retval]
         return retval
 
     @staticmethod
     def form_command(cmd_parts, element):
+        '''Join `cmd_parts` with the hexadecimal string of `element`'''
         addr_str = '{}'.format(hex(int(element)))
         return addr_str.join(cmd_parts)
 
@@ -125,7 +157,6 @@ class Eval(GdbWalker):
     tags = ['general', 'interface']
 
     def __init__(self, args, first, last):
-        # XXX allow escaping '{}' here
         if first:
             self.command_parts = self.parse_args(args, [1, 1], '{}', False)
             self.__iter_helper = self.__iter_without_input
@@ -187,8 +218,8 @@ class Instruction(GdbWalker):
     `end-address` may be `None` to only use `count` as a limit on the number of
     instructions.
 
-    If we're first in the pipeline, `start-address` is required, otherwise it is
-    assumed to be the address given to us in the previous pipeline.
+    If we're first in the pipeline, `start-address` is required, otherwise it
+    is assumed to be the address given to us in the previous pipeline.
 
     Example:
         instructions main; main+10
@@ -201,13 +232,14 @@ class Instruction(GdbWalker):
     tags = ['data']
 
     def __init__(self, args, first, _):
-        cmd_parts = self.parse_args(args, [2,3] if first else [1,2], ';')
+        cmd_parts = self.parse_args(args, [2, 3] if first else [1, 2], ';')
         # TODO Find a way to get the architecture without requiring the program
         # to be running.
         frame = gdb.selected_frame()
         self.arch = frame.architecture()
 
-        if first: self.start_address = eval_int(cmd_parts.pop(0))
+        if first:
+            self.start_address = eval_int(cmd_parts.pop(0))
         end = cmd_parts.pop(0)
         self.end_address = None if end == 'NULL' else eval_int(end)
         self.count = eval_int(cmd_parts.pop(0)) if cmd_parts else None
@@ -368,18 +400,16 @@ class Array(GdbWalker):
         # TODO This is hacky, and we don't handle char[], &char that users
         # might like to use.
         if typename.find('*') != -1:
-            self.element_size = uintptr_t.sizeof
+            self.element_size = helpers.uintptr_t.sizeof
         else:
             self.element_size = gdb.lookup_type(typename).sizeof
 
         self.count = eval_int(count)
 
     def __iter_first(self, _):
-        num_left = self.count
         cur_pos = self.start_addr
-        while num_left > 0:
+        for _ in range(self.count):
             yield cur_pos
-            num_left -= 1
             cur_pos += self.element_size
 
     def __iter_pipe(self, inpipe):
@@ -467,7 +497,7 @@ class Terminated(GdbWalker):
         else:
             test_expr, follow_expr = self.parse_args(args, [2, 2], ';')
             self.start = None
-        
+
         # Here we split the arguments into something that will form the
         # arguments next.
         self.test_cmd = self.parse_args(test_expr, None, '{}', False)
@@ -497,9 +527,9 @@ class Devnull(GdbWalker):
     name = 'devnull'
     require_input = True
     tags = ['general']
-    
+
     def iter_def(self, inpipe):
-        for element in inpipe:
+        for _ in inpipe:
             pass
 
 
@@ -572,7 +602,8 @@ class Functions(GdbWalker):
         # hypothetical_stack checks for recursion, but also allows the
         # hypothetical-call-stack walker to see what the current stack is.
         type(self).hypothetical_stack = []
-        if first: self.__add_addr(eval_int(self.cmd_parts[0]), 0)
+        if first:
+            self.__add_addr(eval_int(self.cmd_parts[0]), 0)
         self.arch = gdb.selected_frame().architecture()
 
     def __add_addr(self, addr, depth):
@@ -596,7 +627,18 @@ class Functions(GdbWalker):
         return None
 
     def __iter_helper(self):
-        while len(self.func_stack) != 0:
+        '''
+        Iterate over all instructions in a function, put each `call`
+        instruction on a stack.
+
+        Continue until no more functions are found, or until `maxdepth` is
+        exceeded.
+
+        Skip any recursion by ignoring any functions already in the
+        hypothetical stack we have built up.
+
+        '''
+        while self.func_stack:
             func_addr, depth = self.func_stack.pop()
             if self.maxdepth >= 0 and depth > self.maxdepth:
                 continue
@@ -701,7 +743,7 @@ class HypotheticalStack(GdbWalker):
         `called-functions` walker.
 
     Usage:
-        pipe called-functions main; .*; -1 | 
+        pipe called-functions main; .*; -1 |
             if $_output_contains("global-used {} curwin", "curwin") |
             hypothetical-call-stack
 
@@ -722,12 +764,11 @@ class HypotheticalStack(GdbWalker):
             yield from self.called_funcs_class.hypothetical_stack
             return
 
-        for element in inpipe:
+        for _ in inpipe:
             yield from self.called_funcs_class.hypothetical_stack
 
 
 for walker in [Eval, Show, Instruction, Head, Tail, If, Array, Count,
                Terminated, Until, Devnull, Since, Reverse, Functions, File,
                HypotheticalStack]:
-    register_walker(walker)
-
+    gdb.register_walker(walker)
