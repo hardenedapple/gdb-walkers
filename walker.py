@@ -34,11 +34,11 @@ class Pipeline(gdb.Command):
         pipe walker1 | walker2 | walker3 ...
 
     Use:
-        (gdb) python print([name for name in gdb.walkers])
+        (gdb) walker help walkers
     to see what walkers are available.
 
     Use:
-        (gdb) python print(gdb.walkers[name].__doc__)
+        (gdb) walker help [walker]
     to show the help for that walker.
     '''
     def __init__(self):
@@ -149,6 +149,7 @@ class Walker(gdb.Command):
         super(Walker, self).__init__('walker', gdb.COMMAND_USER,
                                      gdb.COMPLETE_COMMAND, True)
 
+
 class WalkerHelp(gdb.Command):
     '''Get help on a walker
 
@@ -205,6 +206,8 @@ class WalkerHelp(gdb.Command):
         num_args = len(argv)
         if num_args != 1 and not (num_args == 2 and argv[0] == 'tag'):
             print(self.__doc__)
+            if num_args < 1:
+                return
             raise ValueError('Invalid arguments to `walker help`')
 
         if num_args == 2:

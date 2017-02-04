@@ -353,6 +353,7 @@ class PrintHypotheticalStack(gdb.Command):
 #   I've overcome the problem with defining what should happen on the command
 #   by defining the `stop()` function to print what I want, and always return
 #   False. This means I never actually stop, which makes it even faster!!
+
 class FuncGraph1(gdb.Command):
     '''Continues the program, printing out the function call graph.
 
@@ -377,6 +378,7 @@ class FuncGraph1(gdb.Command):
     #   It has a terrible user interface
     #   It probably has a bunch of missed edge cases.
     #   I only wrote it to see if it would work.
+    #   There's a much better option below (call-graph and its subcommands).
     def __init__(self):
         super(FuncGraph1, self).__init__('func-graph', gdb.COMMAND_USER)
         self.indent = 0

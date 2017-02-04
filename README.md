@@ -1,12 +1,20 @@
-# GDB configuration files
+# GDB extensions
 
-Contains all the helper python commands and functions I've written for myself.
+Contains a few helper gdb functions and commands.
+Most notable are the addition of `walkers` (idea taken from `mdb`) over complex
+data structures, `call-graph` command (idea taken from `dtrace -F`), and
+`shellpipe` that pipes the output of a command to a shell process.
 
-# NOTE -- this repo and README are under flux
-Everything here is subject to change, at the moment the README is pretty much
-just a collection of tricks I want to make sure I don't lose the ability to do
-when working. (i.e. this is the place where poorly formed tests go).
+Walkers that don't exist in `mdb` are over all functions called from another
+one, and the corresponding printing of the hypothetical stack created from this
+walker.
 
+# Getting help
+
+All commands introduced are documented with docstrings so that the gdb `help`
+command provides adequate information.
+For information about walkers, the `walker help` and `walker apropos` commands
+should give you enough information to see what's going on.
 
 # Tips & Tricks
 
@@ -29,13 +37,27 @@ much just a for loop).
 (gdb) set variable $count = 0
 (gdb) pipe array char; 1; 100 | take-while {} % 2 == 0 || $count++ < 5
 (gdb) pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse
+(gdb) // Combine the addresses of more than one walker.
+(gdb) shellpipe pipe array char; 1; 5 ! cat > addresses
+(gdb) shellpipe pipe array char; 6; 5 ! cat >> addresses
+(gdb) pipe file addresses
 ```
 
 ## Other tricks
 
-foldl can be implemented by using side-effects (I know ... that doesn't quite
-fit together right does it?)
+### Show position of all calls in a function
+```
+(gdb) shellpipe disassemble main ! grep call
+   0x0000000000400984 <+48>:	callq  0x400630 <fprintf@plt>
+   0x000000000040098e <+58>:	callq  0x400650 <exit@plt>
+   0x00000000004009a1 <+77>:	callq  0x400640 <atoi@plt>
+   0x00000000004009ae <+90>:	callq  0x4008cb <create_random_tree>
+   0x00000000004009be <+106>:	callq  0x40085c <free_tree>
+(gdb) 
+```
 
+### foldl implemented through side-effects
+I know ... that doesn't quite sound right does it?
 ```
 (gdb) set variable $sum = 0
 (gdb) pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {}, {} | devnull
@@ -44,7 +66,7 @@ $1 = 5050
 (gdb) 
 ```
 
-Find the indices of an array that match some condition
+### Find the indices of an array that match some condition
 ```
 (gdb) start 20 100 Hello there this is a test
 (gdb) set variable $i = -1
@@ -60,8 +82,9 @@ $117 = 0x7fffffffe89d "this"
 (gdb) 
 ```
 
-List all functions called by main (probably a bad idea in anything but the
-smallest program) and their source code file name and line number.
+### List all functions called by main 
+probably a bad idea in anything but the smallest program and their source code
+file name and line number.
 ```
 (gdb) pipe called-functions main; .*; -1 | show printf "%18s\t%s\n", $_function_of({}), $_whereis({})
               main	demos/tree.c:85
@@ -72,8 +95,9 @@ create_random_tree	demos/tree.c:69
 (gdb) 
 ```
 
-List the hypothetical call stack of all functions called by main that use a
-global variable (in this case, use the global function `free_tree`).
+### List hypothetical call stack of functions called by main that use a global
+in this case, use the global function `free_tree`, if you have a global
+variable this would work just as well.
 ```
 (gdb) pipe called-functions main; .*; -1 | if $_output_contains("global-used {} free_tree", "free_tree") | show hypothetical-stack | show printf "\n"
 main demos/tree.c:85
