@@ -46,15 +46,18 @@ def start_handler(_):
     '''Upon startup, find the pointer type for this program'''
     global uintptr_t
     uintptr_t = find_uintptr_t()
-    # Remove us from the stop handler -- there is no reason to keep finding the
-    # same pointer type.
+    # Remove us from the handler -- there is no reason to keep finding the same
+    # pointer type.
     # NOTE:
-    #   This may have trouble when switching between a 32bit and 64 bit process
-    #   in the same gdb session.
+    #   This may have trouble when inspecting both 32bit and 64 bit programs in
+    #   the same gdb session.
     #   In that case, just manually run
     #      (gdb) python find_uintptr_t()
     #   and you should be fine.
-    gdb.events.stop.disconnect(start_handler)
+    gdb.events.new_objfile.disconnect(start_handler)
 
 
-gdb.events.stop.connect(start_handler)
+# Update uintptr_t value on first objfile added because by then we'll know what
+# the current program file architecture is. If we find the current pointer type
+# before we do anything else gdb just guesses.
+gdb.events.new_objfile.connect(start_handler)

@@ -14,22 +14,25 @@ import helpers
 from helpers import eval_int
 
 # TODO
-#    Error messages are stored in the class.
+#   Error messages are stored in the class.
 #       (so that self.parse_args() gives useful error messages)
 #
-#    I should be able to get the current 'Architecture' type from the file
-#    without having to have started the program.
-#       This would mean Instruction could be called without starting the
-#       inferior process.
+#   Why does gdb.lookup_global_symbol() not find global variables.
+#   So far it only appears to find function names.
 #
-#    Rename everything to match the functional paradigm? The question is really
-#    what names would be most helpful for me (or anyone else) when searching
-#    for a walker that matches my needs?
-#       eval => map
-#       if   => filter
-#       I could have double names for some -- I would just need to change
-#       register_walker so that it checks for 'name' and 'functional_name'
-#       items in the class.
+#   I should be able to get the current 'Architecture' type from the file
+#   without having to have started the program.
+#      This would mean Instruction could be called without starting the
+#      inferior process.
+#
+#   Rename everything to match the functional paradigm? The question is really
+#   what names would be most helpful for me (or anyone else) when searching
+#   for a walker that matches my needs?
+#      eval => map
+#      if   => filter
+#      I could have double names for some -- I would just need to change
+#      register_walker so that it checks for 'name' and 'functional_name'
+#      items in the class.
 
 
 class GdbWalker(abc.ABC):
@@ -233,8 +236,7 @@ class Instruction(GdbWalker):
 
     def __init__(self, args, first, _):
         cmd_parts = self.parse_args(args, [2, 3] if first else [1, 2], ';')
-        # TODO Find a way to get the architecture without requiring the program
-        # to be running.
+        # TODO Target arch.
         frame = gdb.selected_frame()
         self.arch = frame.architecture()
 
@@ -248,8 +250,7 @@ class Instruction(GdbWalker):
         '''
         Helper function.
         '''
-        # TODO find the default arguments for this function so I can remove all
-        # the conditions.
+        # TODO arch.disassemble default args.
         if self.end_address and self.count:
             return self.arch.disassemble(start_address,
                                          self.end_address,

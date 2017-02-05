@@ -14,14 +14,6 @@ import gdb
 import helpers
 from helpers import eval_int
 
-# TODO
-#   Why does gdb.lookup_global_symbol() not find global variables.
-#   So far it only appears to find function names.
-#
-#   Get current architecture without having started the process.
-#
-#   Find length of a pointer without having started the process.
-
 
 class ShellPipe(gdb.Command):
     '''Pass the output of a gdb command into a shell command.
