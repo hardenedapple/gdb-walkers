@@ -14,11 +14,27 @@ import helpers
 from helpers import eval_int
 
 # TODO
+#   Everywhere I look for the start and end of a function by using
+#       gdb.block_for_pc() and getting the block start and end, I should be
+#       able to find the function start and end using a minimal_symbol type.
+#       This would allow using these functions without debugging symbols, at
+#       the moment this doesn't work.
+#
+#       Places where replacing gdb.block_for_pc() and block.{start,end} with
+#       something to do with minimal_symbols would allow working without
+#       debugging information:
+#           `call-graph`
+#           `global-used`
+#           `$_function_of()`
+#           `walker called-functions`
+#
 #   Error messages are stored in the class.
 #       (so that self.parse_args() gives useful error messages)
 #
 #   Why does gdb.lookup_global_symbol() not find global variables.
 #   So far it only appears to find function names.
+#
+#   Current symbol table should be available without starting the process.
 #
 #   I should be able to get the current 'Architecture' type from the file
 #   without having to have started the program.
@@ -236,9 +252,7 @@ class Instruction(GdbWalker):
 
     def __init__(self, args, first, _):
         cmd_parts = self.parse_args(args, [2, 3] if first else [1, 2], ';')
-        # TODO Target arch.
-        frame = gdb.selected_frame()
-        self.arch = frame.architecture()
+        self.arch = gdb.current_arch()
 
         if first:
             self.start_address = eval_int(cmd_parts.pop(0))
@@ -605,7 +619,7 @@ class Functions(GdbWalker):
         type(self).hypothetical_stack = []
         if first:
             self.__add_addr(eval_int(self.cmd_parts[0]), 0)
-        self.arch = gdb.selected_frame().architecture()
+        self.arch = gdb.current_arch()
 
     def __add_addr(self, addr, depth):
         # Use reverse stack because recursion is more likely a short-term

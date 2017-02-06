@@ -467,9 +467,18 @@ def add_tracers(regexp):
     # Ensure we never end up with duplicate traced points (which would mess up
     # our output)..
     remove_tracers(regexp)
-    frame = gdb.selected_frame()
-    arch = frame.architecture()
-    glob_block = frame.find_sal().symtab.global_block()
+    arch = gdb.current_arch()
+    # TODO
+    #   Currently doesn't account for more than one symtab.
+    #   Need to iterate over all symbol tables in an objfile.
+    #   There is already a way to access all objfiles under gdb, and since
+    #   each symbol table is associated with an objfile, we should be able to
+    #   get all symbol tables.
+    #   As yet this isn't possible.
+    #
+    #   Also, currently only iterates over global symbols, not functions that
+    #   aren't global -- which obviously misses a lot of functions.
+    glob_block = gdb.selected_frame().find_sal().symtab.global_block()
     matching_symbols = [sym for sym in glob_block
                         if re.match(regexp, sym.name) and sym.is_function]
     for symbol in matching_symbols:
