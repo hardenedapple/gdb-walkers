@@ -328,9 +328,9 @@ class PrintHypotheticalStack(gdb.Command):
 #           When the return instruction is hit, print a "leaving" thing.
 #
 #           Problems:
-#               How to define what should happen on the command.
-#               Would have to iterate over the entire function to find where
-#               the ret instruction is.
+#               At the moment (because there isn't any way to access the
+#               minimal_symbol structures inside gdb) we need debugging
+#               information.
 #
 #       3)  Make a "finish" breakpoint for the current frame.
 #           This would print the "leaving" thing.
@@ -633,6 +633,24 @@ class CallGraphUpdate(gdb.Command):
         remove_tracers(args[1])
 
 
+class CallGraphInfo(gdb.Command):
+    '''Print all functions currently traced with call-graph
+
+    '''
+    # TODO Find if I can mark this as part of the `info` command.
+    def __init__(self):
+        super(CallGraphInfo, self).__init__('info call-graph',
+                                            gdb.COMMAND_STATUS)
+
+    def invoke(self, arg, _):
+        args = gdb.string_to_argv(arg)
+        if args:
+            raise ValueError('info call-graph takes no arguments')
+        print('Functions currently traced by call-graph:')
+        for bp in CallGraph.entry_breakpoints:
+            print('\t', bp.location)
+
+
 AttachMatching()
 ShellPipe()
 GlobalUsed()
@@ -641,3 +659,4 @@ CallGraph()
 CallGraphClear()
 CallGraphInit()
 CallGraphUpdate()
+CallGraphInfo()
