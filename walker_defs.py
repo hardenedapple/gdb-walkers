@@ -11,7 +11,7 @@ import gdb
 # Need the global value so that we don't get a copy of helpers.uintptr_t, and
 # instead we see the updates made by start_handler().
 import helpers
-from helpers import eval_int
+from helpers import eval_int, function_disassembly
 
 # TODO
 #   Everywhere I look for the start and end of a function by using
@@ -612,6 +612,10 @@ class Functions(GdbWalker):
         self.cmd_parts = self.parse_args(args, [3,3] if first else [2,2], ';')
         self.maxdepth = eval_int(self.cmd_parts[-1])
         self.file_regex = self.cmd_parts[-2].strip()
+        # User asked for specific files, wo only know the filename if there is
+        # debugging information, hence ignore all functions that don't have
+        # debugging info.
+        self.dont_fallback = re.match(self.file_regex, '') is not None
 
         self.func_stack = []
         # hypothetical_stack checks for recursion, but also allows the
@@ -658,36 +662,23 @@ class Functions(GdbWalker):
             if self.maxdepth >= 0 and depth > self.maxdepth:
                 continue
 
+            # If func_dis is None no debugging info was found for this function
+            # and the user required filtering by filename (which we don't know
+            # without debugging info) -- hence ignore this.
+            func_dis, _, fname = function_disassembly(func_addr, self.arch,
+                                                      self.dont_fallback)
+            if not func_dis or not re.match(self.file_regex,
+                                            '' if not fname else fname):
+                continue
+
             # Store the current value in the hypothetical_stack for someone
             # else to query - remember to set the class attribute.
             type(self).hypothetical_stack[depth:] = [func_addr]
             yield func_addr
 
-            try:
-                func_block = gdb.block_for_pc(func_addr)
-            except RuntimeError as e:
-                # Cannot locate object file for block
-                if e.args == ('Cannot locate object file for block.', ):
-                    func_block = None
-                else:
-                    raise e
-
-            # Catches not found block and block where object file was not
-            # found.
-            if not func_block:
-                continue
-
-            func_file = func_block.function.symtab.filename
-            if not re.match(self.file_regex, func_file):
-                continue
-
             # Go backwards through the list so that we pop off elements in the
             # order they will be called.
-            # Remove the last element in the list because the disassemble
-            # function has been given the end of the block as it's end
-            # argument, which is past the last retq instruction of the block.
-            for val in self.arch.disassemble(func_block.start,
-                                             func_block.end)[-2::-1]:
+            for val in func_dis[::-1]:
                 new_addr = self.__func_addr(val)
                 self.__add_addr(new_addr, depth + 1)
 

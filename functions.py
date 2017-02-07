@@ -47,7 +47,7 @@ class WhereIs(gdb.Function):
     def invoke(self, arg):
         pos = gdb.find_pc_line(int(arg.cast(helpers.uintptr_t)))
         if not pos.symtab:
-            return " $_whereis() Can't find symtab of address"
+            return "\t\tUnknown"
         return pos.symtab.filename + ':' + str(pos.line)
 
 
@@ -72,7 +72,8 @@ class FunctionOf(gdb.Function):
             block = gdb.block_for_pc(pos_given)
         except RuntimeError as e:
             if e.args == ('Cannot locate object file for block.',):
-                return "$_function_of() Can't find {}".format(pos_given)
+                return gdb.execute('info symbol {}'.format(pos_given),
+                                   False, True).split()[0]
             raise
 
         while block.function.name is None:

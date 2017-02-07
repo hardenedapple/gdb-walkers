@@ -12,7 +12,7 @@ import subprocess as sp
 import re
 import gdb
 import helpers
-from helpers import eval_int
+from helpers import eval_int, function_disassembly
 
 
 class ShellPipe(gdb.Command):
@@ -244,30 +244,19 @@ class GlobalUsed(gdb.Command):
 
     def invoke(self, arg, _):
         args = gdb.string_to_argv(arg)
-        arch = gdb.selected_frame().architecture()
         func_addr = eval_int(''.join(args[:-1]))
         # Let possible error raise -- user needs to know something went wrong.
-        func_block = gdb.block_for_pc(func_addr)
-        if not func_block:
-            print('Block for {} could not be found'.format(
-                ''.join(args[:-1])))
-            return
-
+        func_dis, func_name, func_file = function_disassembly(func_addr)
         glob_name = args[-1]
-        # Since func_block.end is where the block ends, this is *after* the
-        # last instruction (usually a ret).
-        # Hence, we should ignore the last instruction given from the
-        # disassembly as this is after the last instruction of the function.
 
         glob_uses = [
-            self.make_info(val) for val in
-            arch.disassemble(func_block.start, func_block.end)[:-1]
+            self.make_info(val) for val in func_dis
             if val['asm'].split()[-1] == '<{}>'.format(glob_name)
         ]
 
         if glob_uses:
             print('"{}" uses "{}" in the following places'.format(
-                func_block.function.name, glob_name))
+                func_name, glob_name))
             print('\n'.join(glob_uses))
 
 
@@ -288,6 +277,7 @@ class PrintHypotheticalStack(gdb.Command):
         if arg and arg.split() != []:
             raise ValueError('hypothetical-stack takes no arguments')
         gdb.execute('pipe hypothetical-call-stack | show wheresthis {} | devnull')
+        print()
 
 
 # Alternate thoughts about FuncGraph
@@ -452,12 +442,13 @@ def retpoints(symbol, arch):
     The specific format returned is `*<symbol-name>+<offset>`.
 
     '''
-    func_block = gdb.block_for_pc(
-        int(symbol.value().cast(helpers.uintptr_t)))
+    func_dis, func_name, _ = function_disassembly(
+        int(symbol.value().cast(helpers.uintptr_t)),
+        arch)
+    start = func_dis[0]['addr']
     return [
-        '*{}+{}'.format(symbol.name, val['addr'] - func_block.start)
-        for val in
-        arch.disassemble(func_block.start, func_block.end)[:-1]
+        '*{}+{}'.format(func_name, val['addr'] - start)
+        for val in func_dis
         if val['asm'].startswith('ret')
     ]
 
@@ -468,20 +459,16 @@ def add_tracers(regexp):
     # our output)..
     remove_tracers(regexp)
     arch = gdb.current_arch()
+    # .+ as the regex means we ignore non-debugging symbols.
+    # This is unfortunate, but means we avoid a whole load of hassle.
     # TODO
-    #   Currently doesn't account for more than one symtab.
-    #   Need to iterate over all symbol tables in an objfile.
-    #   There is already a way to access all objfiles under gdb, and since
-    #   each symbol table is associated with an objfile, we should be able to
-    #   get all symbol tables.
-    #   As yet this isn't possible.
-    #
-    #   Also, currently only iterates over global symbols, not functions that
-    #   aren't global -- which obviously misses a lot of functions.
-    glob_block = gdb.selected_frame().find_sal().symtab.global_block()
-    matching_symbols = [sym for sym in glob_block
-                        if re.match(regexp, sym.name) and sym.is_function]
-    for symbol in matching_symbols:
+    #   Do the hassle and allow non-debugging symbols.
+    #   Known problems are just that the non-debugging symbols found aren't
+    #   complete (because of the output of `info functions` gives non-full
+    #   symbols).
+    #   This can be solved by adding try/except around instantiating the
+    #   breakpoints.
+    for symbol in gdb.search_symbols(regexp, '.+'):
         CallGraph.entry_breakpoints.append(EntryBreak(symbol.name))
         for retaddr in retpoints(symbol, arch):
             CallGraph.return_breakpoints.append(ReturnBreak(retaddr))

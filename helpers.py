@@ -12,6 +12,7 @@ or source it directly in the gdbinit file.
 
 '''
 import gdb
+import re
 
 
 def find_uintptr_t():
@@ -61,3 +62,153 @@ def start_handler(_):
 # the current program file architecture is. If we find the current pointer type
 # before we do anything else gdb just guesses.
 gdb.events.new_objfile.connect(start_handler)
+
+if not hasattr(gdb, 'current_arch'):
+    def cur_arch():
+        '''
+        Get the current architecture.
+
+        This only works if the program is currently running.
+
+        If the gdb.current_arch() function is defined, then it's much better
+        than this mock because it works even when the current process isn't
+        running.
+
+        '''
+        return gdb.selected_frame().architecture()
+
+    gdb.current_arch = cur_arch
+
+
+class FakeSymbol():
+    '''Fake a gdb.Symbol class.
+
+    Can't make these directly because we don't have enough information.
+    All we need for the current use-case is the value() method, and the name
+    attribute.
+
+    '''
+    def __init__(self, name, value):
+        self.name = name
+        self._value = gdb.Value(eval_int(value))
+
+    def value(self):
+        return self._value
+
+
+if not hasattr(gdb, 'search_symbols'):
+    def file_symbols(filename, regexp):
+        '''Iterate over all symbols defined in a file.'''
+        if not filename:
+            return
+
+        try:
+            unparsed, sal_options = gdb.decode_line("'{}':1".format(filename))
+        except gdb.error as e:
+            if e.args[0].startswith('No line 1 in file "'):
+                return
+            raise
+
+        if unparsed:
+            raise ValueError('Failed to parse {} as filename'.format(filename))
+
+        # NOTE: When there are more than one symbol and file options given from
+        # the same source file, they all have the same set of symbol names.
+        #   (as far as I can tell -- haven't yet looked at the gdb source).
+        # Hence ignore any extra ones.
+        sal = sal_options[0]
+        for block in (sal.symtab.global_block(), sal.symtab.static_block()):
+            yield from (sym for sym in block
+                        if sym.is_function and re.match(regexp, sym.name))
+
+
+    def search_symbols(regexp, file_regex):
+        '''Return symbols matching REGEXP defined in files matching FILE_REGEXP
+
+        '''
+        include_non_debugging = re.match(file_regex, '') is not None
+
+        try:
+            source_files = gdb.execute('info sources', False, True)
+        except gdb.error as e:
+            if e.args != ('No symbol table is loaded.  Use the "file" command.',):
+                raise e
+        else:
+            source_lines = source_files.splitlines()
+            loaded = source_lines[2]
+            unloaded = source_lines[6]
+            for filelist in loaded.split(', '), unloaded.split(', '):
+                for filename in (val for val in filelist if
+                                 re.match(file_regex, val)):
+                    yield from file_symbols(filename, regexp)
+
+        if include_non_debugging:
+            # Don't filter functions directly with regexp because we want to
+            # use python rexexp (to match the filter done above).
+            all_symbols = gdb.execute('info functions', False, True)
+            non_debug_start = all_symbols.find('Non-debugging symbols:')
+            all_non_debugging = all_symbols[non_debug_start:].splitlines()[1:]
+            # Just because it makes me feel better to let python free the big
+            # string -- probably doesn't matter.
+            del all_symbols
+            for line in all_non_debugging:
+                # If ValueError() is raised here, then my assumptions are
+                # incorrect -- I need to know about it.
+                addr, name = line.split()
+                if not re.match(regexp, name):
+                    continue
+                yield FakeSymbol(name, addr)
+
+
+    gdb.search_symbols = search_symbols
+
+
+def function_disassembly(func_addr, arch=None, use_fallback=True):
+    '''Return the disassembly and filename of the function at `func_addr`.
+
+    If there are no debugging symbols, return the None as the filename.
+        (function_disassembly, function_name or None, function_filename or None)
+
+    If `use_fallback` is set to False, and there is are no debugging symbols
+    for the current function, return (None, None, None).
+
+    '''
+    arch = arch or gdb.current_arch()
+
+    try:
+        func_block = gdb.block_for_pc(func_addr)
+    except RuntimeError as e:
+        if e.args != ('Cannot locate object file for block.', ):
+            raise e
+    else:
+        # No instruction is less than one byte.
+        # If we provide an end point that is one byte less than the end of the
+        # last instruction in the block, then this ends the disassembly on the
+        # last instruction of the function.
+        return (arch.disassemble(func_block.start, func_block.end-1),
+                func_block.function.name,
+                func_block.function.symtab.filename)
+
+    if not use_fallback:
+        return (None, None, None)
+
+    # Fallback -- Use the gdb `disassemble` command to disassemble the entire
+    # function, and find difference between the start and end of that function.
+
+    # Rather than implementing a conversion function between a line in the
+    # output of the `disassemble` command and a dictionary that matches the
+    # output of the Architecture.disassemble() method, we just find the extent
+    # of the current function with `disassemble {}`, and then return the list
+    # made from Architecture.disassemble() directly.
+    output = gdb.execute('disassemble {}'.format(func_addr), False, True)
+    lines = output.splitlines()
+    if not lines[0].startswith('Dump of assembler code for function'):
+        raise RuntimeError('Failed to find function at {}'.format(func_addr))
+
+    # Avoid the 'End of assembler dump.' line that is actually last.
+    start_addr = int(lines[1].split()[0], base=16)
+    last_pos = int(lines[-2].split()[0], base=16)
+    function_name = re.search('Dump of assembler code for function (\S+):',
+                              lines[0])
+    function_name = function_name.groups()[0] if function_name else None
+    return arch.disassemble(start_addr, last_pos), function_name, None

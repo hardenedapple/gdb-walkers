@@ -9,6 +9,9 @@ Walkers that don't exist in `mdb` are over all functions called from another
 one, and the corresponding printing of the hypothetical stack created from this
 walker.
 
+Note: As yet, `call-graph` doesn't work without debugging symbols.
+I intend to fix this.
+
 # Getting help
 
 All commands introduced are documented with docstrings so that the gdb `help`
@@ -99,7 +102,7 @@ create_random_tree	demos/tree.c:69
 in this case, use the global function `free_tree`, if you have a global
 variable this would work just as well.
 ```
-(gdb) pipe called-functions main; .*; -1 | if $_output_contains("global-used {} free_tree", "free_tree") | show hypothetical-stack | show printf "\n"
+(gdb) pipe called-functions main; .*; -1 | if $_output_contains("global-used {} free_tree", "free_tree") | show hypothetical-stack
 main demos/tree.c:85
 
 main demos/tree.c:85
