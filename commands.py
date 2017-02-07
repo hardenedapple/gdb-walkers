@@ -473,7 +473,7 @@ def retpoints(addr, arch):
 def add_tracers(regexp):
     'Trace all functions matching `regexp` in the current symbol table.'
     # Ensure we never end up with duplicate traced points (which would mess up
-    # our output)..
+    # our output).
     remove_tracers(regexp)
     arch = gdb.current_arch()
     # If the symbol is non-debug, use the direct memory address location.
@@ -486,8 +486,18 @@ def add_tracers(regexp):
     # function properly -- though non-debug symbols with the same name will
     # have the same output for entry tracepoints.
     file_regex = '.*' if gdb.parameter('call-graph-nondebug') else '.+'
+    # Avoid duplicate symbols -- very often happens in non-debug
+    # symbols where the same function has many names (e.g.
+    # __GI___libc_longjmp, __libc_longjmp, __libc_siglongjmp, _longjmp,
+    # longjmp, siglongjmp) all have the same address.
+    seen_addresses = set()
     for symbol in gdb.search_symbols(regexp, file_regex):
         addr = int(symbol.value().cast(helpers.uintptr_t))
+
+        if addr in seen_addresses:
+            continue
+        seen_addresses.add(addr)
+
         # Use hex just because it's pretty for `info call-graph exact`.
         entry_loc, func_name = '*{}'.format(hex(addr)), symbol.name
         CallGraph.entry_breakpoints.append(EntryBreak(entry_loc, func_name))
@@ -658,6 +668,9 @@ class CallGraphInfo(gdb.Command):
 
     If given the `exact` argument, print the addresses of each entry
     breakpoint.
+
+    This may be needed if there are multiple functions with the same name in
+    your program (to avoid.
     '''
     def __init__(self):
         super(CallGraphInfo, self).__init__('info call-graph',

@@ -112,6 +112,7 @@ if not hasattr(gdb, 'search_symbols'):
         if unparsed:
             raise ValueError('Failed to parse {} as filename'.format(filename))
 
+        # TODO Check source code and see if this is always the case.
         # NOTE: When there are more than one symbol and file options given from
         # the same source file, they all have the same set of symbol names.
         #   (as far as I can tell -- haven't yet looked at the gdb source).
@@ -124,6 +125,8 @@ if not hasattr(gdb, 'search_symbols'):
 
     def search_symbols(regexp, file_regex):
         '''Return symbols matching REGEXP defined in files matching FILE_REGEXP
+
+        If FILE_REGEXP matches the empty string, include Non-debug functions.
 
         '''
         include_non_debugging = re.match(file_regex, '') is not None
@@ -151,8 +154,6 @@ if not hasattr(gdb, 'search_symbols'):
             # Just because it makes me feel better to let python free the big
             # string -- probably doesn't matter.
             del all_symbols
-            # Avoid duplicate symbols -- very often happens with multiple
-            symbols = set()
             for line in all_non_debugging:
                 # If ValueError() is raised here, then my assumptions are
                 # incorrect -- I need to know about it.
@@ -162,6 +163,7 @@ if not hasattr(gdb, 'search_symbols'):
                 # 0x00007ffff7bbcd50  uv(float, long double,...)(...)
                 # and others.
                 # I don't know what to do with these, so I ignore them.
+                # TODO Figure out what to do with these.
                 try:
                     addr, name = line.split()
                 except ValueError as e:
@@ -172,9 +174,7 @@ if not hasattr(gdb, 'search_symbols'):
                 # Assume users don't care about the indirection functions.
                 if not re.match(regexp, name) or name.endswith('@plt'):
                     continue
-                symbols.add((name, addr))
 
-            for name, addr in symbols:
                 yield FakeSymbol(name, addr)
 
 
