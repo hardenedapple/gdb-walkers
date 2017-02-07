@@ -151,12 +151,30 @@ if not hasattr(gdb, 'search_symbols'):
             # Just because it makes me feel better to let python free the big
             # string -- probably doesn't matter.
             del all_symbols
+            # Avoid duplicate symbols -- very often happens with multiple
+            symbols = set()
             for line in all_non_debugging:
                 # If ValueError() is raised here, then my assumptions are
                 # incorrect -- I need to know about it.
-                addr, name = line.split()
-                if not re.match(regexp, name):
+                # For example, `info functions` on $(which nvim) gives me the
+                # lines 
+                # 0x00007ffff7bbb310  uv(float, long double,...)(...)@plt
+                # 0x00007ffff7bbcd50  uv(float, long double,...)(...)
+                # and others.
+                # I don't know what to do with these, so I ignore them.
+                try:
+                    addr, name = line.split()
+                except ValueError as e:
+                    if e.args == ('too many values to unpack (expected 2)',):
+                        continue
+                    raise e
+
+                # Assume users don't care about the indirection functions.
+                if not re.match(regexp, name) or name.endswith('@plt'):
                     continue
+                symbols.add((name, addr))
+
+            for name, addr in symbols:
                 yield FakeSymbol(name, addr)
 
 

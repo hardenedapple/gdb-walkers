@@ -9,8 +9,12 @@ Walkers that don't exist in `mdb` are over all functions called from another
 one, and the corresponding printing of the hypothetical stack created from this
 walker.
 
-Note: As yet, `call-graph` doesn't work without debugging symbols.
-I intend to fix this.
+Note: In order to avoid surprises, `call-graph` by default doesn't work with
+non-debug functions. This is so that naive regular expressions don't end up
+tracing many many functions, and to avoid the problem of functions that return
+with `jmp` rather than `ret` (which are much more common in non-debug
+functions).
+Tracing non-debug symbols can be activated with `set call-graph-nondebug on`.
 
 # Getting help
 

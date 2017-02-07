@@ -433,7 +433,27 @@ class FuncGraph1(gdb.Command):
         print(print_str)
 
 
-def retpoints(symbol, arch):
+class CallGraphNonDebug(gdb.Parameter):
+    '''Should `call-graph` include non-debug symbols.
+
+    Boolean - true => use non-debug symbols.
+              false => ignore non-debug symbols.
+
+    '''
+    def __init__(self):
+        super(CallGraphNonDebug, self).__init__('call-graph-nondebug',
+                                                gdb.COMMAND_NONE,
+                                                gdb.PARAM_BOOLEAN)
+
+    def get_set_string(self):
+        return 'call-graph will {}ignore non-debug symbols'.format(
+            'not ' if self.value else '')
+
+    def get_show_string(self, curval):
+        return curval + ': ' + self.get_set_string()
+
+
+def retpoints(addr, arch):
     '''Return a list of addresses for all ret instructions in function `symbol`
 
     Disassembles the function that `symbol` refers to, and returns a list of
@@ -442,15 +462,12 @@ def retpoints(symbol, arch):
     The specific format returned is `*<symbol-name>+<offset>`.
 
     '''
-    func_dis, func_name, _ = function_disassembly(
-        int(symbol.value().cast(helpers.uintptr_t)),
-        arch)
+    func_dis, func_name, _ = function_disassembly(addr, arch)
     start = func_dis[0]['addr']
-    return [
-        '*{}+{}'.format(func_name, val['addr'] - start)
-        for val in func_dis
-        if val['asm'].startswith('ret')
-    ]
+    description = lambda val: func_name + '+{}'.format(val['addr'] - start)
+    location = lambda val: '*{}'.format(val['addr'])
+    return [(location(val), description(val))
+            for val in func_dis if val['asm'].startswith('ret') ]
 
 
 def add_tracers(regexp):
@@ -459,19 +476,23 @@ def add_tracers(regexp):
     # our output)..
     remove_tracers(regexp)
     arch = gdb.current_arch()
-    # .+ as the regex means we ignore non-debugging symbols.
-    # This is unfortunate, but means we avoid a whole load of hassle.
-    # TODO
-    #   Do the hassle and allow non-debugging symbols.
-    #   Known problems are just that the non-debugging symbols found aren't
-    #   complete (because of the output of `info functions` gives non-full
-    #   symbols).
-    #   This can be solved by adding try/except around instantiating the
-    #   breakpoints.
-    for symbol in gdb.search_symbols(regexp, '.+'):
-        CallGraph.entry_breakpoints.append(EntryBreak(symbol.name))
-        for retaddr in retpoints(symbol, arch):
-            CallGraph.return_breakpoints.append(ReturnBreak(retaddr))
+    # If the symbol is non-debug, use the direct memory address location.
+    # Otherwise use symbolic names so we can see what's happening.
+    #
+    # We have to disassemble based on the address to distinguish non-debug
+    # symbols with the same name, in our `function_disassembly()` function.
+    #
+    # In order to have nice output, we create a string that describes the
+    # function properly -- though non-debug symbols with the same name will
+    # have the same output for entry tracepoints.
+    file_regex = '.*' if gdb.parameter('call-graph-nondebug') else '.+'
+    for symbol in gdb.search_symbols(regexp, file_regex):
+        addr = int(symbol.value().cast(helpers.uintptr_t))
+        # Use hex just because it's pretty for `info call-graph exact`.
+        entry_loc, func_name = '*{}'.format(hex(addr)), symbol.name
+        CallGraph.entry_breakpoints.append(EntryBreak(entry_loc, func_name))
+        for retloc, retdesc in retpoints(addr, arch):
+            CallGraph.return_breakpoints.append(ReturnBreak(retloc, retdesc))
 
 
 def remove_tracers(regexp):
@@ -504,13 +525,14 @@ class EntryBreak(gdb.Breakpoint):
     indentation level from the CallGraph data.
 
     '''
-    def __init__(self, name):
-        super(EntryBreak, self).__init__(name, gdb.BP_BREAKPOINT,
+    def __init__(self, loc, func_name):
+        super(EntryBreak, self).__init__(loc, gdb.BP_BREAKPOINT,
                                          -1, True, False)
+        self.func_name = func_name
 
     def stop(self):
         CallGraph.indent_level += 4
-        print('{} --> {}'.format(' '*CallGraph.indent_level, self.location))
+        print('{} --> {}'.format(' '*CallGraph.indent_level, self.func_name))
         return False
 
 
@@ -522,11 +544,13 @@ class ReturnBreak(gdb.Breakpoint):
     indentation level from the CallGraph data.
 
     '''
-    def __init__(self, loc):
+    def __init__(self, loc, desc):
         super(ReturnBreak, self).__init__(loc, gdb.BP_BREAKPOINT,
                                           -1, True, False)
+        self.desc = desc
+
     def stop(self):
-        print('{} <-- {}'.format(' '*CallGraph.indent_level, self.location))
+        print('{} <-- {}'.format(' '*CallGraph.indent_level, self.desc))
         CallGraph.indent_level -= 4
         return False
 
@@ -632,19 +656,28 @@ class CallGraphUpdate(gdb.Command):
 class CallGraphInfo(gdb.Command):
     '''Print all functions currently traced with call-graph
 
+    If given the `exact` argument, print the addresses of each entry
+    breakpoint.
     '''
-    # TODO Find if I can mark this as part of the `info` command.
     def __init__(self):
         super(CallGraphInfo, self).__init__('info call-graph',
                                             gdb.COMMAND_STATUS)
 
     def invoke(self, arg, _):
         args = gdb.string_to_argv(arg)
-        if args:
-            raise ValueError('info call-graph takes no arguments')
+        if len(args) > 1 or (len(args) == 1 and args[0] != 'exact'):
+            raise ValueError('Usage: info call-graph [exact]')
+
         print('Functions currently traced by call-graph:')
+
+        # If ask for exact location, print the address the breakpoint is at.
+        if args:
+            for bp in CallGraph.entry_breakpoints:
+                print('\t', bp.location.strip('*'))
+            return
+
         for bp in CallGraph.entry_breakpoints:
-            print('\t', bp.location)
+            print('\t', bp.func_name)
 
 
 AttachMatching()
@@ -656,3 +689,4 @@ CallGraphClear()
 CallGraphInit()
 CallGraphUpdate()
 CallGraphInfo()
+CallGraphNonDebug()
