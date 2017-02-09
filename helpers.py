@@ -158,7 +158,7 @@ if not hasattr(gdb, 'search_symbols'):
                 # If ValueError() is raised here, then my assumptions are
                 # incorrect -- I need to know about it.
                 # For example, `info functions` on $(which nvim) gives me the
-                # lines 
+                # lines
                 # 0x00007ffff7bbb310  uv(float, long double,...)(...)@plt
                 # 0x00007ffff7bbcd50  uv(float, long double,...)(...)
                 # and others.
@@ -187,6 +187,10 @@ def function_disassembly(func_addr, arch=None, use_fallback=True):
     If there are no debugging symbols, return the None as the filename.
         (function_disassembly, function_name or None, function_filename or None)
 
+    If we have debugging information, but we can't find a function at the
+    address specified, we return '' for the function_name and
+    function_filename.
+
     If `use_fallback` is set to False, and there is are no debugging symbols
     for the current function, return (None, None, None).
 
@@ -195,17 +199,59 @@ def function_disassembly(func_addr, arch=None, use_fallback=True):
 
     try:
         func_block = gdb.block_for_pc(func_addr)
+
+        # Bit of a hack, but I want the same thing to happen when gdb can't
+        # find the object file (and hence raises an exception itself) as when
+        # it just can't find the block.
+        if func_block is None:
+            raise RuntimeError('Cannot locate object file for block.')
     except RuntimeError as e:
         if e.args != ('Cannot locate object file for block.', ):
             raise e
     else:
+        orig_block = func_block
+        # This has happened a few times -- find out why/when.
+        # When the file was compiled without debugging.
+        if func_block is None:
+            print(func_addr)
+
+        # Often enough that it's a problem, despite being given the start of a
+        # function as the address, we get a child block of the function.
+        # Functions I've seen this happen with (all when inspecting a debug
+        # build of neovim).
+        #
+        # src/valgrind.c je_valgrind_make_mem_undefined
+        # src/valgrind.c je_valgrind_make_mem_defined
+        # include/jemalloc/internal/atomic.h je_atomic_add_uint32
+        #
+        # I used the below to get this output.
+        # if not func_block.function:
+        #     print(func_addr)
+        #     above = func_block.superblock.function
+        #     if above:
+        #         print(above.symtab.filename, above.name)
+
+        while func_block and func_block.function is None:
+            func_block = func_block.superblock
+
+        if func_block:
+            function_name = func_block.function.name
+            function_filename = func_block.function.symtab.filename
+        else:
+            # Print this out for my information -- I don't know of a case when
+            # this would happen, so if it does I have a chance to learn.
+            print('Function not found at {}'.format(func_addr))
+            func_block = orig_block
+            function_name = ''
+            function_filename = ''
+
         # No instruction is less than one byte.
         # If we provide an end point that is one byte less than the end of the
         # last instruction in the block, then this ends the disassembly on the
         # last instruction of the function.
         return (arch.disassemble(func_block.start, func_block.end-1),
-                func_block.function.name,
-                func_block.function.symtab.filename)
+                function_name,
+                function_filename)
 
     if not use_fallback:
         return (None, None, None)
