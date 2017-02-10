@@ -13,6 +13,7 @@ or source it directly in the gdbinit file.
 '''
 import gdb
 import re
+import collections
 
 
 def find_uintptr_t():
@@ -88,9 +89,11 @@ class FakeSymbol():
     attribute.
 
     '''
+    pointless_symtab = collections.namedtuple('symtab', ['filename'])
+    symtab = pointless_symtab('')
     def __init__(self, name, value):
         self.name = name
-        self._value = gdb.Value(eval_int(value))
+        self._value = gdb.parse_and_eval(value)
 
     def value(self):
         return self._value
@@ -130,7 +133,6 @@ if not hasattr(gdb, 'search_symbols'):
 
         '''
         include_non_debugging = re.match(file_regex, '') is not None
-
         try:
             source_files = gdb.execute('info sources', False, True)
         except gdb.error as e:
@@ -142,7 +144,7 @@ if not hasattr(gdb, 'search_symbols'):
             unloaded = source_lines[6]
             for filelist in loaded.split(', '), unloaded.split(', '):
                 for filename in (val for val in filelist if
-                                 re.match(file_regex, val)):
+                                 re.search(file_regex, val)):
                     yield from file_symbols(filename, regexp)
 
         if include_non_debugging:

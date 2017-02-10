@@ -72,11 +72,19 @@ class FunctionOf(gdb.Function):
             block = gdb.block_for_pc(pos_given)
         except RuntimeError as e:
             if e.args == ('Cannot locate object file for block.',):
-                return gdb.execute('info symbol {}'.format(pos_given),
+                retval = gdb.execute('info symbol {}'.format(pos_given),
                                    False, True).split()[0]
+                # Debugging -- for some reason, I'm getting this at some point,
+                # that appears to be working fine manually.
+                # Alert myself when the problem occurs.
+                # NOTE -- noticed this when inspecting a debug build of neovim
+                # and having broken on the retq instruction of os_inchar()
+                if retval == 'No':
+                    print('Getting "No" for position:', hex(pos_given))
+                return retval
             raise
 
-        while block.function.name is None:
+        while block.function is None:
             if block.superblock:
                 block = block.superblock
             else:

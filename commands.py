@@ -470,61 +470,78 @@ def retpoints(addr, arch):
             for val in func_dis if val['asm'].startswith('ret') ]
 
 
+def file_func_split(regexp):
+    '''Split  file_regexp:func_regexp  into its component parts.
+
+    If there is no colon, then func_regexp is `regexp` and file_regexp is None
+
+    '''
+    file_func = regexp.split(':', maxsplit=1)
+    if len(file_func) == 1:
+        file_regex = None
+        func_regex = file_func[0]
+    else:
+        file_regex, func_regex = file_func
+
+    return file_regex, func_regex
+
+
 def add_tracers(regexp):
     'Trace all functions matching `regexp` in the current symbol table.'
-    # Ensure we never end up with duplicate traced points (which would mess up
-    # our output).
-    remove_tracers(regexp)
+    file_regex, func_regex = file_func_split(regexp)
+    if file_regex is None:
+        file_regex = '.*' if gdb.parameter('call-graph-nondebug') else '.+'
+
     arch = gdb.current_arch()
-    # If the symbol is non-debug, use the direct memory address location.
-    # Otherwise use symbolic names so we can see what's happening.
-    #
-    # We have to disassemble based on the address to distinguish non-debug
-    # symbols with the same name, in our `function_disassembly()` function.
+    # We have to break on address to distinguish symbols with the same name in
+    # different files.
     #
     # In order to have nice output, we create a string that describes the
-    # function properly -- though non-debug symbols with the same name will
-    # have the same output for entry tracepoints.
-    file_regex = '.*' if gdb.parameter('call-graph-nondebug') else '.+'
-    # Avoid duplicate symbols -- very often happens in non-debug
-    # symbols where the same function has many names (e.g.
-    # __GI___libc_longjmp, __libc_longjmp, __libc_siglongjmp, _longjmp,
-    # longjmp, siglongjmp) all have the same address.
-    seen_addresses = set()
-    for symbol in gdb.search_symbols(regexp, file_regex):
+    # function for a human -- though symbols with the same name will have the
+    # same output for entry tracepoints.
+    for symbol in gdb.search_symbols(func_regex, file_regex):
         addr = int(symbol.value().cast(helpers.uintptr_t))
 
-        if addr in seen_addresses:
-            continue
-        seen_addresses.add(addr)
-
         # Use hex just because it's pretty for `info call-graph exact`.
-        entry_loc, func_name = '*{}'.format(hex(addr)), symbol.name
-        CallGraph.entry_breakpoints.append(EntryBreak(entry_loc, func_name))
+        entry_loc, func_name, filename = ('*{}'.format(hex(addr)), symbol.name,
+                                          symbol.symtab.filename)
+
+        # Avoid duplicate symbols by checking if the address already has a
+        # breakpoint  -- very often happens in non-debug symbols where the same
+        # function has many names (e.g. __GI___libc_longjmp, __libc_longjmp,
+        # __libc_siglongjmp, _longjmp, longjmp, siglongjmp) all have the same
+        # address.
+        # This also means that if the given regexp matches functions already
+        # traced, we don't end up with duplicate tracers.
+        if addr not in CallGraph.entry_breaks:
+            CallGraph.entry_breaks[addr] = EntryBreak(entry_loc, func_name,
+                                                      filename)
         for retloc, retdesc in retpoints(addr, arch):
-            CallGraph.return_breakpoints.append(ReturnBreak(retloc, retdesc))
+            if retloc not in CallGraph.ret_breaks:
+                CallGraph.ret_breaks[retloc] = ReturnBreak(retloc, retdesc,
+                                                           filename)
 
 
 def remove_tracers(regexp):
     'Remove all trace points matching `regexp` in the CallGraph class lists.'
-    remaining_entry_bps = []
+    file_regex, func_regex = file_func_split(regexp)
+    # If no file_regex given, remove *all* matching functions.
+    # We don't predicate this on `call-graph-nondebug` because it's confusing
+    # if non-debug functions aren't removed after changing the value.
+    file_regex = '.*' if file_regex is None else file_regex
+    entry_dels = [(addr, bp) for addr, bp in CallGraph.entry_breaks.items()
+                  if re.match(func_regex, bp.desc)
+                  and re.search(file_regex, bp.filename)]
+    for addr, bp in entry_dels:
+        bp.delete()
+        del CallGraph.entry_breaks[addr]
 
-    for bp in CallGraph.entry_breakpoints:
-        if re.match(regexp, bp.location):
-            bp.delete()
-        else:
-            remaining_entry_bps.append(bp)
-
-    remaining_return_bps = []
-    for bp in CallGraph.return_breakpoints:
-        func_name = bp.location[1:bp.location.rfind('+')]
-        if re.match(regexp, func_name):
-            bp.delete()
-        else:
-            remaining_return_bps.append(bp)
-
-    CallGraph.entry_breakpoints = remaining_entry_bps
-    CallGraph.return_breakpoints = remaining_return_bps
+    ret_dels = [(addr, bp) for addr, bp in CallGraph.ret_breaks.items()
+                if re.match(func_regex, bp.desc[:bp.desc.rfind('+')])
+                and re.search(file_regex, bp.filename)]
+    for addr, bp in ret_dels:
+        bp.delete()
+        del CallGraph.ret_breaks[addr]
 
 
 class EntryBreak(gdb.Breakpoint):
@@ -535,14 +552,15 @@ class EntryBreak(gdb.Breakpoint):
     indentation level from the CallGraph data.
 
     '''
-    def __init__(self, loc, func_name):
+    def __init__(self, loc, desc, filename):
         super(EntryBreak, self).__init__(loc, gdb.BP_BREAKPOINT,
                                          -1, True, False)
-        self.func_name = func_name
+        self.desc = desc
+        self.filename = filename
 
     def stop(self):
         CallGraph.indent_level += 4
-        print('{} --> {}'.format(' '*CallGraph.indent_level, self.func_name))
+        print('{} --> {}'.format(' '*CallGraph.indent_level, self.desc))
         return False
 
 
@@ -554,10 +572,11 @@ class ReturnBreak(gdb.Breakpoint):
     indentation level from the CallGraph data.
 
     '''
-    def __init__(self, loc, desc):
+    def __init__(self, loc, desc, filename):
         super(ReturnBreak, self).__init__(loc, gdb.BP_BREAKPOINT,
                                           -1, True, False)
         self.desc = desc
+        self.filename = filename
 
     def stop(self):
         print('{} <-- {}'.format(' '*CallGraph.indent_level, self.desc))
@@ -567,18 +586,18 @@ class ReturnBreak(gdb.Breakpoint):
 
 class CallGraph(gdb.Command):
     '''Prefix command for call graph tracing commands.'''
-    entry_breakpoints = []
-    return_breakpoints = []
+    entry_breaks = {}
+    ret_breaks = {}
     indent_level = 0
 
     @classmethod
     def clear_previous_breakpoints(cls):
-        for bp in cls.entry_breakpoints:
+        for bp in cls.entry_breaks.values():
             bp.delete()
-        cls.entry_breakpoints = []
-        for bp in cls.return_breakpoints:
+        cls.entry_breaks = {}
+        for bp in cls.ret_breaks.values():
             bp.delete()
-        cls.return_breakpoints = []
+        cls.ret_breaks = {}
         cls.indent_level = 0
 
     def __init__(self):
@@ -685,12 +704,12 @@ class CallGraphInfo(gdb.Command):
 
         # If ask for exact location, print the address the breakpoint is at.
         if args:
-            for bp in CallGraph.entry_breakpoints:
+            for bp in CallGraph.entry_breaks.values():
                 print('\t', bp.location.strip('*'))
             return
 
-        for bp in CallGraph.entry_breakpoints:
-            print('\t', bp.func_name)
+        for bp in CallGraph.entry_breaks.values():
+            print('\t', bp.desc)
 
 
 AttachMatching()
