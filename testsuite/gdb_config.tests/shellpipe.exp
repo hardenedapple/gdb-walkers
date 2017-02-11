@@ -1,0 +1,17 @@
+# Use separate procedure to ensure no variable clashing
+# This does mean we have to access the correct scope with `upvar`
+# proc test_shellpipe {} {
+set known_calls ""
+lappend known_calls "   0x0000000000400984 <+48>:	callq  0x400630 <fprintf@plt>"
+lappend known_calls "   0x000000000040098e <+58>:	callq  0x400650 <exit@plt>"
+lappend known_calls "   0x00000000004009a1 <+77>:	callq  0x400640 <atoi@plt>"
+lappend known_calls "   0x00000000004009ae <+90>:	callq  0x4008cb <create_random_tree>"
+lappend known_calls "   0x00000000004009be <+106>:	callq  0x40085c <free_tree>"
+# # For some reason I don't know, each line is appended with a \r character, so
+# # we only add a \n character to each to match the output we're seeing.
+set known_calls [join $known_calls "\r\n"]
+
+run_basic_test "shellpipe debug disassemble" "inferior $debug_inferior\nshellpipe disassemble main ! grep call\n" $known_calls
+run_basic_test "shellpipe plain disassemble" "inferior $plain_inferior\nshellpipe disassemble main ! grep call\n" $known_calls
+
+unset known_calls

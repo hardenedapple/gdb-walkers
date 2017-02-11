@@ -1,0 +1,53 @@
+# Tool config file -- Store helper procedures in one place.
+# We put them here instead of testsuite/config/unix.exp to match the suggested
+# layout.
+# Because the test makes the 
+spawn gdb
+# TODO Check no error warnings about my python extensions.
+expect {
+    "(gdb)" {}
+    default {
+        unresolved "Failed to spawn program"
+    }
+}
+
+send "add-inferior -exec demos/tree\n"
+send "add-inferior -exec demos/tree_debug\n"
+# TODO For now assume we can never have a different inferior number (I don't
+# see how we can), but later on I'll parse the output of the command and read
+# the inferior number just to be safe.
+set plain_inferior 2
+set debug_inferior 3
+
+proc run_basic_test { test_name commands expect_string } {
+    global verbose
+    global expect_out
+
+    if { $verbose > 1 } {
+        send_user "starting $command_line\n"
+    }
+
+    send $commands
+    expect {
+        $expect_string {
+            pass "$test_name\n"
+        }
+        eof {
+            fail "$test_name: EOF\n"
+        }
+        timeout {
+            unresolved "$test_name: timeout\n $expect_out(buffer)"
+        }
+    }
+}
+
+proc wait_for_exit { exit_name } {
+    send "cont\n"
+    expect {
+        "exited" {}
+        default {
+            unresolved "After test $exit_name couldn't finish!!"
+        }
+    }
+}
+

@@ -1,0 +1,20 @@
+# TODO
+#   Start each inferior again
+#   In the debug inferior, just mark everything.
+#   Run the program, check we get the correct output.
+#   Make sure to remove all tracepoints, and check their removed
+#       (tracepoints carry over between inferiors -- which is annoying)
+#   
+#   Switch to non-debug inferior.
+#   Show that a normal trace hits no functions
+#       (show this with the `info call-graphs` function)
+#   Set call-graph-nondebug to on
+#   Initialise stuff: call-graph init (free_tree|insert_entry|create_tree|create_random_tree|main)
+#   Run the program, check we get the correct output.
+#
+#   Remove tracepoints.
+#   trace `free_tree`
+#   check (with info call-graph) that only one function is traced
+#   set call-graph-dynlibs on
+#   trace `free_tree`
+#   check (with info call-graph) that two functions are traced
