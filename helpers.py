@@ -126,7 +126,7 @@ if not hasattr(gdb, 'search_symbols'):
                         if sym.is_function and re.match(regexp, sym.name))
 
 
-    def search_symbols(regexp, file_regex):
+    def search_symbols(regexp, file_regex, include_dynlibs=False):
         '''Return symbols matching REGEXP defined in files matching FILE_REGEXP
 
         If FILE_REGEXP matches the empty string, include Non-debug functions.
@@ -148,6 +148,11 @@ if not hasattr(gdb, 'search_symbols'):
                     yield from file_symbols(filename, regexp)
 
         if include_non_debugging:
+            # TODO not really sure whether this is a safe way of making sure we
+            # only get the main program. Read the gdb source and see what's
+            # actually happening.
+            cur_progfile = gdb.current_progspace().filename
+
             # Don't filter functions directly with regexp because we want to
             # use python rexexp (to match the filter done above).
             all_symbols = gdb.execute('info functions', False, True)
@@ -176,6 +181,11 @@ if not hasattr(gdb, 'search_symbols'):
                 # Assume users don't care about the indirection functions.
                 if not re.match(regexp, name) or name.endswith('@plt'):
                     continue
+                if not include_dynlibs:
+                    sym_objfile = gdb.execute('info symbol {}'.format(addr),
+                                              False, True).split()[-1]
+                    if sym_objfile != cur_progfile:
+                        continue
 
                 yield FakeSymbol(name, addr)
 

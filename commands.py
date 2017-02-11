@@ -433,6 +433,26 @@ class FuncGraph1(gdb.Command):
         print(print_str)
 
 
+class CallGraphDynlibs(gdb.Parameter):
+    '''Should `call-graph` trace symbols in dynamic libraries.
+
+    Boolean - true => trace dynamic library functions.
+              false => do not trace dynamic library functions.
+
+    '''
+    def __init__(self):
+        super(CallGraphDynlibs, self).__init__('call-graph-dynlibs',
+                                                gdb.COMMAND_NONE,
+                                                gdb.PARAM_BOOLEAN)
+
+    def get_set_string(self):
+        return 'call-graph will {}include dynamic libraries'.format(
+            '' if self.value else 'not ')
+
+    def get_show_string(self, curval):
+        return curval + ': ' + self.get_set_string()
+
+
 class CallGraphNonDebug(gdb.Parameter):
     '''Should `call-graph` include non-debug symbols.
 
@@ -446,8 +466,8 @@ class CallGraphNonDebug(gdb.Parameter):
                                                 gdb.PARAM_BOOLEAN)
 
     def get_set_string(self):
-        return 'call-graph will {}ignore non-debug symbols'.format(
-            'not ' if self.value else '')
+        return 'call-graph will {} non-debug symbols'.format(
+            'use' if self.value else 'ignore')
 
     def get_show_string(self, curval):
         return curval + ': ' + self.get_set_string()
@@ -499,7 +519,8 @@ def add_tracers(regexp):
     # In order to have nice output, we create a string that describes the
     # function for a human -- though symbols with the same name will have the
     # same output for entry tracepoints.
-    for symbol in gdb.search_symbols(func_regex, file_regex):
+    for symbol in gdb.search_symbols(func_regex, file_regex,
+                                     gdb.parameter('call-graph-dynlibs')):
         addr = int(symbol.value().cast(helpers.uintptr_t))
 
         # Use hex just because it's pretty for `info call-graph exact`.
@@ -585,7 +606,28 @@ class ReturnBreak(gdb.Breakpoint):
 
 
 class CallGraph(gdb.Command):
-    '''Prefix command for call graph tracing commands.'''
+    '''Prefix command for call graph tracing commands.
+    
+    These tracing commands put an internal breakpoint on the entry point and
+    exit point of each function specified on the command line.
+    The breakpoints print an indentation representing the current function
+    nesting level, an arrow indicating whether this is an entry or exit point,
+    and the function name that is currently being entered/exited.
+
+    The format of regular expressions for this command is
+        file_regex:func_regex
+    If `file_regex` matches the empty string '', then non-debugging symbols are
+    searched too.
+
+    If there is no colon in the pattern, then all files are used, and whether
+    non-debugging symbols are used or not depends on the value of
+    `call-graph-nondebug`.
+    This parameter may be set with `set call-graph-nondebug`.
+
+    By default, call-graph ignores functions in the dynamic libraries (i.e.
+    libc etc). This can be configured using `set call-graph-dynlib`.
+
+    '''
     entry_breaks = {}
     ret_breaks = {}
     indent_level = 0
@@ -722,3 +764,4 @@ CallGraphInit()
 CallGraphUpdate()
 CallGraphInfo()
 CallGraphNonDebug()
+CallGraphDynlibs()

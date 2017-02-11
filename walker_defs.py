@@ -636,7 +636,10 @@ class Functions(GdbWalker):
         elements = instruction['asm'].split()
         # Make sure the format for this instruction is
         # call... addr <func_name>
-        # Ignore those functions with @plt in them.
+        # Ignore those functions with '@' in them (to avoid @plt functions).
+        #   Note this wouldn't actually matter much because the plt stubs don't
+        #   have any `call` instructions in them. It just saves a little on
+        #   time.
         # Return the address converted to a number.
         if re.match('<[^@]*>', elements[-1]) and len(elements) == 3 and \
                 elements[0].startswith('call'):

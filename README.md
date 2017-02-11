@@ -125,7 +125,7 @@ free_tree demos/tree.c:53
 
 ## Call Graph
 
-This command emulates `dtrace -F`.
+This command does similar to `dtrace -F`.
 
 Example
 
