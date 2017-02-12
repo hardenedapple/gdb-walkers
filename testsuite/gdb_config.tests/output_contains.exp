@@ -1,15 +1,30 @@
 set commands ""
-lappend commands {start 20 100 Hello there this is a test}
-lappend commands {set variable $i = -1}
+lappend commands "start 20 100 Hello there this is a test"
+lappend commands "set variable \$i = -1"
 lappend commands "pipe array char*; argv; argc  | if \$i++, \$_output_contains(\"print/s *(char **){}\", \"t\") | show output \$i"
 set commands [join $commands "\n"]
 
 run_basic_test "debug filter args" "inferior $debug_inferior\n$commands\n" 0458
 wait_for_exit "debug filter args"
 # While this command won't work on the non-debug build, it should at least
-# provide an error message that is understandable.
+# provide an error message that is understandable to a user.
 run_basic_test "plain filter args" "inferior $plain_inferior\n$commands\n" {No symbol table is loaded.  Use the "file" command.}
 wait_for_exit "plain filter args"
 
+# Use `python print('...'.format())` so the expect procedure matches on output,
+# not on echoing the command.
+# We can't use gdb's own `printf` because that relies on having an active
+# inferior.
+set commands ""
+lappend commands {if $_output_contains("echo \"Hello\"", "ell")}
+lappend commands "python print('Worked', 'nicely')"
+lappend commands "else"
+lappend commands "python print('FAIL', 'ED', sep='')"
+lappend commands "end"
+
+run_basic_test "if on output_contains success" "[join $commands \n]\n" "Worked nicely"
+
+set commands [lreplace $commands 0 0 {if $_output_contains("echo \"Hello\"", "xxx")}]
+run_basic_test "if on output_contains failure" "[join $commands \n]\n" "FAILED"
 
 unset commands
