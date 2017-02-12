@@ -1,0 +1,49 @@
+Gdb problems:
+    printf with string returned from python function.
+        Quite often get strange extra characters.
+        I usually see this in neovim
+
+    info functions
+        Mises out numbers in the function names -- this may be on purpose.
+        It could very well be that extra numbers are ignored so that the
+        output is user-friendly.
+        At the moment it's messing up my parsing (which is why `call-graph`
+        doesn't account for non-debugging symbols).
+
+    Abort when keyboard-interrupt running python code.
+        Example I used
+pipe called-functions nvim_buf_set_lines; .+; 10 | if $_output_contains("global-used {} ml_get_buf", "ml_get") | show hypothetical-stack
+
+        Just keyboard interrupt in time.sleep() doesn't cause the error if run
+        by either of
+        (gdb) python time.sleep(10)
+        (gdb) pi
+        >>> python time.sleep(10)
+
+        Questions to check are:
+            If I just make a 
+            o
+
+
+Things I want:
+    All source files in python
+        Currently I have to parse `info sources`
+
+    Access to minimal symbols
+        If the inferior I'm debugging doesn't have debugging information, I
+        don't even have access to the symbol table.
+        gdb has access to the symbol table, but it just doesn't expose it to
+        the extension languages interface.
+
+    What objfile is this symbol in
+        Currently I have to do gdb\.execute('info symbol {}'.format(...))
+
+    Directly iterate over symbols
+        At the moment I have to iterate over source files, finding the symbol
+        table for each source file, then 
+
+    Include function size in symbol
+        This way I don't have to do gdb.block_for_pc(), and walk up the block
+        hierarchy until I find the function block.
+        i.e. I just want to say "disassemble this function" without as much
+        bother.

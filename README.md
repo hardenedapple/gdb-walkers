@@ -8,6 +8,7 @@ data structures, `call-graph` command (idea taken from `dtrace -F`), and
 Walkers that don't exist in `mdb` are over all functions called from another
 one, and the corresponding printing of the hypothetical stack created from this
 walker.
+There are *many* walkers in `mdb` that aren't implemented here.
 
 Note: In order to avoid surprises, `call-graph` by default doesn't work with
 non-debug functions. This is so that naive regular expressions don't end up
