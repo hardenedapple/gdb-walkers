@@ -9,6 +9,7 @@ The commands defined here are:
 
 '''
 import subprocess as sp
+from collections import namedtuple
 import re
 import gdb
 import helpers
@@ -473,6 +474,46 @@ class CallGraphNonDebug(gdb.Parameter):
         return curval + ': ' + self.get_set_string()
 
 
+class CallGraph(gdb.Command):
+    '''Prefix command for call graph tracing commands.
+
+    These tracing commands put an internal breakpoint on the entry point and
+    exit point of each function specified on the command line.
+    The breakpoints print an indentation representing the current function
+    nesting level, an arrow indicating whether this is an entry or exit point,
+    and the function name that is currently being entered/exited.
+
+    The format of regular expressions for this command is
+        file_regex:func_regex
+    If `file_regex` matches the empty string '', then non-debugging symbols are
+    searched too.
+
+    If there is no colon in the pattern, then all files are used, and whether
+    non-debugging symbols are used or not depends on the value of
+    `call-graph-nondebug`.
+    This parameter may be set with `set call-graph-nondebug`.
+
+    By default, call-graph ignores functions in the dynamic libraries (i.e.
+    libc etc). This can be configured using `set call-graph-dynlib`.
+
+    '''
+    entry_breaks = {}
+    ret_breaks = {}
+    indent_level = 0
+
+    @classmethod
+    def clear_previous_breakpoints(cls):
+        all_addresses = list(cls.entry_breaks.keys())
+        for addr in all_addresses:
+            remove_addr_trace(addr)
+
+        cls.indent_level = 0
+
+    def __init__(self):
+        super(CallGraph, self).__init__('call-graph', gdb.COMMAND_USER,
+                                        gdb.COMPLETE_COMMAND, True)
+
+
 def retpoints(addr, arch):
     '''Return a list of addresses for all ret instructions in function `symbol`
 
@@ -506,7 +547,35 @@ def file_func_split(regexp):
     return file_regex, func_regex
 
 
-def add_tracers(regexp):
+def add_tracer(symbol, arch):
+    '''Trace the function defined by symbol.
+
+    `symbol` should have a `value()` method, a `symtab.filename` member (i.e.
+    a symtab member that itself has a filename member), and a `name` member.
+
+    '''
+    addr = int(symbol.value().cast(helpers.uintptr_t))
+
+    # Use hex just because it's pretty for `info call-graph exact`.
+    entry_loc, *names = ('*{}'.format(hex(addr)),
+                         symbol.name, symbol.symtab.filename)
+
+    # Avoid duplicate symbols by checking if the address already has a
+    # breakpoint  -- very often happens in non-debug symbols where the same
+    # function has many names (e.g. __GI___libc_longjmp, __libc_longjmp,
+    # __libc_siglongjmp, _longjmp, longjmp, siglongjmp) all have the same
+    # address.
+    # This also means that if the given regexp matches functions already
+    # traced, we don't end up with duplicate tracers.
+    if addr not in CallGraph.entry_breaks:
+        CallGraph.entry_breaks[addr] = EntryBreak(entry_loc, *names)
+    if addr not in CallGraph.ret_breaks:
+        CallGraph.ret_breaks[addr] = [
+            ReturnBreak(retloc, retdesc, *names)
+            for retloc, retdesc in retpoints(addr, arch)]
+
+
+def trace_regexp(regexp):
     'Trace all functions matching `regexp` in the current symbol table.'
     file_regex, func_regex = file_func_split(regexp)
     if file_regex is None:
@@ -521,26 +590,42 @@ def add_tracers(regexp):
     # same output for entry tracepoints.
     for symbol in gdb.search_symbols(func_regex, file_regex,
                                      gdb.parameter('call-graph-dynlibs')):
-        addr = int(symbol.value().cast(helpers.uintptr_t))
+        add_tracer(symbol, arch)
 
-        # Use hex just because it's pretty for `info call-graph exact`.
-        entry_loc, func_name, filename = ('*{}'.format(hex(addr)), symbol.name,
-                                          symbol.symtab.filename)
 
-        # Avoid duplicate symbols by checking if the address already has a
-        # breakpoint  -- very often happens in non-debug symbols where the same
-        # function has many names (e.g. __GI___libc_longjmp, __libc_longjmp,
-        # __libc_siglongjmp, _longjmp, longjmp, siglongjmp) all have the same
-        # address.
-        # This also means that if the given regexp matches functions already
-        # traced, we don't end up with duplicate tracers.
-        if addr not in CallGraph.entry_breaks:
-            CallGraph.entry_breaks[addr] = EntryBreak(entry_loc, func_name,
-                                                      filename)
-        for retloc, retdesc in retpoints(addr, arch):
-            if retloc not in CallGraph.ret_breaks:
-                CallGraph.ret_breaks[retloc] = ReturnBreak(retloc, retdesc,
-                                                           filename)
+def remove_addr_trace(del_addr):
+    'Remove tracers on the function at `addr`.'
+    # The following code would be more elegant, and should work in any
+    # situation the data structures are allowed to get in.
+    #
+    # try:
+    #     CallGraph.entry_breaks[del_addr].delete()
+    #     del CallGraph.entry_breaks[del_addr]
+    # except KeyError:
+    #     return
+    # for bp in CallGraph.ret_breaks[del_addr]:
+    #     bp.delete()
+    # del CallGraph.ret_breaks[del_addr]
+    #
+    # But I use the below to give warning if anything strange is happening.
+    missing_key = False
+    try:
+        CallGraph.entry_breaks[del_addr].delete()
+        del CallGraph.entry_breaks[del_addr]
+    except KeyError:
+        missing_key = True
+
+    try:
+        for bp in CallGraph.ret_breaks[del_addr]:
+            bp.delete()
+        del CallGraph.ret_breaks[del_addr]
+    except KeyError:
+        if not missing_key:
+            raise RuntimeError('Tracer in entry dict not in return dict')
+        return
+
+    if missing_key:
+        raise RuntimeError('Tracer in return dict, not in entry dict')
 
 
 def remove_tracers(regexp):
@@ -550,19 +635,13 @@ def remove_tracers(regexp):
     # We don't predicate this on `call-graph-nondebug` because it's confusing
     # if non-debug functions aren't removed after changing the value.
     file_regex = '.*' if file_regex is None else file_regex
-    entry_dels = [(addr, bp) for addr, bp in CallGraph.entry_breaks.items()
-                  if re.match(func_regex, bp.desc)
-                  and re.search(file_regex, bp.filename)]
-    for addr, bp in entry_dels:
-        bp.delete()
-        del CallGraph.entry_breaks[addr]
 
-    ret_dels = [(addr, bp) for addr, bp in CallGraph.ret_breaks.items()
-                if re.match(func_regex, bp.desc[:bp.desc.rfind('+')])
-                and re.search(file_regex, bp.filename)]
-    for addr, bp in ret_dels:
-        bp.delete()
-        del CallGraph.ret_breaks[addr]
+    entry_dels = [(addr, bp) for addr, bp in CallGraph.entry_breaks.items()
+                  if re.match(func_regex, bp.func_name)
+                  and re.search(file_regex, bp.filename)]
+
+    for addr, _ in entry_dels:
+        remove_addr_trace(addr)
 
 
 class EntryBreak(gdb.Breakpoint):
@@ -577,6 +656,7 @@ class EntryBreak(gdb.Breakpoint):
         super(EntryBreak, self).__init__(loc, gdb.BP_BREAKPOINT,
                                          -1, True, False)
         self.desc = desc
+        self.func_name = desc
         self.filename = filename
 
     def stop(self):
@@ -593,58 +673,17 @@ class ReturnBreak(gdb.Breakpoint):
     indentation level from the CallGraph data.
 
     '''
-    def __init__(self, loc, desc, filename):
+    def __init__(self, loc, desc, func_name, filename):
         super(ReturnBreak, self).__init__(loc, gdb.BP_BREAKPOINT,
                                           -1, True, False)
         self.desc = desc
+        self.func_name = func_name
         self.filename = filename
 
     def stop(self):
         print('{} <-- {}'.format(' '*CallGraph.indent_level, self.desc))
         CallGraph.indent_level -= 4
         return False
-
-
-class CallGraph(gdb.Command):
-    '''Prefix command for call graph tracing commands.
-    
-    These tracing commands put an internal breakpoint on the entry point and
-    exit point of each function specified on the command line.
-    The breakpoints print an indentation representing the current function
-    nesting level, an arrow indicating whether this is an entry or exit point,
-    and the function name that is currently being entered/exited.
-
-    The format of regular expressions for this command is
-        file_regex:func_regex
-    If `file_regex` matches the empty string '', then non-debugging symbols are
-    searched too.
-
-    If there is no colon in the pattern, then all files are used, and whether
-    non-debugging symbols are used or not depends on the value of
-    `call-graph-nondebug`.
-    This parameter may be set with `set call-graph-nondebug`.
-
-    By default, call-graph ignores functions in the dynamic libraries (i.e.
-    libc etc). This can be configured using `set call-graph-dynlib`.
-
-    '''
-    entry_breaks = {}
-    ret_breaks = {}
-    indent_level = 0
-
-    @classmethod
-    def clear_previous_breakpoints(cls):
-        for bp in cls.entry_breaks.values():
-            bp.delete()
-        cls.entry_breaks = {}
-        for bp in cls.ret_breaks.values():
-            bp.delete()
-        cls.ret_breaks = {}
-        cls.indent_level = 0
-
-    def __init__(self):
-        super(CallGraph, self).__init__('call-graph', gdb.COMMAND_USER,
-                                        gdb.COMPLETE_COMMAND, True)
 
 
 class CallGraphClear(gdb.Command):
@@ -684,7 +723,7 @@ class CallGraphInit(gdb.Command):
     def invoke(self, arg, _):
         self.dont_repeat()
         CallGraph.clear_previous_breakpoints()
-        add_tracers(arg)
+        trace_regexp(arg)
 
 
 class CallGraphUpdate(gdb.Command):
@@ -701,24 +740,65 @@ class CallGraphUpdate(gdb.Command):
         call-graph init .*_tree
         call-graph update - create_random_tree
 
+    For when there are more than one function with the same name, you can pass
+    the argument "exact" and a memory address instead of a regular expression.
+    Memory addresses of currently traced functions can be seen with
+        info call-graph exact
+
     Usage:
-        call-graph update [+ | -] REGEXP
+        call-graph update [+ | -] <REGEXP>
+        call-graph update [+ | -] exact <address>
 
     '''
+    usage_string = 'Usage: call-graph [+ | -] [<REGEXP> | exact <address>]'
     def __init__(self):
         super(CallGraphUpdate, self).__init__('call-graph update',
                                               gdb.COMMAND_USER)
 
+    @staticmethod
+    def function_at_addr(addr):
+        '''Returns the name of the function that starts at `addr`.
+
+        If `addr` is not the start of a symbol, returns None.
+
+        '''
+        symbol_info = gdb.execute('info symbol {}'.format(addr), False, True)
+        # Checking for section ".text" removes @plt stubs and variables.
+        # Making sure the function is just one word removes addresses in the
+        # middle of functions.
+        sym_match = re.match('(\S+) in section .text', symbol_info)
+        return sym_match.group(1) if sym_match else None
+
+    def update_exact(self, direction, addr):
+        '''Add or remove a function from tracing that starts at a given memory
+        address instead of whose name matches a regular expression.'''
+        func_name = self.function_at_addr(addr)
+        # Checks we don't give an invalid address to remove_addr_trace(), or
+        # add_tracer().
+        if func_name == None:
+            raise ValueError('{} does not start a function'.format(addr))
+
+        if direction == '+':
+            arch = gdb.current_arch()
+            return add_tracer(helpers.FakeSymbol(func_name, addr), arch)
+
+        remove_addr_trace(int(addr, 0))
+
     def invoke(self, arg, _):
         args = gdb.string_to_argv(arg)
-        if len(args) != 2:
-            raise ValueError('call-graph update must have two arguments')
+        if len(args) != 2 and len(args) != 3:
+            raise ValueError(self.usage_string)
 
         if args[0] not in ['+', '-']:
-            raise ValueError('Usage: call-graph update [+ | -] REGEXP')
+            raise ValueError(self.usage_string)
+
+        if len(args) == 3:
+            assert args[1] == 'exact', self.usage_string
+            self.update_exact(args[0], args[2])
+            return
 
         if args[0] == '+':
-            add_tracers(args[1])
+            trace_regexp(args[1])
             return
 
         remove_tracers(args[1])
@@ -747,7 +827,7 @@ class CallGraphInfo(gdb.Command):
         # If ask for exact location, print the address the breakpoint is at.
         if args:
             for bp in CallGraph.entry_breaks.values():
-                print('\t', bp.location.strip('*'))
+                print('\t', bp.location.strip('*'), '\t', bp.desc)
             return
 
         for bp in CallGraph.entry_breaks.values():

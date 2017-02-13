@@ -14,11 +14,11 @@ check_so_far "Debug finds all functions with info" debug_commands debug_out
 
 lappend debug_commands "info call-graph exact"
 lappend debug_out "Functions currently traced by call-graph:"
-lappend debug_out "	 0x40089d"
-lappend debug_out "	 0x40085c"
-lappend debug_out "	 0x400776"
-lappend debug_out "	 0x400954"
-lappend debug_out "	 0x4008cb"
+lappend plain_out "	 0x40089d 	 create_tree"
+lappend plain_out "	 0x40085c 	 free_tree"
+lappend plain_out "	 0x400776 	 insert_entry"
+lappend plain_out "	 0x400954 	 main"
+lappend plain_out "	 0x4008cb 	 create_random_tree"
 check_so_far "Debug shows exact position" debug_commands debug_out
 
 lappend debug_commands "call-graph update - free_tree"
@@ -114,7 +114,10 @@ lappend debug_out "         <-- free_tree+64"
 lappend debug_out "     <-- free_tree+64"
 lappend debug_out " <-- main+117"
 check_so_far "Debug call-graph traces function calls" debug_commands debug_out
-wait_for_exit "debug call-graph"
+expect {
+    "exited" {pass "Finish after continuing debug tracer"}
+    default {unresolved "Didn't finish after continuing debug tracer"}
+}
 
 lappend debug_commands "call-graph update + free_tree"
 lappend debug_out "No frame is currently selected."
@@ -156,6 +159,37 @@ lappend plain_out "	 main"
 lappend plain_out "	 free_tree"
 check_so_far "Plain finds correct functions including dynlibs" plain_commands plain_out
 
+# This is a little "round the houses" but it gets all the tests done.
+# We first remove the known address of free_tree in our test program, this
+# should leave the free_tree in libc.
+# Then we add it back it, showing that `call-graph update + exact` works.
+# After, we remove both free_tree functions to show all matches of a regexp are
+# acted upon.
+# Finally, we unset call-graph-dynlibs and add all matching free_tree functions
+# back in. This shows we can ignore dynamic libraries with our regular
+# expressions.
+
+lappend plain_commands "call-graph update - exact 0x40085c"
+lappend plain_commands "info call-graph"
+lappend plain_out "Functions currently traced by call-graph:"
+lappend plain_out "	 insert_entry"
+lappend plain_out "	 create_tree"
+lappend plain_out "	 create_random_tree"
+lappend plain_out "	 main"
+lappend plain_out "	 free_tree"
+check_so_far "Plain call-graph update removes exact" plain_commands plain_out
+
+lappend plain_commands "call-graph update + exact 0x40085c"
+lappend plain_commands "info call-graph"
+lappend plain_out "Functions currently traced by call-graph:"
+lappend plain_out "	 insert_entry"
+lappend plain_out "	 create_tree"
+lappend plain_out "	 create_random_tree"
+lappend plain_out "	 main"
+lappend plain_out "	 free_tree"
+lappend plain_out "	 free_tree"
+check_so_far "Plain call-graph update adds exact functions" plain_commands plain_out
+
 lappend plain_commands "call-graph update - free_tree"
 lappend plain_commands "info call-graph"
 lappend plain_out "Functions currently traced by call-graph:"
@@ -174,15 +208,15 @@ lappend plain_out "	 create_tree"
 lappend plain_out "	 create_random_tree"
 lappend plain_out "	 main"
 lappend plain_out "	 free_tree"
-check_so_far "Plain call-graph update adds functions" plain_commands plain_out
+check_so_far "Plain call-graph update adds exact functions" plain_commands plain_out
 
 lappend plain_commands "info call-graph exact"
 lappend plain_out "Functions currently traced by call-graph:"
-lappend plain_out "	 0x400776"
-lappend plain_out "	 0x40089d"
-lappend plain_out "	 0x4008cb"
-lappend plain_out "	 0x400954"
-lappend plain_out "	 0x40085c"
+lappend plain_out "	 0x400776 	 insert_entry"
+lappend plain_out "	 0x40089d 	 create_tree"
+lappend plain_out "	 0x4008cb 	 create_random_tree"
+lappend plain_out "	 0x400954 	 main"
+lappend plain_out "	 0x40085c 	 free_tree"
 check_so_far "Plain shows exact position" plain_commands plain_out
 
 lappend plain_commands "cont"
@@ -259,7 +293,10 @@ lappend plain_out "         <-- free_tree+64"
 lappend plain_out "     <-- free_tree+64"
 lappend plain_out " <-- main+117"
 check_so_far "Plain call-graph traces function calls" plain_commands plain_out
-wait_for_exit "plain call-graph"
+expect {
+    "exited" {pass "Finish after continuing plain tracer"}
+    default {unresolved "Didn't finish after continuing plain tracer"}
+}
 
 lappend plain_commands "call-graph update + free_tree"
 lappend plain_out "No frame is currently selected."
