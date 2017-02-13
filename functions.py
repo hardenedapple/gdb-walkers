@@ -3,7 +3,7 @@ import gdb
 import helpers
 
 
-class OutputMatches(gdb.Function):
+class OutputContains(gdb.Function):
     '''Report whether the output of a given command includes some regex.
 
     This function is most useful to force existing gdb commands into a
@@ -21,7 +21,7 @@ class OutputMatches(gdb.Function):
 
     '''
     def __init__(self):
-        super(OutputMatches, self).__init__('_output_contains')
+        super(OutputContains, self).__init__('_output_contains')
 
     def invoke(self, command, search_pattern):
         gdb_output = gdb.execute(command.string(), False, True)
@@ -129,7 +129,7 @@ class Typeof(gdb.Function):
         return str(val.dynamic_type)
 
 
-OutputMatches()
+OutputContains()
 WhereIs()
 FunctionOf()
 Python()

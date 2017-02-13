@@ -132,7 +132,7 @@ if not hasattr(gdb, 'search_symbols'):
         If FILE_REGEXP matches the empty string, include Non-debug functions.
 
         '''
-        include_non_debugging = re.match(file_regex, '') is not None
+        include_non_debugging = re.search(file_regex, '') is not None
         try:
             source_files = gdb.execute('info sources', False, True)
         except gdb.error as e:
