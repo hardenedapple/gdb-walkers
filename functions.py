@@ -65,36 +65,12 @@ class FunctionOf(gdb.Function):
 
     def invoke(self, arg):
         pos_given = int(arg.cast(helpers.uintptr_t))
+        function_name, offset = helpers.func_and_offset(pos_given)
 
-        # If given @plt addresses (or other problematic functions) just ignore
-        # them and return an error message -- (better than raising an error?)
-        try:
-            block = gdb.block_for_pc(pos_given)
-        except RuntimeError as e:
-            if e.args == ('Cannot locate object file for block.',):
-                retval = gdb.execute('info symbol {}'.format(pos_given),
-                                   False, True).split()[0]
-                # Debugging -- for some reason, I'm getting this at some point,
-                # that appears to be working fine manually.
-                # Alert myself when the problem occurs.
-                # NOTE -- noticed this when inspecting a debug build of neovim
-                # and having broken on the retq instruction of os_inchar()
-                if retval == 'No':
-                    print('Getting "No" for position:', hex(pos_given))
-                return retval
-            raise
-
-        while block.function is None:
-            if block.superblock:
-                block = block.superblock
-            else:
-                raise gdb.GdbError('Could not find enclosing function of '
-                                   '{} ({})'.format(pos_given, arg))
-
-        offset = pos_given - block.start
+        func_name = function_name if function_name else 'Unknown'
         offset_str = '+{}'.format(offset) if offset else ''
 
-        return block.function.name + offset_str
+        return func_name + offset_str
 
 
 # The functions below are taken from here

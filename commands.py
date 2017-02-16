@@ -13,7 +13,7 @@ from collections import namedtuple
 import re
 import gdb
 import helpers
-from helpers import eval_int, function_disassembly
+from helpers import eval_int, function_disassembly, func_and_offset
 
 
 class ShellPipe(gdb.Command):
@@ -755,27 +755,13 @@ class CallGraphUpdate(gdb.Command):
         super(CallGraphUpdate, self).__init__('call-graph update',
                                               gdb.COMMAND_USER)
 
-    @staticmethod
-    def function_at_addr(addr):
-        '''Returns the name of the function that starts at `addr`.
-
-        If `addr` is not the start of a symbol, returns None.
-
-        '''
-        symbol_info = gdb.execute('info symbol {}'.format(addr), False, True)
-        # Checking for section ".text" removes @plt stubs and variables.
-        # Making sure the function is just one word removes addresses in the
-        # middle of functions.
-        sym_match = re.match('(\S+) in section .text', symbol_info)
-        return sym_match.group(1) if sym_match else None
-
     def update_exact(self, direction, addr):
         '''Add or remove a function from tracing that starts at a given memory
         address instead of whose name matches a regular expression.'''
-        func_name = self.function_at_addr(addr)
+        func_name, offset = func_and_offset(int(addr, base=0))
         # Checks we don't give an invalid address to remove_addr_trace(), or
         # add_tracer().
-        if func_name == None:
+        if func_name is None or offset != 0:
             raise ValueError('{} does not start a function'.format(addr))
 
         if direction == '+':

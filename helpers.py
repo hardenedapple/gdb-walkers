@@ -288,3 +288,58 @@ def function_disassembly(func_addr, arch=None, use_fallback=True):
                               lines[0])
     function_name = function_name.groups()[0] if function_name else None
     return arch.disassemble(start_addr, last_pos), function_name, None
+
+
+def func_and_offset(addr):
+    '''Return the function and offset into that function of `addr`.
+
+    If failed to find the function at the given address, return (None, None).
+
+    '''
+    # If given @plt addresses (or other problematic functions) just ignore
+    # them and return an error message -- (better than raising an error?)
+    try:
+        block = gdb.block_for_pc(addr)
+    except RuntimeError as e:
+        # If this is an exception we don't know about, raise.
+        if e.args != ('Cannot locate object file for block.',):
+            raise
+
+        # Attempt to work with symbols that don't have debugging information.
+        retval = gdb.execute('info symbol {}'.format(addr),
+                            False, True)
+        # Checking for section ".text" removes @plt stubs and variables.
+        if 'in section .text' not in retval:
+            print('{} is not a .text location'.format(addr))
+            return (None, None)
+
+        # At the moment I expect that all awkward output (i.e. of the form
+        # funcname(function, argument, types) in section .text of /home/matthew/temp_dir/gdb/gdb/gdb
+        # are avoided because when there is debug info we've used the alternate
+        # method. Hence, the output should be of the form
+        # <funcname> + <offset> in section .text of <objfile>
+        # If this isn't the case, alert user so I know there's a problem and
+        # can investigate what I've missed.
+        #
+        # NOTE: I believe that digits are always printed in decimal -- can't
+        # find any way to change this, so I believe there isn't one.
+        # If this isn't the case, then I hopefully will notice the problem when
+        # this function fails.
+        sym_match = re.match('(\S+)( \+ (\d+))? in section .text', retval)
+        if not sym_match:
+            print('Cannot parse output from command `info symbol {}`.'.format(
+                addr))
+            return (None, None)
+
+        offset = int(sym_match.group(3)) if sym_match.group(3) else 0
+        return (sym_match.group(1), offset)
+
+    while block.function is None:
+        if block.superblock:
+            block = block.superblock
+        else:
+            raise gdb.GdbError('Could not find enclosing function of '
+                                '{} ({})'.format(addr, arg))
+
+    offset = addr - block.start
+    return (block.function.name, offset)
