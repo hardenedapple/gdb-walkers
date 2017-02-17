@@ -313,7 +313,7 @@ def func_and_offset(addr):
             print('{} is not a .text location'.format(addr))
             return (None, None)
 
-        # At the moment I expect that all awkward output (i.e. of the form
+        # At the moment I believe that all awkward output (i.e. of the form
         # funcname(function, argument, types) in section .text of /home/matthew/temp_dir/gdb/gdb/gdb
         # are avoided because when there is debug info we've used the alternate
         # method. Hence, the output should be of the form
