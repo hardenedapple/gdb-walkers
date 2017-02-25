@@ -1,8 +1,4 @@
 Gdb problems:
-    printf with string returned from python function.
-        Quite often get strange extra characters.
-        I usually see this in neovim
-
     info functions
         Mises out numbers in the function names -- this may be on purpose.
         It could very well be that extra numbers are ignored so that the
@@ -20,12 +16,156 @@ pipe called-functions nvim_buf_set_lines; .+; 10 | if $_output_contains("global-
         (gdb) pi
         >>> python time.sleep(10)
 
-        Questions to check are:
-            If I just make a 
-            o
+        Apparently this is fixed in the latest versions of gdb (i.e. if I build
+        from source), so I guess I don't need to figure this out.
+
+    Internal error reported
+```
+vshcmd: > gdb ~/temp_dir/gdb/gdb/gdb
+Reading symbols from /home/matthew/temp_dir/gdb/gdb/gdb...done.
+Setting up the environment for debugging gdb.
+Breakpoint 1 at 0x5a9680: file /home/matthew/share/repos/gdb-source/gdb/common/errors.c, line 51.
+During symbol reading, cannot get low and high bounds for subprogram DIE at 4446939.
+During symbol reading, DW_AT_GNU_call_site_target target DIE has invalid low pc, for referencing DIE 0x43dcce [in module /home/matthew/temp_dir/gdb/gdb/gdb].
+During symbol reading, Child DIE 0x43e025 and its abstract origin 0x43bf09 have different parents.
+Breakpoint 2 at 0x490700: file /home/matthew/share/repos/gdb-source/gdb/cli/cli-cmds.c, line 218.
+(top-gdb)
+vshcmd: > break c-lang.c:580
+During symbol reading, unsupported tag: 'DW_TAG_unspecified_type'.
+During symbol reading, unexpected tag in read_type_die: 'DW_TAG_rvalue_reference_type'.
+During symbol reading, cannot get low and high bounds for subprogram DIE at 18535766.
+During symbol reading, Child DIE 0x11adbe6 and its abstract origin 0x11acdba have different parents.
+During symbol reading, DW_AT_GNU_call_site_target target DIE has invalid low pc, for referencing DIE 0x11ae3fd [in module /home/matthew/temp_dir/gdb/gdb/gdb].
+Breakpoint 3 at 0x55509a: file /home/matthew/share/repos/gdb-source/gdb/c-lang.c, line 580.
+(top-gdb)
+vshcmd: > break ui_printf
+Breakpoint 4 at 0x623d50: file /home/matthew/share/repos/gdb-source/gdb/printcmd.c, line 2499.
+(top-gdb)
+vshcmd: > help record
+Start recording.
+
+List of record subcommands:
+
+record btrace -- Start branch trace recording
+record delete -- Delete the rest of execution log and start recording it anew
+record full -- Start full execution recording
+record function-call-history -- Prints the execution history at function granularity
+record goto -- Restore the program to its state at instruction number N
+record instruction-history -- Print disassembled instructions stored in the execution log
+record save -- Save the execution log to a file
+record stop -- Stop the record/replay target
+
+Type "help record" followed by record subcommand name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Command name abbreviations are allowed if unambiguous.
+(top-gdb)
+vshcmd: > break value_coerce_to_target
+Breakpoint 5 at 0x6918d0: file /home/matthew/share/repos/gdb-source/gdb/valops.c, line 1398.
+(top-gdb)
+vshcmd: > run ~/share/repos/neovim/build/bin/nvim
+Starting program: /home/matthew/temp_dir/gdb/gdb/gdb ~/share/repos/neovim/build/bin/nvim
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/usr/lib/libthread_db.so.1".
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+[New Thread 0x7ffff4c07700 (LWP 3172)]
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+GNU gdb (GDB) 7.12.50.20170215-git
+Copyright (C) 2017 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "x86_64-pc-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+<http://www.gnu.org/software/gdb/documentation/>.
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+Reading symbols from /home/matthew/share/repos/neovim/build/bin/nvim...done.
+(gdb)
+vshcmd: > attach-matching nvim README
+[New LWP 3151]
+During symbol reading, incomplete CFI data; unspecified registers (e.g., rax) at 0x7ffff7de9ca0.
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/usr/lib/libthread_db.so.1".
+0x00007f3f0d4eaf19 in syscall () from /usr/lib/libc.so.6
+(gdb)
+vshcmd: > printf "%s\n", "Hello world"
+
+During symbol reading, unsupported tag: 'DW_TAG_unspecified_type'.
+During symbol reading, unexpected tag in read_type_die: 'DW_TAG_rvalue_reference_type'.
+During symbol reading, Member function "~ui_file" (offset 5945503) is virtual but the vtable offset is not specified.
+During symbol reading, Child DIE 0x5acfab and its abstract origin 0x5acf53 have different parents.
+Thread 1 "gdb" hit Breakpoint 4, ui_printf (arg=arg@entry=0xe0c867 "\"%s\\n\", \"Hello world\"", stream=0x1536570) at /home/matthew/share/repos/gdb-source/gdb/printcmd.c:2499
+2499	{
+(top-gdb)
+vshcmd: > record full
+(top-gdb)
+vshcmd: > break evaluate_subexp_c
+Breakpoint 6 at 0x555060: file /home/matthew/share/repos/gdb-source/gdb/c-lang.c, line 564.
+(top-gdb)
+vshcmd: > cont
+Continuing.
+record-full.c:1066: internal-error: ptid_t record_full_wait_1(target_ops*, ptid_t, target_waitstatus*, int): Assertion `(options & TARGET_WNOHANG) != 0' failed.
+A problem internal to GDB has been detected,
+further debugging may prove unreliable.
+Quit this debugging session? (y or n)
+vshcmd: > n
+
+This is a bug, please report it.  For instructions, see:
+<http://www.gnu.org/software/gdb/bugs/>.
+
+record-full.c:1066: internal-error: ptid_t record_full_wait_1(target_ops*, ptid_t, target_waitstatus*, int): Assertion `(options & TARGET_WNOHANG) != 0' failed.
+A problem internal to GDB has been detected,
+further debugging may prove unreliable.
+Create a core file of GDB? (y or n)
+vshcmd: > y
+```
+
+Random Questions:
+    How is memory in the inferior freed?
+        In printf_c_string() we eventually call allocate_space_in_inferior()
+        This just uses malloc() in the inferior, but how is that value freed
+        afterwards?
 
 
 Things I want:
+    gdb.current_arch() function
+        Would be nice if I could disassemble a function without having to start
+        the underlying process.
+        At the moment I have a patch that uses the gdb get_current_arch()
+        function, I may be able to switch to just wrapping the `python_gdbarch`
+        structure.
+        This structure may very well be removed later, so I'm not confident
+        it's a good idea -- check it out.
+
     All source files in python
         Currently I have to parse `info sources`
 
@@ -40,10 +180,20 @@ Things I want:
 
     Directly iterate over symbols
         At the moment I have to iterate over source files, finding the symbol
-        table for each source file, then 
+        table for each source file, then iterating over all symbols in those
+        symbol tables.
 
     Include function size in symbol
         This way I don't have to do gdb.block_for_pc(), and walk up the block
         hierarchy until I find the function block.
         i.e. I just want to say "disassemble this function" without as much
         bother.
+
+    Continue on to the end of the 'next' I'd previously asked for.
+        Have a break on function foo().
+        Single stepping through function bar()
+        I call `next` to step over a function call.
+        Somewhere in that function call, foo() is invoked.
+        I end up in foo().
+
+        I want to say "continue until the end of the `next` command"

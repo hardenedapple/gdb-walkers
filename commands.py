@@ -281,6 +281,45 @@ class PrintHypotheticalStack(gdb.Command):
         print()
 
 
+class PrintString(gdb.Command):
+    '''Print a string without quotation marks and without allocating memory.
+
+    The gdb command `printf "%s\\n", $_as_string(<something>)` allocates memory
+    in the inferior, and you have no reference with which to free it.
+
+    In order to avoid this you can do things like
+        set variable $tmpvar = (char *)$_as_string(<something>)
+        printf "%s\\n", $tmpvar
+        call free($tmpvar)
+    but this means you have $tmpvar in the gdb environment.
+
+    Commands such as `output` and `print` print the text with surrounding
+    quotes to show this is a string.
+
+    This `print-string` command simply prints a gdb internal string without
+    those enclosing quotes.
+    i.e. it is the `output` command limited to strings but without the
+    enclosing "".
+
+    '''
+    def __init__(self):
+        super(PrintString, self).__init__('print-string', gdb.COMMAND_DATA)
+
+    def invoke(self, arg, _):
+        args = gdb.string_to_argv(arg)
+        for argument in args:
+            try:
+                tmp = gdb.parse_and_eval(argument)
+            except gdb.error as e:
+                # Assume whatever error in parsing happens is because we're
+                # given a literal string.
+                raise ValueError(
+                    'Failed to parse `{}` as a gdb value'.format(argument))
+
+            value = str(tmp)[1:-1]
+            print(value, end='')
+
+
 # Alternate thoughts about FuncGraph
 #
 #   Questions:
@@ -824,6 +863,7 @@ AttachMatching()
 ShellPipe()
 GlobalUsed()
 PrintHypotheticalStack()
+PrintString()
 CallGraph()
 CallGraphClear()
 CallGraphInit()

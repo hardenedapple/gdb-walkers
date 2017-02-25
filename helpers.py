@@ -134,6 +134,17 @@ if not hasattr(gdb, 'search_symbols'):
         '''
         include_non_debugging = re.search(file_regex, '') is not None
         try:
+            # TODO substitute with
+            # interpreter-exec mi -file-list-exec-source-files ?
+            # This should have a well defined output, so I would have to worry
+            # less about the output changing in the future.
+            # Unfortunately, the output isn't nearly as simple to parse, and as
+            # long as the output stays the same, this is both easy and robust
+            # against strange filenames.
+            #
+            # I could use pygdbmi, but I really don't want to add a dependency
+            # for this.
+            # https://github.com/cs01/pygdbmi
             source_files = gdb.execute('info sources', False, True)
         except gdb.error as e:
             if e.args != ('No symbol table is loaded.  Use the "file" command.',):
