@@ -316,7 +316,15 @@ class PrintString(gdb.Command):
                 raise ValueError(
                     'Failed to parse `{}` as a gdb value'.format(argument))
 
-            value = str(tmp)[1:-1]
+            try:
+                value = tmp.string()
+            except gdb.error as e:
+                if e.args[0].startswith(
+                    'Trying to read string with inappropriate type'):
+                    value = str(tmp)
+                else:
+                    raise
+
             print(value, end='')
 
 
