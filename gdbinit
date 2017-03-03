@@ -3,7 +3,9 @@ source ~/.config/gdb/basic-config.py
 source ~/.config/gdb/commands.py
 source ~/.config/gdb/functions.py
 source ~/.config/gdb/walker.py
+source ~/.config/gdb/walker_defs.py
 source ~/.config/gdb/neovim_integration.py
+set auto-load python-scripts on
 
 # gdb puts strings into the inferior when printing them with printf.
 # It does this with malloc(3), and never frees them.
@@ -38,6 +40,7 @@ define whereis
     print-string $_whereis($arg0)
     printf "\n"
 end
+
 define whereami
     whereis $pc
 end

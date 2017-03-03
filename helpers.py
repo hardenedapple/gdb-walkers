@@ -33,7 +33,6 @@ def find_uintptr_t():
 # attach to the process.
 uintptr_t = find_uintptr_t()
 
-
 def eval_int(gdb_expr):
     '''Return the python integer value of `gdb_expr`
 
@@ -57,6 +56,10 @@ def start_handler(_):
     #      (gdb) python find_uintptr_t()
     #   and you should be fine.
     gdb.events.new_objfile.disconnect(start_handler)
+
+
+def offsetof(typename, field):
+    return eval_int('&((({} *)0)->{})'.format(typename, field))
 
 
 # Update uintptr_t value on first objfile added because by then we'll know what

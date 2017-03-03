@@ -5,5 +5,9 @@ import sys
 if os.getenv('TERM') == 'dumb':
     gdb.execute('set pagination off')
 
-if '~/.config/gdb/' not in sys.path:
-    sys.path.append(os.path.expanduser('~/.config/gdb/'))
+confdir = os.path.expanduser('~/.config/gdb')
+if confdir not in sys.path:
+    sys.path.append(confdir)
+
+gdb.execute('add-auto-load-safe-path {}/autoloads'.format(confdir))
+gdb.execute('add-auto-load-scripts-directory {}/autoloads'.format(confdir))

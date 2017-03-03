@@ -5,7 +5,6 @@ When making your own walkers, define them anywhere, and load them into the
 gdb.walkers dictionary with gdb.register_walker().
 
 '''
-import abc
 import re
 import gdb
 # Need the global value so that we don't get a copy of helpers.uintptr_t, and
@@ -51,104 +50,7 @@ from helpers import eval_int, function_disassembly
 #      items in the class.
 
 
-class GdbWalker(abc.ABC):
-    '''
-    Class for a walker type.
-
-    These walkers should be registered with register_walker() so that they can
-    be used with the `pipe` command.
-
-    Each walker class is instantiated with the arguments given to it as a
-    string, and two parameters indicating whether it is first or last in a
-    pipeline (it can be both).
-
-    A walker is required to implement the method `iter_def(self, inpipe)`.
-    This method is passed the previous iterator as `inpipe` (this may be None
-    if the walker is first in a command line).
-    It is required to return an iterator over python integers.
-    These integers usually represent addresses in the program space.
-
-    '''
-    name = 'XXX Default XXX Must name this class XXXX'
-    require_input = False
-    require_output = False
-    tags = []
-
-    def __init__(self, args, first, last):
-        pass
-
-    @abc.abstractmethod
-    def iter_def(self, inpipe):
-        pass
-
-    @classmethod
-    def eval_user_expressions(cls, string):
-        '''Take argument `string` and replace all occurances of $#<expression>#
-        with the value of the enclosed expression as evaluated by
-        gdb.parse_and_eval() before being cast to an integer.
-
-        These valus are then put back into the input string as hexadecimal
-        constants.
-
-        e.g.
-            "hello there $#1 + 10#"
-            =>
-            "hello there 0xb"
-
-        '''
-        return_parts = []
-        # TODO Make this a 'proper' parser -- for now I just hope no-one's
-        # using '#' characters in their gdb expressions.
-        pattern = r'\$#([^#]*)#'
-        prev_end = 0
-        for match in re.finditer(pattern, string):
-            return_parts.append(string[prev_end:match.start()])
-            return_parts.append(hex(eval_int(match.group(1))))
-            prev_end = match.end()
-
-        return_parts.append(string[prev_end:])
-        return ''.join(return_parts)
-
-    @classmethod
-    def parse_args(cls, args, nargs=None, split_string=None,
-                   strip_whitespace=True, maxsplit=-1):
-        '''General function for parsing walker arguments.
-
-        Replace occurances of $#<expression># with the evaluated expression,
-        then split based on the split string given (if None given split on
-        whitespace), then check the number of arguments are within nargs[0] and
-        nargs[1].
-
-        If strip_whitespace is given, then remove whitespace from all
-        arguments.
-
-        Return a list of strings as the arguments.
-
-        '''
-        if not args:
-            return []
-        # Replace $## covered expressions in the string with gdb
-        args = cls.eval_user_expressions(args)
-
-        # TODO Ignore escaped versions of split_string, then remove the escape
-        # characters (i.e. backslashes) after splitting.
-        retval = args.split(split_string, maxsplit)
-        argc = len(retval)
-        if nargs is not None and (argc < nargs[0] or argc > nargs[1]):
-            raise ValueError('Walker "{}" takes between {} and {} '
-                             'arguments.'.format(cls.name, nargs[0], nargs[1]))
-        if strip_whitespace:
-            retval = [val.strip() for val in retval]
-        return retval
-
-    @staticmethod
-    def form_command(cmd_parts, element):
-        '''Join `cmd_parts` with the hexadecimal string of `element`'''
-        addr_str = '{}'.format(hex(int(element)))
-        return addr_str.join(cmd_parts)
-
-
-class Eval(GdbWalker):
+class Eval(gdb.Walker):
     '''Parse args as a gdb expression.
 
     Replaces occurances of `{}` in the argument string with the values from a
@@ -163,12 +65,12 @@ class Eval(GdbWalker):
     place.
 
     Use:
-        eval  <gdb expression>
+        pipe eval  <gdb expression>
 
     Example:
-        eval  {} + 8
-        eval  {} != 0 && ((struct complex_type *){})->field
-        eval  $saved_var->field
+        pipe eval  {} + 8
+        pipe eval  {} != 0 && ((struct complex_type *){})->field
+        pipe eval  $saved_var->field
 
     '''
 
@@ -195,7 +97,7 @@ class Eval(GdbWalker):
         return self.__iter_helper(inpipe)
 
 
-class Show(GdbWalker):
+class Show(gdb.Walker):
     '''Parse the expression as a gdb command, and print its output.
 
     This must have input, and it re-uses that input as its output.
@@ -227,7 +129,7 @@ class Show(GdbWalker):
                 yield element
 
 
-class Instruction(GdbWalker):
+class Instruction(gdb.Walker):
     '''Next `count` instructions starting at `start-address`.
 
     Usage:
@@ -288,7 +190,7 @@ class Instruction(GdbWalker):
                     yield instruction['addr']
 
 
-class If(GdbWalker):
+class If(gdb.Walker):
     '''Reproduces items that satisfy a condition.
 
     Replaces occurances of `{}` with the input address.
@@ -316,7 +218,7 @@ class If(GdbWalker):
                 yield element
 
 
-class Head(GdbWalker):
+class Head(gdb.Walker):
     '''Only take first `N` items of the pipeline.
 
     Usage:
@@ -339,7 +241,7 @@ class Head(GdbWalker):
             yield element
 
 
-class Tail(GdbWalker):
+class Tail(gdb.Walker):
     '''Limit walker to last `N` items of pipeline.
 
     Usage:
@@ -364,7 +266,7 @@ class Tail(GdbWalker):
             yield element
 
 
-class Count(GdbWalker):
+class Count(gdb.Walker):
     '''Count how many elements were in the previous walker.
 
     Usage:
@@ -385,7 +287,7 @@ class Count(GdbWalker):
         yield i + 1
 
 
-class Array(GdbWalker):
+class Array(gdb.Walker):
     '''Iterate over each element in an array.
 
     Usage:
@@ -436,7 +338,7 @@ class Array(GdbWalker):
         return self.__iter_helper(inpipe)
 
 
-class Until(GdbWalker):
+class Until(gdb.Walker):
     '''Accept and pass through elements until a condition is broken.
 
     Can't be the first walker.
@@ -459,7 +361,7 @@ class Until(GdbWalker):
             yield element
 
 
-class Since(GdbWalker):
+class Since(gdb.Walker):
     '''Skip items until a condition is satisfied.
 
     Returns all items in a walker since a condition was satisfied.
@@ -483,7 +385,7 @@ class Since(GdbWalker):
             yield element
 
 
-class Terminated(GdbWalker):
+class Terminated(gdb.Walker):
     '''Follow "next" pointer until reach terminating condition.
 
     Uses given expression to find the "next" pointer in a sequence, follows
@@ -532,7 +434,7 @@ class Terminated(GdbWalker):
                 yield from self.follow_to_termination(element)
 
 
-class Devnull(GdbWalker):
+class Devnull(gdb.Walker):
     '''Completely consume the previous walker, but yield nothing.
 
     Usage:
@@ -548,7 +450,7 @@ class Devnull(GdbWalker):
             pass
 
 
-class Reverse(GdbWalker):
+class Reverse(gdb.Walker):
     '''Reverse the iteration from the previous command.
 
     Usage:
@@ -569,7 +471,7 @@ class Reverse(GdbWalker):
             yield element
 
 
-class Functions(GdbWalker):
+class Functions(gdb.Walker):
     '''Walk through the call tree of all functions.
 
     Given a function name/address, walk over all functions this function calls,
@@ -697,7 +599,7 @@ class Functions(GdbWalker):
             yield from self.__iter_helper()
 
 
-class File(GdbWalker):
+class File(gdb.Walker):
     '''Walk over numbers read in from a file.
 
     Yields addresses read in from a file, one line at a time.
@@ -727,7 +629,7 @@ class File(GdbWalker):
                     yield int(line, base=16)
 
 
-class HypotheticalStack(GdbWalker):
+class HypotheticalStack(gdb.Walker):
     '''Print the hypothetical function stack called-functions has created.
 
     The `called-functions` walker creates a hypothetical stack each time it
