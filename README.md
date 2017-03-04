@@ -17,6 +17,9 @@ with `jmp` rather than `ret` (which are much more common in non-debug
 functions).
 Tracing non-debug symbols can be activated with `set call-graph-nondebug on`.
 
+To install, simply clone this repo to `~/.config/gdb/` and put the line
+`source ~/.config/gdb/gdbinit` in your `~/.gdbinit` file.
+
 # Getting help
 
 All commands introduced are documented with docstrings so that the gdb `help`
