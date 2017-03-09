@@ -13,7 +13,8 @@ from collections import namedtuple
 import re
 import gdb
 import helpers
-from helpers import eval_int, function_disassembly, func_and_offset
+from helpers import (eval_int, function_disassembly, func_and_offset,
+                     file_func_split)
 
 
 class ShellPipe(gdb.Command):
@@ -576,22 +577,6 @@ def retpoints(addr, arch):
     location = lambda val: '*{}'.format(val['addr'])
     return [(location(val), description(val))
             for val in func_dis if val['asm'].startswith('ret') ]
-
-
-def file_func_split(regexp):
-    '''Split  file_regexp:func_regexp  into its component parts.
-
-    If there is no colon, then func_regexp is `regexp` and file_regexp is None
-
-    '''
-    file_func = regexp.split(':', maxsplit=1)
-    if len(file_func) == 1:
-        file_regex = None
-        func_regex = file_func[0]
-    else:
-        file_regex, func_regex = file_func
-
-    return file_regex, func_regex
 
 
 def add_tracer(symbol, arch):

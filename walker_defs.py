@@ -13,6 +13,10 @@ import helpers
 from helpers import eval_int, function_disassembly
 
 # TODO
+#   I would like to use the python standard argparse library to parse
+#   arguments, but when it fails it exits instead of raising an error.
+#       This means that any error in the command line by the user exits the gdb
+#       process, which can't be the case.
 #   Everywhere I look for the start and end of a function by using
 #       gdb.block_for_pc() and getting the block start and end, I should be
 #       able to find the function start and end using a minimal_symbol type.
@@ -471,7 +475,7 @@ class Reverse(gdb.Walker):
             yield element
 
 
-class Functions(gdb.Walker):
+class CalledFunctions(gdb.Walker):
     '''Walk through the call tree of all functions.
 
     Given a function name/address, walk over all functions this function calls,
@@ -679,7 +683,59 @@ class HypotheticalStack(gdb.Walker):
             yield from self.called_funcs_class.hypothetical_stack
 
 
+class DefinedFunctions(gdb.Walker):
+    '''Walk over defined functions that match the given regexp.
+
+    This walker iterates over all functions defined in the current program.
+    It takes a regular expression of the form file_regexp:func_regexp and limits matches
+    based on whether they are defined in a file that matches the file regexp
+    and if the function name matches the function regexp.
+
+    To ignore the file regexp, use the regular expression .*.
+
+    By default the walker ignores all functions defined in dynamic libraries
+    (by checking the output of 'info symbol {}' matches the current progspace
+    filename). If you don't want to ignore these functions, give the argument
+    'include-dynlibs' after the file and function regexps.
+
+    Usage:
+        pipe defined-functions file-regex:function-regex [include-dynlibs]
+
+    Example:
+        // Print those functions in tree.c that use the 'insert_entry' function
+        pipe defined-functions tree.c:tree | \
+            if $_output_contains("global-used {} insert_entry", "insert_entry") | \
+            show whereis {}
+
+        // Walk over all functions ending with 'tree' (including those in
+        // dynamic libraries)
+        pipe defined-functions .*:.*tree$ True | \
+                show print-string $_function_of({}) | \
+                show printf "\n"
+
+    '''
+    name = 'defined-functions'
+    tags = ['data']
+
+    def __init__(self, args, first, _):
+        if not first:
+            raise ValueError('defined-functions must be the first walker')
+        argv = gdb.string_to_argv(args)
+        if len(argv) > 2:
+            raise ValueError('defined-functions takes a max of two arguments')
+        if len(argv) == 2:
+            self.include_dynlibs = bool(argv[1])
+        else:
+            self.include_dynlibs = False
+        self.file_regex, self.func_regex = helpers.file_func_split(argv[0])
+
+    def iter_def(self, inpipe):
+        for symbol in helpers.search_symbols(self.func_regex, self.file_regex,
+                self.include_dynlibs):
+            yield int(symbol.value().cast(helpers.uintptr_t))
+
+
 for walker in [Eval, Show, Instruction, Head, Tail, If, Array, Count,
-               Terminated, Until, Devnull, Since, Reverse, Functions, File,
-               HypotheticalStack]:
+               Terminated, Until, Devnull, Since, Reverse, CalledFunctions, File,
+               HypotheticalStack, DefinedFunctions]:
     gdb.register_walker(walker)

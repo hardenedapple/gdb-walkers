@@ -15,6 +15,21 @@ import gdb
 import re
 import collections
 
+def file_func_split(regexp):
+    '''Split  file_regexp:func_regexp  into its component parts.
+
+    If there is no colon, then func_regexp is `regexp` and file_regexp is None
+
+    '''
+    file_func = regexp.split(':', maxsplit=1)
+    if len(file_func) == 1:
+        file_regex = None
+        func_regex = file_func[0]
+    else:
+        file_regex, func_regex = file_func
+
+    return file_regex, func_regex
+
 
 def find_uintptr_t():
     '''Find a uintptr_t equivalent and store it in the global namespace.'''
