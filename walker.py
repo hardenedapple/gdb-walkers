@@ -20,9 +20,10 @@ from helpers import eval_int
 gdb.walkers = {}
 
 def register_walker(walker_class):
-    cur_objfile = gdb.current_objfile()
-    if cur_objfile != None:
-        objfile_tag = os.path.basename(cur_objfile.filename)
+    # Use the manually defined objfile name (defined in 'importer' in
+    # basic-config.py)
+    if gdb.objfile_name != None:
+        objfile_tag = os.path.basename(gdb.objfile_name)
         if objfile_tag not in walker_class.tags:
             walker_class.tags.append(objfile_tag)
 

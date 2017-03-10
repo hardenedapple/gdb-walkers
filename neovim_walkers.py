@@ -31,9 +31,6 @@ class NvimFold(gdb.Walker):
 
     '''
     name = 'nvim-folds'
-    # TODO -- should be able to add this tag automatically in
-    # gdb.register_walker() by checking gdb.current_objfile().
-    tags = ['nvim']
 
     def __init__(self, args, first, _):
         self.nested_offset = offsetof('fold_T', 'fd_nested')
@@ -69,7 +66,6 @@ class NvimUndoTree(gdb.Walker):
 
     '''
     name = 'nvim-undohist'
-    tags = ['nvim']
 
     def __init__(self, args, first, _):
         if first:
