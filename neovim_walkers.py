@@ -113,9 +113,17 @@ class NvimBuffers(gdb.Walker):
 
     Convenience walker, is equivalent to
         (gdb) pipe follow-until firstbuf; {} == 0; ((buf_T *){})->b_next
+    i.e. it walks over all buffers in neovim.
 
     Use:
         pipe nvim-buffers | ...
+
+    Example:
+        // Print all buffers viewing a file whose path contains 'runtime'
+        pipe nvim-buffers | \
+                if ((buf_T *){})->b_ffname | \
+                if $_regex(((buf_T *){})->b_ffname, ".*runtime.*") | \
+                show print ((buf_T *){})->b_ffname
 
     '''
     name = 'nvim-buffers'
@@ -129,9 +137,15 @@ class NvimTabs(gdb.Walker):
 
     Convenience walker, is equivalent to
         (gdb) pipe follow-until first_tabpage; {} == 0; ((tabpage_T *){})->tp_next
+    i.e. it walks over all tabs in the instance.
 
     Use:
         pipe nvim-tabs | ...
+
+    Example:
+        pipe nvim-tabs | \
+                if ((tabpage_T *){})->localdir | \
+                show print ((tabpage_T *){})->localdir
 
     '''
     name = 'nvim-tabs'
@@ -145,18 +159,26 @@ class NvimWindows(gdb.Walker):
 
     Convenience walker,
         (gdb) pipe nvim-windows <tab_ptr>
-        (gdb) // Is equivalent to
-        (gdb) pipe follow-until <tab_ptr>->tp_firstwin; {} == 0; ((win_T *){})->w_next
+        (gdb) // Is almost equivalent to
+        (gdb) if <tab_ptr> == curtab
+         > pipe follow-until firstwin; {} == 0; ((win_T *){})->w_next
+         > else
+         > pipe follow-until <tab_ptr>->tp_firstwin; {} == 0; ((win_T *){})->w_next
+         > end
     and
         (gdb) pipe nvim-windows
         (gdb) // Is equivalent to
         (gdb) pipe nvim-tabs | nvim-windows {}
 
+    i.e. with a tab pounter it walks over all windows in that tab, without an
+    argument it walks over all windows in the neovim instance.
+
     Use:
         pipe nvim-windows [tab_ptr]
 
     Examples:
-        pipe nvim-windows | ...
+        // Print the buffers in each neovim window.
+        pipe nvim-windows | show print ((win_T *){})->w_buffer->b_ffname
 
     '''
     name = 'nvim-windows'

@@ -5,10 +5,10 @@ Most notable are the addition of `walkers` (idea taken from `mdb`) over complex
 data structures, `call-graph` command (idea taken from `dtrace -F`), and
 `shellpipe` that pipes the output of a command to a shell process.
 
-Walkers that don't exist in `mdb` are over all functions called from another
-one, and the corresponding printing of the hypothetical stack created from this
-walker.
-There are *many* walkers in `mdb` that aren't implemented here.
+The information passed between each walker is a single integer without any type
+information. As most pipelines use this integer to represent a pointer to some
+data structure, most pipelines contain casting to tell gdb what data structure
+that integer points to.
 
 Note: In order to avoid surprises, `call-graph` by default doesn't work with
 non-debug functions. This is so that naive regular expressions don't end up
