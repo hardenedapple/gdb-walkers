@@ -20,6 +20,45 @@ Tracing non-debug symbols can be activated with `set call-graph-nondebug on`.
 To install, simply clone this repo to `~/.config/gdb/` and put the line
 `source ~/.config/gdb/gdbinit` in your `~/.gdbinit` file.
 
+### Examples
+There is a demo walker `tree-elements` walking over all elements in a tree
+structure defined in `demo_structure.py` (the tree structure is defined in
+`tree.c`).
+This can be sourced and tested with `source ~/.config/gdb/demos/tree_walker.py`
+and `pipe tree-elements tree_root` respectively.
+```
+(gdb) gdb demos/tree_debug
+Reading symbols from demos/tree_debug...done.
+(gdb) start 10
+Temporary breakpoint 1 at 0x400963: file demos/tree.c, line 86.
+Starting program: /home/matthew/share/repos/gdb-config/demos/tree_debug 10
+
+Temporary breakpoint 1, main (argc=2, argv=0x7fffffffe4c8) at demos/tree.c:86
+86	    if (argc != 2) {
+(gdb) until 93
+main (argc=2, argv=0x7fffffffe4c8) at demos/tree.c:93
+93	    free_tree(tree_root);
+(gdb) source demos/tree_walker.py
+(gdb) // Show all pure leaf elements in the tree.
+(gdb) pipe tree-elements tree_root | if ((node_t *){})->children[0] == 0 && ((node_t *){})->children[1] == 0 | show print *(node_t *){}
+$1 = {children = {0x0, 0x0}, datum = 1753820418}
+$2 = {children = {0x0, 0x0}, datum = 1255532675}
+$3 = {children = {0x0, 0x0}, datum = 679162307}
+$4 = {children = {0x0, 0x0}, datum = 131589623}
+(gdb)
+```
+
+This repo also contains some walkers over vim structures in
+`neovim_walkers.py`, and these are automatically loaded when debugging a
+program called `nvim`.
+
+Writing your own walker should be easy -- define a class inheriting from
+`gdb.Walker`, `__init__()` takes three arguments, the string the walker was
+initialised with, whether the walker is first in the pipeline, and whether it
+is last. Then the `iter_def()` method is called with an iterator over elements
+from the preceding element in the pipe, and should return an iterator over
+integers.
+
 # Getting help
 
 All commands introduced are documented with docstrings so that the gdb `help`
