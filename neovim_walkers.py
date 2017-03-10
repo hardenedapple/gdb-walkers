@@ -106,5 +106,95 @@ class NvimUndoTree(gdb.Walker):
                 yield from self.walk_hist(element)
 
 
-for walker in [NvimFold, NvimUndoTree]:
+# For walking over buffers
+# (gdb) pipe follow-until firstbuf; {} == 0; ((buf_T *){})->b_next
+class NvimBuffers(gdb.Walker):
+    '''Walk over all buffers
+
+    Convenience walker, is equivalent to
+        (gdb) pipe follow-until firstbuf; {} == 0; ((buf_T *){})->b_next
+
+    Use:
+        pipe nvim-buffers | ...
+
+    '''
+    name = 'nvim-buffers'
+    def iter_def(self, inpipe):
+        wlkr_text = 'follow-until firstbuf; {} == 0; ((buf_T *){})->b_next'
+        yield from gdb.create_pipeline(wlkr_text)
+
+
+class NvimTabs(gdb.Walker):
+    '''Walk over all vim tabs
+
+    Convenience walker, is equivalent to
+        (gdb) pipe follow-until first_tabpage; {} == 0; ((tabpage_T *){})->tp_next
+
+    Use:
+        pipe nvim-tabs | ...
+
+    '''
+    name = 'nvim-tabs'
+    def iter_def(self, inpipe):
+        wlkr_text = 'follow-until first_tabpage; {} == 0; ((tabpage_T *){})->tp_next'
+        yield from gdb.create_pipeline(wlkr_text)
+
+
+class NvimWindows(gdb.Walker):
+    '''Walk over all vim windows or windows in a given tab
+
+    Convenience walker,
+        (gdb) pipe nvim-windows <tab_ptr>
+        (gdb) // Is equivalent to
+        (gdb) pipe follow-until <tab_ptr>->tp_firstwin; {} == 0; ((win_T *){})->w_next
+    and
+        (gdb) pipe nvim-windows
+        (gdb) // Is equivalent to
+        (gdb) pipe nvim-tabs | nvim-windows {}
+
+    Use:
+        pipe nvim-windows [tab_ptr]
+
+    Examples:
+        pipe nvim-windows | ...
+
+    '''
+    name = 'nvim-windows'
+
+    def __init__(self, args, *_):
+        self.startptr = args if args else None
+
+    def __make_wlkr_text(self, element):
+        # So the user can put '{}' in their tabpage definition.
+        startptr = eval_int(self.startptr.format(element)
+                if element is not None else self.startptr)
+        # The current tab doesn't have windows stored in it.
+        if startptr == eval_int('curtab'):
+            # Deosn't really matter if startptr is evaluated or not before
+            # passing to follow-until (because follow-until evaluates the
+            # expression as an integer anyway).
+            # But we have to evaluate it to check if the tab pointer is to
+            # curtab.
+            startptr = 'firstwin'
+        else:
+            startptr = '((tabpage_T *){})->tp_firstwin'.format(startptr)
+
+        ret = 'follow-until {};'.format(startptr)
+        return ret + '{} == 0; ((win_T *){})->w_next'
+
+    def __iter_helper(self, element):
+        if self.startptr:
+            yield from gdb.create_pipeline(self.__make_wlkr_text(element))
+        else:
+            yield from gdb.create_pipeline('nvim-tabs | nvim-windows {}')
+
+    def iter_def(self, inpipe):
+        if inpipe:
+            for element in inpipe:
+                yield from self.__iter_helper(element)
+        else:
+            yield from self.__iter_helper(None)
+
+
+for walker in [NvimFold, NvimUndoTree, NvimBuffers, NvimTabs, NvimWindows]:
     gdb.register_walker(walker)
