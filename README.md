@@ -106,9 +106,20 @@ create_random_tree	demos/tree.c:69
 (gdb) 
 ```
 
-### List hypothetical call stack of functions called by main that use a global
+### List all functions defined in tree.c that use a global variable
 in this case, use the global function `free_tree`, if you have a global
 variable this would work just as well.
+```
+(gdb) pipe defined-functions tree.c:.* | if $_output_contains("global-used {} free_tree", "free_tree") | show whereis {}
+(gdb) // Walk over all functions ending with 'tree' (including those in dynamic libraries)
+(gdb) pipe defined-functions .*:.*tree$ True | show print-string $_function_of({}) | show printf "\n"
+(gdb) // NOTE, I use my own command `print-string` above to avoid
+(gdb) // `printf "%s\n", $_function_of({})` as `printf "%s", <somestring>`
+(gdb) // allocates the string in the inferior and provides no way of
+(gdb) // `free()`ing it.
+```
+
+### List hypothetical call stack of functions called by main that use a global
 ```
 (gdb) pipe called-functions main; .*; -1 | if $_output_contains("global-used {} free_tree", "free_tree") | show hypothetical-stack
 main demos/tree.c:85

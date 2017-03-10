@@ -12,3 +12,6 @@ run_basic_test "file pipe" "shellpipe pipe array char; 1; 5 ! cat > addresses\ns
 unset ten_count
 
 run_basic_test "foldl" "set variable \$sum = 0\npipe follow-until 1; {} > 100; {} + 1 | eval \$sum += {}, {} | devnull\nprint \$sum\n" "5050"
+
+send "inferior $debug_inferior\n"
+run_basic_test "walk functions" "pipe defined-functions tree.c:.* | show whereis {}\n" "create_tree demos/tree.c:62\r\nfree_tree demos/tree.c:53\r\ninsert_entry demos/tree.c:23\r\nmain demos/tree.c:85\r\ncreate_random_tree demos/tree.c:69\r\n(gdb)"
