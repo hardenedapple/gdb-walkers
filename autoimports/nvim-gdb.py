@@ -1,1 +1,1 @@
-import neovim_walkers
+import bundled_walkers.neovim_walkers
