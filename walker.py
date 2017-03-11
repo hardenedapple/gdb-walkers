@@ -109,6 +109,9 @@ class Walker(abc.ABC):
 
         '''
         if not args:
+            if nargs[0] > 0:
+                raise ValueError('Walker "{}" requires at least one argument'
+                        .format(cls.name))
             return []
         # Replace $## covered expressions in the string with gdb
         args = cls.eval_user_expressions(args)
