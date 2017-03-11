@@ -15,7 +15,7 @@ it.
 '''
 import itertools as itt
 import gdb
-from helpers import offsetof, eval_int
+from helpers import offsetof, eval_int, offsetof
 
 class NvimFold(gdb.Walker):
     '''Walk over all folds defined in a garray_T recursively.
@@ -218,5 +218,80 @@ class NvimWindows(gdb.Walker):
             yield from self.__iter_helper(None)
 
 
-for walker in [NvimFold, NvimUndoTree, NvimBuffers, NvimTabs, NvimWindows]:
+class NvimEventQueues(gdb.Walker):
+    '''Walk over events in a queue
+
+    Pass in a MultiQueue pointer.
+
+    Without an argument, walks over all events in main_loop.events.
+
+    Can either go recursively (i.e. if a MultiQueueItem.data is a MultiQueue
+    iterate over all events in that MultiQueue too) or not.
+
+    It doesn't matter what you put after the semi-colon, if there is a
+    semicolon and something after it, that tells this walker to recurse.
+
+    Use:
+        pipe nvim-events start-expression[; recurse] | ...
+        pipe eval start-expression | nvim-events <expr containing {}>[; recurse] | ...
+
+    Example:
+        pipe nvim-events main_loop.events; recurse | show print *(Event *){}
+        pipe nvim-events main_loop.events
+
+    '''
+    name = 'nvim-events'
+    def __init__(self, args, first, last):
+        # Calculate a bunch of offsets and types for future use.
+        self.mqi_q_offset = offsetof('MultiQueueItem', 'node')
+        self.mqi_event_offset = offsetof('MultiQueueItem', 'data.item.event')
+        self.mq_headtail_offset = offsetof('MultiQueue', 'headtail')
+        self.mqi_ptr = gdb.lookup_type('MultiQueueItem').pointer()
+        self.mq_ptr = gdb.lookup_type('MultiQueue').pointer()
+        self.queue_ptr = gdb.lookup_type('QUEUE').pointer()
+        # Parse arguments
+        arg_list = self.parse_args(args, [1, 2], ';')
+        self.recurse = len(arg_list) == 2
+        self.expr = arg_list[0]
+        self.start = eval_int(self.expr) if first else None
+
+    def __ptr_to_type(self, pointer, type):
+        return gdb.Value(pointer).cast(type).dereference()
+    
+    def __q_next(self, pointer):
+        return int(self.__ptr_to_type(pointer, self.queue_ptr)['next'])
+    
+    def iter_queue(self, pointer):
+        '''Given a MultiQueue, iterate over all events on it.
+
+        If self.recurse is true, iterate over events in all sub-queues too.
+
+        '''
+        q_start = pointer + self.mq_headtail_offset
+        q_next = self.__q_next(q_start)
+
+        # Gist of what to do taken from QUEUE_FOREACH(), multiqueue_remove(),
+        # and QUEUE_DATA()/multiqueue_node_data()
+        while q_next != q_start:
+            item_ptr = q_next - self.mqi_q_offset
+            item = self.__ptr_to_type(item_ptr, self.mqi_ptr)
+            q_next = self.__q_next(q_next)
+
+            if item['link']:
+                if self.recurse:
+                    yield from self.iter_queue(int(item['data']['queue']))
+                continue
+
+            yield item_ptr + self.mqi_event_offset
+
+    def iter_def(self, inpipe):
+        if inpipe:
+            for element in inpipe:
+                yield from self.iter_queue(self.expr.format(element))
+        else:
+            yield from self.iter_queue(self.start)
+
+
+for walker in [NvimFold, NvimUndoTree, NvimBuffers, NvimTabs, NvimWindows,
+        NvimEventQueues]:
     gdb.register_walker(walker)

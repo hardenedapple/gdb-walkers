@@ -55,6 +55,8 @@ def eval_int(gdb_expr):
     account for the given description being a symbol.
 
     '''
+    # Cast to uintptr_t to find addresses of functions (e.g.
+    # gdb.parse_and_eval('main')).
     return int(gdb.parse_and_eval(gdb_expr).cast(uintptr_t))
 
 
