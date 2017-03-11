@@ -31,12 +31,14 @@ def importer(event):
     # basename), I have to manually store the current program file somewhere.
     gdb.objfile_name = progname
     matchname = os.path.basename(progname) + '-gdb.py'
-    # If the file doesn't exist, gdb just prints an error and does nothing.
-    # Asking to get the output as a string via the final 'True' argument means
-    # this error isn't shown to the user.
     confdir = os.path.expanduser('~/.config/gdb')
-    gdb.execute('source {}/autoimports/{}'.format(confdir, matchname),
-                False, True)
+    source_file = '{}/autoimports/{}'.format(confdir, matchname)
+    # We check the file exists to avoid unnecessary output.
+    # This could be done by taking all output (by passing True to gdb.execute)
+    # and then throwing it away, but we want to show error messages to the
+    # user.
+    if os.path.exists(source_file):
+        gdb.execute('source {}'.format(source_file), False, False)
     gdb.objfile_name = None
 
 
