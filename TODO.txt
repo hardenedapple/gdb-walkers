@@ -3,8 +3,8 @@ Gdb problems:
         Mises out numbers in the function names -- this may be on purpose.
         It could very well be that extra numbers are ignored so that the
         output is user-friendly.
-        At the moment it's messing up my parsing (which is why `call-graph`
-        doesn't account for non-debugging symbols).
+        At the moment it's messing up my parsing (so `call-graph` misses these
+        functions).
 
     Abort when keyboard-interrupt running python code.
         Example I used
@@ -160,13 +160,10 @@ Things I want:
     gdb.current_arch() function
         Would be nice if I could disassemble a function without having to start
         the underlying process.
-        At the moment I have a patch that uses the gdb get_current_arch()
-        function, I may be able to switch to just wrapping the `python_gdbarch`
-        structure.
-        This structure may very well be removed later, so I'm not confident
-        it's a good idea -- check it out.
+        I've submitted a patch that uses the gdb get_current_arch() function to
+        do this, but it doesn't appear to be going anywhere.
 
-    All source files in python
+    All source files in python gdb.sources()
         Currently I have to parse `info sources`
 
     Access to minimal symbols
@@ -175,10 +172,10 @@ Things I want:
         gdb has access to the symbol table, but it just doesn't expose it to
         the extension languages interface.
 
-    What objfile is this symbol in
+    What objfile is this symbol in i.e. `info symbol ...` but as a python func.
         Currently I have to do gdb\.execute('info symbol {}'.format(...))
 
-    Directly iterate over symbols
+    `search_symbols()` for python.
         At the moment I have to iterate over source files, finding the symbol
         table for each source file, then iterating over all symbols in those
         symbol tables.
@@ -186,8 +183,7 @@ Things I want:
     Include function size in symbol
         This way I don't have to do gdb.block_for_pc(), and walk up the block
         hierarchy until I find the function block.
-        i.e. I just want to say "disassemble this function" without as much
-        bother.
+        i.e. I just want to say "disassemble this function" with less bother.
 
     Continue on to the end of the 'next' I'd previously asked for.
         Have a break on function foo().
