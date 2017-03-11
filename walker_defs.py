@@ -277,7 +277,7 @@ class Count(gdb.Walker):
         count
 
     Example:
-        pipe instructions main, main+100 | count
+        pipe instructions main; main+100 | count
 
     '''
     name = 'count'
