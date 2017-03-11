@@ -285,10 +285,10 @@ class Count(gdb.Walker):
     tags = ['general']
 
     def iter_def(self, inpipe):
-        i = 0
+        i = None
         for i, _ in enumerate(inpipe):
             pass
-        yield i + 1
+        yield i + 1 if i is not None else 0
 
 
 class Array(gdb.Walker):
