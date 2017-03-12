@@ -245,8 +245,12 @@ def function_disassembly(func_addr, arch=None, use_fallback=True):
 
         # Bit of a hack, but I want the same thing to happen when gdb can't
         # find the object file (and hence raises an exception itself) as when
-        # it just can't find the block.
-        if func_block is None:
+        # it just can't find the block, or found a static / global (i.e.
+        # file-sized) block instead of a function block.
+        # I've seen getting a static block when asking for the block at a
+        # function address happen with je_extent_tree_szad_new() function when
+        # debugging neovim.
+        if func_block is None or func_block.is_static or func_block.is_global:
             raise RuntimeError('Cannot locate object file for block.')
     except RuntimeError as e:
         if e.args != ('Cannot locate object file for block.', ):
@@ -281,8 +285,8 @@ def function_disassembly(func_addr, arch=None, use_fallback=True):
             function_name = func_block.function.name
             function_filename = func_block.function.symtab.filename
         else:
-            # Print this out for my information -- I don't know of a case when
-            # this would happen, so if it does I have a chance to learn.
+            # Print this out for my information -- know when it happens so have
+            # a chance to learn.
             print('Function not found at {}'.format(func_addr))
             func_block = orig_block
             function_name = ''
