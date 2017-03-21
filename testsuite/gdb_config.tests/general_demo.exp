@@ -13,5 +13,19 @@ unset ten_count
 
 run_basic_test "foldl" "set variable \$sum = 0\npipe follow-until 1; {} > 100; {} + 1 | eval \$sum += {}, {} | devnull\nprint \$sum\n" "5050"
 
+# Need arguments
 send "inferior $debug_inferior\n"
+ensure_finished "Before max min sort and dedup"
+send "start Hello there this is a set of arguments\n"
+set walk_args "pipe follow-until argv + 1; *(char**){} == 0; ((char **){}) + 1"
+set show_arg  "show printf \"\%s\\n\", *(char **){}\n"
+set first_char "(*(char **){})\[0\]"
+run_basic_test "max" "$walk_args | max $first_char | $show_arg\n" "there"
+run_basic_test "min" "$walk_args | min $first_char | $show_arg" "Hello"
+run_basic_test "sort" "$walk_args | sort $first_char | $show_arg" "Hello\r\na\r\narguments\r\nis\r\nof\r\nset\r\nthere\r\nthis"
+run_basic_test "dedup" "$walk_args | sort $first_char | dedup $first_char | $show_arg" "Hello\r\na\r\nis\r\nof\r\nset\r\nthere\r\n"
+wait_for_exit "Finish after arguments"
+unset walk_args
+unset show_arg
+
 run_basic_test "walk functions" "pipe defined-functions tree.c:.* | show whereis {}\n" "create_tree demos/tree.c:62\r\nfree_tree demos/tree.c:53\r\ninsert_entry demos/tree.c:23\r\nmain demos/tree.c:85\r\ncreate_random_tree demos/tree.c:69\r\n(gdb)"

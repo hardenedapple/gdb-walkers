@@ -133,6 +133,18 @@ class Walker(abc.ABC):
         addr_str = '{}'.format(hex(int(element)))
         return addr_str.join(cmd_parts)
 
+    def eval_command(self, element, cmd_parts=None):
+        '''Helper
+        
+        Without `cmd_parts` argument is just 
+        return eval_int(self.form_command(self.command_parts, element))
+
+        Otherwise uses `cmd_parts` instead of `self.command_parts`
+
+        '''
+        cmd_parts = cmd_parts if cmd_parts else self.command_parts
+        return eval_int(self.form_command(cmd_parts, element))
+
 
 gdb.Walker = Walker
 

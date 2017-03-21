@@ -15,8 +15,8 @@ send "add-inferior -exec demos/tree\n"
 send "add-inferior -exec demos/tree_debug\n"
 # set timeout 5
 # TODO For now assume we can never have a different inferior number (I don't
-# see how we can), but later on I'll parse the output of the command and read
-# the inferior number just to be safe.
+# see how we can), but later on I should parse the output of the command and
+# read the inferior number just to be safe.
 set plain_inferior 2
 set debug_inferior 3
 # expect {
@@ -50,6 +50,19 @@ proc wait_for_exit { exit_name } {
         "exited" {}
         default {
             unresolved "After test $exit_name couldn't finish!!"
+        }
+    }
+}
+
+proc ensure_finished { name } {
+    # NOTE -- require all breakpoints to have either been disabled or deleted.
+    # (or not in the code path to completion).
+    send "cont\n"
+    expect {
+        "The program is not being run." {}
+        "exited" {}
+        default {
+            unresolved "Couldn't ensure_finished at $name"
         }
     }
 }

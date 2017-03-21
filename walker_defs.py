@@ -6,6 +6,8 @@ gdb.walkers dictionary with gdb.register_walker().
 
 '''
 import re
+import math
+import operator
 import gdb
 # Need the global value so that we don't get a copy of helpers.uintptr_t, and
 # instead we see the updates made by start_handler().
@@ -95,7 +97,7 @@ class Eval(gdb.Walker):
 
     def __iter_with_input(self, inpipe):
         for element in inpipe:
-            yield eval_int(self.form_command(self.command_parts, element))
+            yield self.eval_command(element)
 
     def iter_def(self, inpipe):
         return self.__iter_helper(inpipe)
@@ -217,8 +219,7 @@ class If(gdb.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            command = self.form_command(self.command_parts, element)
-            if eval_int(command):
+            if self.eval_command(element):
                 yield element
 
 
@@ -342,6 +343,138 @@ class Array(gdb.Walker):
         return self.__iter_helper(inpipe)
 
 
+# Probably should do something about the code duplication between Max and Min
+# here, but right now it seems much more effort than it's worth.
+class Max(gdb.Walker):
+    '''Pass through the value that results in the maximum expression.
+    
+    For each element, it evaluates the expression given, and returns the
+    element for which this expression gives the maximum value.
+
+    If more than one element give the same maximum value, then the first is
+    returned.
+
+    Use:
+        pipe ... | max {}
+
+    Example:
+        // Find argument that starts with the last letter in the alphabet.
+        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | max (*(char *){})[0]
+
+    '''
+    name = 'max'
+    require_input = True
+    tags = ['general']
+
+    def __init__(self, args, *_):
+        self.command_parts = self.parse_args(args, [1, math.inf], '{}', False)
+
+    def iter_def(self, inpipe):
+        try:
+            _, retelement = max(
+                    ((self.eval_command(element), element) for element in inpipe),
+                    key=operator.itemgetter(0)
+            )
+            yield retelement
+        except ValueError as e:
+            if e.args != ('max() arg is an empty sequence',):
+                raise
+
+
+class Min(gdb.Walker):
+    '''Pass through the value that results in the minimum expression.
+    
+    For each element, it evaluates the expression given, and returns the
+    element for which this expression gives the minimum value.
+
+    If more than one element give the same minimum value, then the first is
+    returned.
+
+    Use:
+        pipe ... | min {}
+
+    Example:
+        // Find argument that starts with the last letter in the alphabet.
+        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | min (*(char *){})[0]
+
+    '''
+    name = 'min'
+    require_input = True
+    tags = ['general']
+
+    def __init__(self, args, *_):
+        self.command_parts = self.parse_args(args, [1, math.inf], '{}', False)
+
+    def iter_def(self, inpipe):
+        try:
+            _, retelement = min(
+                    ((self.eval_command(element), element) for element in inpipe),
+                    key=operator.itemgetter(0)
+            )
+            yield retelement
+        except ValueError as e:
+            if e.args != ('min() arg is an empty sequence',):
+                raise
+
+
+class Sort(gdb.Walker):
+    '''Yield elements from the previous walker sorted on expression given.
+    
+    For each element, it evaluates the expression given. It then yields the
+    elements in their sorted order.
+
+    Reverse sorting is not supported: negate the expression as a workaround.
+
+    Use:
+        pipe ... | sort {}
+
+    Example:
+        // Sort arguments alphabetically
+        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | sort (*(char **){})[0]
+
+    '''
+    name = 'sort'
+    require_input = True
+    tags = ['general']
+
+    def __init__(self, args, *_):
+        self.command_parts = self.parse_args(args, [1, math.inf], '{}', False)
+
+    def iter_def(self, inpipe):
+        retlist = sorted(
+                ((self.eval_command(element), element) for element in inpipe),
+                key=operator.itemgetter(0)
+        )
+        for _, element in retlist:
+            yield element
+        
+
+class Dedup(gdb.Walker):
+    '''Remove duplicate elements.
+
+    For each element, evaluates the expression given and removes those that
+    repeat the same value as the one previous.
+    
+    Use:
+        pipe ... | dedup {}
+
+    '''
+    name = 'dedup'
+    require_input = True
+    tags = ['general']
+
+    def __init__(self, args, *_):
+        self.command_parts = self.parse_args(args, [1, math.inf], '{}', False)
+
+    def iter_def(self, inpipe):
+        prev_value = None
+        for element, value in ((ele, self.eval_command(ele)) for ele in inpipe):
+            if value == prev_value:
+                continue
+            prev_value = value
+            yield element
+
+
 class Until(gdb.Walker):
     '''Accept and pass through elements until a condition is broken.
 
@@ -360,7 +493,7 @@ class Until(gdb.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if not eval_int(self.form_command(self.command_parts, element)):
+            if not self.eval_command(element):
                 break
             yield element
 
@@ -383,7 +516,7 @@ class Since(gdb.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if eval_int(self.form_command(self.command_parts, element)):
+            if self.eval_command(ele):
                 break
         for element in inpipe:
             yield element
@@ -425,9 +558,9 @@ class Terminated(gdb.Walker):
         self.follow_cmd = self.parse_args(follow_expr, None, '{}', False)
 
     def follow_to_termination(self, start):
-        while eval_int(self.form_command(self.test_cmd, start)) == 0:
+        while self.eval_command(start, self.test_cmd) == 0:
             yield start
-            start = eval_int(self.form_command(self.follow_cmd, start))
+            start = self.eval_command(start, self.follow_cmd)
 
     def iter_def(self, inpipe):
         if self.start:
@@ -735,7 +868,7 @@ class DefinedFunctions(gdb.Walker):
             yield int(symbol.value().cast(helpers.uintptr_t))
 
 
-for walker in [Eval, Show, Instruction, Head, Tail, If, Array, Count,
+for walker in [Eval, Show, Instruction, Head, Tail, If, Array, Count, Max, Min,
                Terminated, Until, Devnull, Since, Reverse, CalledFunctions, File,
-               HypotheticalStack, DefinedFunctions]:
+               HypotheticalStack, DefinedFunctions, Sort, Dedup]:
     gdb.register_walker(walker)
