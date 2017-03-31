@@ -224,6 +224,27 @@ if not hasattr(gdb, 'search_symbols'):
     gdb.search_symbols = search_symbols
 
 
+def get_function_block(addr):
+    '''Does gdb.block_for_pc(addr) but raises the same exception if object file
+    can't be found as if the block found is None, static, or global.
+
+    This is just for convenience.
+
+    '''
+    func_block = gdb.block_for_pc(addr)
+    # Want the same thing to happen when gdb can't find the object file (and
+    # hence raises an exception itself) as when it just can't find the block,
+    # or found a static / global (i.e. file-sized) block instead of a function
+    # block.
+    # I've seen getting a static block when asking for the block at a
+    # function address happen with je_extent_tree_szad_new() function when
+    # debugging neovim.
+    if func_block is None or func_block.is_static or func_block.is_global:
+        raise RuntimeError('Cannot locate object file for block.')
+
+    return func_block
+
+
 def function_disassembly(func_addr, arch=None, use_fallback=True):
     '''Return the disassembly and filename of the function at `func_addr`.
 
@@ -241,17 +262,7 @@ def function_disassembly(func_addr, arch=None, use_fallback=True):
     arch = arch or gdb.current_arch()
 
     try:
-        func_block = gdb.block_for_pc(func_addr)
-
-        # Bit of a hack, but I want the same thing to happen when gdb can't
-        # find the object file (and hence raises an exception itself) as when
-        # it just can't find the block, or found a static / global (i.e.
-        # file-sized) block instead of a function block.
-        # I've seen getting a static block when asking for the block at a
-        # function address happen with je_extent_tree_szad_new() function when
-        # debugging neovim.
-        if func_block is None or func_block.is_static or func_block.is_global:
-            raise RuntimeError('Cannot locate object file for block.')
+        func_block = get_function_block(func_addr)
     except RuntimeError as e:
         if e.args != ('Cannot locate object file for block.', ):
             raise e
@@ -334,7 +345,7 @@ def func_and_offset(addr):
     # If given @plt addresses (or other problematic functions) just ignore
     # them and return an error message -- (better than raising an error?)
     try:
-        block = gdb.block_for_pc(addr)
+        block = get_function_block(addr)
     except RuntimeError as e:
         # If this is an exception we don't know about, raise.
         if e.args != ('Cannot locate object file for block.',):
@@ -374,7 +385,7 @@ def func_and_offset(addr):
             block = block.superblock
         else:
             raise gdb.GdbError('Could not find enclosing function of '
-                                '{} ({})'.format(addr, arg))
+                                '{}'.format(addr))
 
     offset = addr - block.start
     return (block.function.name, offset)
