@@ -302,6 +302,13 @@ class PrintString(gdb.Command):
     i.e. it is the `output` command limited to strings but without the
     enclosing "".
 
+    Some other differences to `printf` are:
+        `print-string` prints non-printable characters backslash escaped
+        instead of directly.
+        `print-string` can handle NULL pointers (and some other problematic
+        pointers) by simply printing out 'UNK <invalid pointer>'.
+
+
     '''
     def __init__(self):
         super(PrintString, self).__init__('print-string', gdb.COMMAND_DATA)
@@ -318,7 +325,13 @@ class PrintString(gdb.Command):
                     'Failed to parse `{}` as a gdb value'.format(argument))
 
             try:
-                value = tmp.string()
+                value = tmp.string(errors='backslashreplace')
+            except gdb.MemoryError as e:
+                if e.args[0].startswith(
+                    'Cannot access memory at address'):
+                    value = 'UNK {}'.format(tmp)
+                else:
+                    raise
             except gdb.error as e:
                 if e.args[0].startswith(
                     'Trying to read string with inappropriate type'):
