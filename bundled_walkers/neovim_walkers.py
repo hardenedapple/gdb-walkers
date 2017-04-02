@@ -285,6 +285,111 @@ class NvimMultiQueues(gdb.Walker):
             yield from self.iter_queue(self.start)
 
 
+class NvimCharBuffer(gdb.Walker):
+    '''Walk over all buffblock_T items starting at given buffheader_T
+
+    Equivalent to:
+        linked-list &(<argument>->bh_first); buffblock_T; b_next
+
+    Use:
+        pipe nvim-buffblocks <buffheader_T> | ...
+        pipe eval ... | nvim-buffblocks | ...
+
+    Examples:
+        pipe nvim-buffblocks &readbuf1 | show printf "%s\n", ((buffblock_T *){})->b_str
+        pipe eval &readbuf1 | nvim-buffblocks
+
+    '''
+    name = 'nvim-buffblocks'
+    def __init__(self, args, first, _):
+        if first:
+            self.start_addr = eval_int(self.eval_user_expressions(args))
+        else:
+            self.start_addr = None
+
+    def iter_helper(self, addr):
+        buff_list = ''.join(['linked-list &(((buffheader_T *){})->bh_first);'.format(addr),
+                               'buffblock_T; b_next'])
+        for buffblock in gdb.create_pipeline(buff_list):
+            yield buffblock
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(self.start_addr, inpipe, self.iter_helper)
+
+
+class NvimMapBlock(gdb.Walker):
+    '''Walk over all mapblock_T structures in a linked list.
+
+    Equivalent to
+        linked-list <argument>; mapblock_T; m_next
+
+    Usage:
+        // Print all global mappings.
+        pipe nvim-mapblock <mapblock_T *>
+        pipe eval ... | nvim-buffblocks
+
+    '''
+    name = 'nvim-mapblock'
+    def __init__(self, args, first, _):
+        if first:
+            self.start_addr = eval_int(self.eval_user_expressions(args))
+        else:
+            self.start_addr = None
+
+    def iter_helper(self, addr):
+        map_list = ''.join(['linked-list {};'.format(addr),
+                               'mapblock_T; m_next'])
+        for mapping in gdb.create_pipeline(map_list):
+            yield mapping
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(self.start_addr, inpipe, self.iter_helper)
+
+
+class NvimMappings(gdb.Walker):
+    '''Walk over all mappings in a buffer, or all global mappings.
+
+    Equivalent to
+        pipe array mapblock_T **; maphash; 256 | if *(mapblock_T **){} != 0 | eval ((mapblock_T *){})->m_next | nvim-mapblock
+    or
+        pipe array mapblock_T **; <buffer>->b_maphash; 256 | if *(mapblock_T **){} != 0 | eval ((mapblock_T *){})->m_next | nvim-mapblock
+
+    Usage:
+        pipe nvim-maps <buffer>
+        pipe nvim-maps
+
+    Example:
+        // print-string and printf are different because printf prints
+        // non-printable characters directly while print-string escapes them with
+        // a backslash.
+        pipe nvim-maps | show print-string ((mapblock_T*){})->m_keys | show printf "  -->  " | show print-string ((mapblock_T*){})->m_str | show printf "\n"
+        // printf can't handle (char *)NULL, and some maps
+        pipe nvim-maps | if ((mapblock_T*){})->m_str && ((mapblock_T*){})->m_keys | show printf "%s  -->  %s\n", ((mapblock_T*){})->m_keys, ((mapblock_T*){})->m_str
+        // Or only maps of a given buffer
+        pipe nvim-maps curbuf | ...
+        pipe nvim-buffers | nvim-maps | ...
+
+    '''
+    name = 'nvim-maps'
+    __conversion_pipe = ' | if *(mapblock_T **){} != 0 | eval ((mapblock_T *){})->m_next | nvim-mapblock'
+    def __init__(self, args, first, _):
+        self.first = first
+        self.use_global = first and not args
+        self.start_buf = None if not args else eval_int(args)
+
+    def __iter_helper(self, arg):
+        map_array = 'maphash' if self.use_global else '((buf_T *){})->b_maphash'.format(arg)
+        init_pipe = 'array mapblock_T **; {}; 256'.format(map_array)
+        yield from gdb.create_pipeline(init_pipe + self.__conversion_pipe)
+
+    def iter_def(self, inpipe):
+        if not inpipe:
+            yield from self.__iter_helper(self.start_buf)
+        else:
+            for element in inpipe:
+                yield from self.__iter_helper(element)
+
+
 for walker in [NvimFold, NvimUndoTree, NvimBuffers, NvimTabs, NvimWindows,
-               NvimMultiQueues]:
+               NvimMultiQueues, NvimCharBuffer, NvimMapBlock, NvimMappings]:
     gdb.register_walker(walker)
