@@ -13,7 +13,16 @@ unset ten_count
 
 run_basic_test "foldl" "set variable \$sum = 0\npipe follow-until 1; {} > 100; {} + 1 | eval \$sum += {}, {} | devnull\nprint \$sum\n" "5050"
 
-# Need arguments
+send "inferior $list_inferior\n"
+ensure_finished "Before walk list"
+send "tbreak list.c:70\nrun 10\n"
+set walk_args "pipe linked-list list_head; list_t; next"
+set show_arg "show printf \"\%d\\n\", ((list_t *){})->datum"
+run_basic_test "list" "$walk_args | $show_arg\n" "679162307\r\n54404747\r\n906573271\r\n1255532675\r\n394002377\r\n1753820418\r\n385788725\r\n1086128678\r\n1311962008\r\n1215069295\r\n(gdb)"
+wait_for_exit "Finish after list print"
+unset walk_args
+unset show_arg
+
 send "inferior $debug_inferior\n"
 ensure_finished "Before max min sort and dedup"
 send "start Hello there this is a set of arguments\n"

@@ -564,6 +564,41 @@ class Terminated(gdb.Walker):
         yield from self.call_with(self.start, inpipe, self.follow_to_termination)
 
 
+class LinkedList(gdb.Walker):
+    '''Convenience walker for a NULL terminated linked list.
+
+    The following walker
+        linked-list list_head; list_T; list_next
+    is the equivalent of
+        follow-until list_head; {} == 0; ((list_T *){})->list_next
+
+    Usage:
+        linked-list <list start>; <list type>; <next member>
+        linked-list <list type>; <next member>
+
+    '''
+    name = 'linked-list'
+    tags = ['data']
+
+    def __init__(self, args, first, _):
+        if first:
+            start, self.list_type, self.next_member = self.parse_args(args, [3, 3], ';')
+            self.start = eval_int(start)
+        else:
+            self.list_type, self.next_member = self.parse_args(args, [2, 2], ';')
+            self.start = None
+
+    def __iter_helper(self, element):
+        walker_text = ''.join(['follow-until {};'.format(element),
+                               ' {} == 0;',
+                               ' (({} *)'.format(self.list_type),
+                               '{})',
+                               '->{}'.format(self.next_member)])
+        yield from gdb.create_pipeline(walker_text)
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(self.start, inpipe, self.__iter_helper)
+
 
 class Devnull(gdb.Walker):
     '''Completely consume the previous walker, but yield nothing.
@@ -863,6 +898,7 @@ class DefinedFunctions(gdb.Walker):
 
 
 for walker in [Eval, Show, Instruction, Head, Tail, If, Array, Count, Max, Min,
-               Terminated, Until, Devnull, Since, Reverse, CalledFunctions, File,
-               HypotheticalStack, DefinedFunctions, Sort, Dedup]:
+               Terminated, LinkedList, Until, Devnull, Since, Reverse,
+               CalledFunctions, File, HypotheticalStack, DefinedFunctions,
+               Sort, Dedup]:
     gdb.register_walker(walker)
