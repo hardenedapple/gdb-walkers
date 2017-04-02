@@ -41,11 +41,7 @@ class TreeElements(gdb.Walker):
         yield init_addr
 
     def iter_def(self, inpipe):
-        if self.start_addr:
-            yield from self.iter_elements(self.start_addr)
-        else:
-            for addr in inpipe:
-                yield from self.iter_elements(addr)
-            
+        yield from self.call_with(self.start_addr, inpipe, self.iter_elements)
+
 
 gdb.register_walker(TreeElements)
