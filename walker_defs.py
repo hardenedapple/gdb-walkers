@@ -129,8 +129,7 @@ class Show(gdb.Walker):
     def iter_def(self, inpipe):
         for element in inpipe:
             command = self.form_command(self.command_parts, element)
-            gdb_output = gdb.execute(command, False, True)
-            print(gdb_output, end='')
+            gdb_output = gdb.execute(command, False)
             if not self.is_last:
                 yield element
 
