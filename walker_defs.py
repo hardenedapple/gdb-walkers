@@ -186,14 +186,12 @@ class Instruction(gdb.Walker):
 
         return self.arch.disassemble(start_address)
 
+    def iter_helper(self, start_addr):
+        for instruction in self.disass(start_addr):
+            yield instruction['addr']
+
     def iter_def(self, inpipe):
-        if self.start_address:
-            for instruction in self.disass(self.start_address):
-                yield instruction['addr']
-        else:
-            for start_address in inpipe:
-                for instruction in self.disass(start_address):
-                    yield instruction['addr']
+        yield from self.call_with(self.start_address, inpipe, self.iter_helper)
 
 
 class If(gdb.Walker):
@@ -523,7 +521,7 @@ class Since(gdb.Walker):
 
 
 class Terminated(gdb.Walker):
-    '''Follow "next" pointer until reach terminating condition.
+    '''Follow "next" expression until reach terminating condition.
 
     Uses given expression to find the "next" pointer in a sequence, follows
     this expression until a terminating value is reached.
@@ -563,12 +561,8 @@ class Terminated(gdb.Walker):
             start = self.eval_command(start, self.follow_cmd)
 
     def iter_def(self, inpipe):
-        if self.start:
-            assert not inpipe
-            yield from self.follow_to_termination(self.start)
-        else:
-            for element in inpipe:
-                yield from self.follow_to_termination(element)
+        yield from self.call_with(self.start, inpipe, self.follow_to_termination)
+
 
 
 class Devnull(gdb.Walker):

@@ -145,6 +145,14 @@ class Walker(abc.ABC):
         cmd_parts = cmd_parts if cmd_parts else self.command_parts
         return eval_int(self.form_command(cmd_parts, element))
 
+    def call_with(self, start, inpipe, helper):
+        if start:
+            assert not inpipe
+            yield from helper(start)
+        else:
+            for element in inpipe:
+                yield from helper(element)
+
 
 gdb.Walker = Walker
 

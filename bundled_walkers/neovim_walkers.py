@@ -48,11 +48,7 @@ class NvimFold(gdb.Walker):
             yield from self.iter_folds(fold + self.nested_offset)
 
     def iter_def(self, inpipe):
-        if self.start_addr:
-            yield from self.iter_folds(self.start_addr)
-        else:
-            for element in inpipe:
-                yield from self.iter_folds(element)
+        yield from self.call_with(self.start_addr, inpipe, self.iter_folds)
 
 
 class NvimUndoTree(gdb.Walker):
@@ -212,11 +208,7 @@ class NvimWindows(gdb.Walker):
             yield from gdb.create_pipeline('nvim-tabs | nvim-windows {}')
 
     def iter_def(self, inpipe):
-        if inpipe:
-            for element in inpipe:
-                yield from self.__iter_helper(element)
-        else:
-            yield from self.__iter_helper(None)
+        yield from self.call_with(None, inpipe, self.__iter_helper)
 
 
 class NvimMultiQueues(gdb.Walker):
