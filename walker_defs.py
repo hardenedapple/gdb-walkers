@@ -871,8 +871,7 @@ class DefinedFunctions(gdb.Walker):
         // Walk over all functions ending with 'tree' (including those in
         // dynamic libraries)
         pipe defined-functions .*:.*tree$ True | \
-                show print-string $_function_of({}) | \
-                show printf "\n"
+            show print-string $_function_of({}); "\n"
 
     '''
     name = 'defined-functions'

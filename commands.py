@@ -297,10 +297,8 @@ class PrintString(gdb.Command):
     Commands such as `output` and `print` print the text with surrounding
     quotes to show this is a string.
 
-    This `print-string` command simply prints a gdb internal string without
-    those enclosing quotes.
-    i.e. it is the `output` command limited to strings but without the
-    enclosing "".
+    This `print-string` command prints each string argument without any
+    surrounding quotes and without putting the string into the inferior.
 
     Some other differences to `printf` are:
         `print-string` prints non-printable characters backslash escaped
@@ -308,13 +306,36 @@ class PrintString(gdb.Command):
         `print-string` can handle NULL pointers (and some other problematic
         pointers) by simply printing out 'UNK <invalid pointer>'.
 
+    Use:
+        print-string <string arg1>; <string arg2>; ...
+
+    Example:
+        print-string $_as_string($pc); "  is at function  "; $_function_of($pc)
 
     '''
     def __init__(self):
         super(PrintString, self).__init__('print-string', gdb.COMMAND_DATA)
 
+    def parse_args(self, arg):
+        in_string = False
+        retargs = []
+        curarg = []
+        for char in arg:
+            if char == '"':
+                in_string = not in_string
+            if char == ';' and not in_string:
+                retargs.append(''.join(curarg))
+                curarg = []
+                continue
+            curarg.append(char)
+
+        if curarg:
+            retargs.append(''.join(curarg))
+            curarg = []
+        return [val.strip() for val in retargs if val.strip()]
+
     def invoke(self, arg, _):
-        args = gdb.string_to_argv(arg)
+        args = self.parse_args(arg)
         for argument in args:
             try:
                 tmp = gdb.parse_and_eval(argument)

@@ -362,9 +362,8 @@ class NvimMappings(gdb.Walker):
         // print-string and printf are different because printf prints
         // non-printable characters directly while print-string escapes them with
         // a backslash.
-        pipe nvim-maps | show print-string ((mapblock_T*){})->m_keys | show printf "  -->  " | show print-string ((mapblock_T*){})->m_str | show printf "\n"
-        // printf can't handle (char *)NULL, and some maps
-        pipe nvim-maps | if ((mapblock_T*){})->m_str && ((mapblock_T*){})->m_keys | show printf "%s  -->  %s\n", ((mapblock_T*){})->m_keys, ((mapblock_T*){})->m_str
+        pipe nvim-maps | show print-string ((mapblock_T*){})->m_keys; "  -->  "; ((mapblock_T*){})->m_str; "\n"
+        pipe nvim-maps | show printf "%s  -->  %s\n", ((mapblock_T*){})->m_keys, ((mapblock_T*){})->m_str
         // Or only maps of a given buffer
         pipe nvim-maps curbuf | ...
         pipe nvim-buffers | nvim-maps | ...

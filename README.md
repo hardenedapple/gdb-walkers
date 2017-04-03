@@ -151,7 +151,7 @@ variable this would work just as well.
 ```
 (gdb) pipe defined-functions tree.c:.* | if $_output_contains("global-used {} free_tree", "free_tree") | show whereis {}
 (gdb) // Walk over all functions ending with 'tree' (including those in dynamic libraries)
-(gdb) pipe defined-functions .*:.*tree$ True | show print-string $_function_of({}) | show printf "\n"
+(gdb) pipe defined-functions .*:.*tree$ True | show print-string $_function_of({}); "\n"
 (gdb) // NOTE, I use my own command `print-string` above to avoid
 (gdb) // `printf "%s\n", $_function_of({})` as `printf "%s", <somestring>`
 (gdb) // allocates the string in the inferior and provides no way of

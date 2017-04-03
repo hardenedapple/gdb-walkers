@@ -33,10 +33,7 @@ source ~/.config/gdb/walker_defs.py
 # the inferior and then acting as though it were a NULL terminated string in
 # the inferior.
 define whereis
-    print-string $_function_of($arg0)
-    printf " "
-    print-string $_whereis($arg0)
-    printf "\n"
+    print-string $_function_of($arg0); " "; $_whereis($arg0); "\n";
 end
 
 define whereami
