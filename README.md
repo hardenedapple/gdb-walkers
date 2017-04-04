@@ -31,7 +31,7 @@ and `pipe tree-elements tree_root` respectively.
 Reading symbols from demos/tree_debug...done.
 (gdb) start 10
 Temporary breakpoint 1 at 0x400963: file demos/tree.c, line 86.
-Starting program: /home/matthew/share/repos/gdb-config/demos/tree_debug 10
+Starting program: /home/matthew/share/repos/gdb-walkers/demos/tree_debug 10
 
 Temporary breakpoint 1, main (argc=2, argv=0x7fffffffe4c8) at demos/tree.c:86
 86	    if (argc != 2) {
@@ -188,7 +188,7 @@ Example
 Reading symbols from demos/tree...done.
 (gdb) start 10
 Temporary breakpoint 1 at 0x400963: file demos/tree.c, line 86.
-Starting program: /home/matthew/share/repos/gdb-config/demos/tree 10
+Starting program: /home/matthew/share/repos/gdb-walkers/demos/tree 10
 
 Temporary breakpoint 1, main (argc=2, argv=0x7fffffffe4d8) at demos/tree.c:86
 86	    if (argc != 2) {

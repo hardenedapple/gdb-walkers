@@ -1,4 +1,4 @@
-'''Helper functions -- used throughout the config files.
+'''Helper functions -- used throughout the walkers files.
 
 The uintptr_t variable has to be a global variable because other functions want
 to use it.
