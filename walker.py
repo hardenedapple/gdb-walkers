@@ -65,34 +65,6 @@ class Walker(abc.ABC):
         pass
 
     @classmethod
-    def eval_user_expressions(cls, string):
-        '''Take argument `string` and replace all occurances of $#<expression>#
-        with the value of the enclosed expression as evaluated by
-        gdb.parse_and_eval() before being cast to an integer.
-
-        These valus are then put back into the input string as hexadecimal
-        constants.
-
-        e.g.
-            "hello there $#1 + 10#"
-            =>
-            "hello there 0xb"
-
-        '''
-        return_parts = []
-        # TODO Make this a 'proper' parser -- for now I just hope no-one's
-        # using '#' characters in their gdb expressions.
-        pattern = r'\$#([^#]*)#'
-        prev_end = 0
-        for match in re.finditer(pattern, string):
-            return_parts.append(string[prev_end:match.start()])
-            return_parts.append(hex(eval_int(match.group(1))))
-            prev_end = match.end()
-
-        return_parts.append(string[prev_end:])
-        return ''.join(return_parts)
-
-    @classmethod
     def parse_args(cls, args, nargs=None, split_string=None,
                    strip_whitespace=True, maxsplit=-1):
         '''General function for parsing walker arguments.
@@ -113,8 +85,6 @@ class Walker(abc.ABC):
                 raise ValueError('Walker "{}" requires at least one argument'
                         .format(cls.name))
             return []
-        # Replace $## covered expressions in the string with gdb
-        args = cls.eval_user_expressions(args)
 
         # TODO Ignore escaped versions of split_string, then remove the escape
         # characters (i.e. backslashes) after splitting.

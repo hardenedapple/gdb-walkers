@@ -36,7 +36,7 @@ class NvimFold(gdb.Walker):
     def __init__(self, args, first, _):
         self.nested_offset = offsetof('fold_T', 'fd_nested')
         if first:
-            self.start_addr = eval_int(self.eval_user_expressions(args))
+            self.start_addr = eval_int(args)
             return
         self.start_addr = None
 
@@ -66,7 +66,7 @@ class NvimUndoTree(gdb.Walker):
 
     def __init__(self, args, first, _):
         if first:
-            self.start_addr = eval_int(self.eval_user_expressions(args))
+            self.start_addr = eval_int(args)
             return
         self.start_addr = None
 
@@ -186,7 +186,7 @@ class NvimWindows(gdb.Walker):
     def __make_wlkr_text(self, element):
         # So the user can put '{}' in their tabpage definition.
         startptr = eval_int(self.startptr.format(element)
-                if element is not None else self.startptr)
+                            if element is not None else self.startptr)
         # The current tab doesn't have windows stored in it.
         if startptr == eval_int('curtab'):
             # Deosn't really matter if startptr is evaluated or not before
@@ -303,7 +303,7 @@ class NvimCharBuffer(gdb.Walker):
     name = 'nvim-buffblocks'
     def __init__(self, args, first, _):
         if first:
-            self.start_addr = eval_int(self.eval_user_expressions(args))
+            self.start_addr = eval_int(args)
         else:
             self.start_addr = None
 
@@ -332,7 +332,7 @@ class NvimMapBlock(gdb.Walker):
     name = 'nvim-mapblock'
     def __init__(self, args, first, _):
         if first:
-            self.start_addr = eval_int(self.eval_user_expressions(args))
+            self.start_addr = eval_int(args)
         else:
             self.start_addr = None
 
