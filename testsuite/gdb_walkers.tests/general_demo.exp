@@ -3,6 +3,7 @@
 set ten_count "0x1\r\n0x2\r\n0x3\r\n0x4\r\n0x5\r\n0x6\r\n0x7\r\n0x8\r\n0x9\r\n0xa" 
 run_basic_test "follow-until basic" "pipe follow-until 1; {} > 10; {} + 1\n" $ten_count
 run_basic_test "array basic" "pipe array char; 1; 10\n" $ten_count
+run_basic_test "eval beginning" "pipe eval 1 | array char; 10\n" $ten_count
 run_basic_test "head" "pipe follow-until 1; {} > 100; {} + 1 | head 10\n" $ten_count
 run_basic_test "if basic" "set variable \$count = 0\npipe follow-until 1; {} > 100; {} + 1 | if \$count++ < 10\n" $ten_count
 run_basic_test "takewhile basic" "set variable \$count = 0\npipe follow-until 1; {} > 100; {} + 1 | take-while \$count++ < 10\n" $ten_count

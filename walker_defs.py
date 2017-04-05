@@ -60,7 +60,7 @@ class Eval(gdb.Walker):
 
     Replaces occurances of `{}` in the argument string with the values from a
     previous walker.
-    Parses the resulting gdb expression, and outputs the value to the next
+    Evaluates the resulting gdb expression, and outputs the value to the next
     walker.
 
     If `{}` does not appear in the argument string, takes no input and outputs
@@ -91,7 +91,7 @@ class Eval(gdb.Walker):
         self.__iter_helper = self.__iter_with_input
 
     def __iter_without_input(self, _):
-        yield self.calc(self.args)
+        yield self.calc(self.cmd)
 
     def __iter_with_input(self, inpipe):
         for element in inpipe:
