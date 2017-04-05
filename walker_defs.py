@@ -84,20 +84,19 @@ class Eval(gdb.Walker):
     tags = ['general', 'interface']
 
     def __init__(self, args, first, last):
+        self.cmd = args
         if first:
-            self.command_parts = self.parse_args(args, [1, 1], '{}', False)
             self.__iter_helper = self.__iter_without_input
             return
 
-        self.command_parts = self.parse_args(args, None, '{}', False)
         self.__iter_helper = self.__iter_with_input
 
     def __iter_without_input(self, _):
-        yield self.calc(self.command_parts[0])
+        yield self.calc(self.args)
 
     def __iter_with_input(self, inpipe):
         for element in inpipe:
-            yield self.eval_command(element)
+            yield self.ev_cmd(element)
 
     def iter_def(self, inpipe):
         return self.__iter_helper(inpipe)

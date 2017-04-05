@@ -6,18 +6,18 @@ run_basic_test "array basic" "pipe array char; 1; 10\n" $ten_count
 run_basic_test "head" "pipe follow-until 1; {} > 100; {} + 1 | head 10\n" $ten_count
 run_basic_test "if basic" "set variable \$count = 0\npipe follow-until 1; {} > 100; {} + 1 | if \$count++ < 10\n" $ten_count
 run_basic_test "takewhile basic" "set variable \$count = 0\npipe follow-until 1; {} > 100; {} + 1 | take-while \$count++ < 10\n" $ten_count
-run_basic_test "takewhile complex" "set variable \$count = 0\npipe array char; 1; 100 | take-while {} % 2 == 0 || \$count++ < 5\n" $ten_count
+run_basic_test "takewhile complex" "set variable \$count = 0\npipe array char; 1; 100 | take-while (int){} % 2 == 0 || \$count++ < 5\n" $ten_count
 run_basic_test "reverse tail" "pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse\n" $ten_count
 run_basic_test "file pipe" "shellpipe pipe array char; 1; 5 ! cat > addresses\nshellpipe pipe array char; 6; 5 ! cat >> addresses\npipe file addresses\n!rm addresses\n" $ten_count
 unset ten_count
 
-run_basic_test "foldl" "set variable \$sum = 0\npipe follow-until 1; {} > 100; {} + 1 | eval \$sum += {}, {} | devnull\nprint \$sum\n" "5050"
+run_basic_test "foldl" "set variable \$sum = 0\npipe follow-until 1; {} > 100; {} + 1 | eval \$sum += {0}, {0} | devnull\nprint \$sum\n" "5050"
 
 send "inferior $list_inferior\n"
 ensure_finished "Before walk list"
 send "tbreak list.c:70\nrun 10\n"
 set walk_args "pipe linked-list list_head; list_t; next"
-set show_arg "show printf \"\%d\\n\", ((list_t *){})->datum"
+set show_arg "show printf \"\%d\\n\", {}->datum"
 run_basic_test "list" "$walk_args | $show_arg\n" "679162307\r\n54404747\r\n906573271\r\n1255532675\r\n394002377\r\n1753820418\r\n385788725\r\n1086128678\r\n1311962008\r\n1215069295\r\n(gdb)"
 wait_for_exit "Finish after list print"
 unset walk_args
@@ -26,8 +26,8 @@ unset show_arg
 send "inferior $debug_inferior\n"
 ensure_finished "Before max min sort and dedup"
 send "start Hello there this is a set of arguments\n"
-set walk_args "pipe follow-until argv + 1; *(char**){} == 0; ((char **){}) + 1"
-set show_arg  "show printf \"\%s\\n\", *(char **){}\n"
+set walk_args "pipe follow-until argv + 1; *{} == 0; {} + 1"
+set show_arg  "show printf \"\%s\\n\", *{}\n"
 set first_char "(*(char **){})\[0\]"
 run_basic_test "max" "$walk_args | max $first_char | $show_arg\n" "there"
 run_basic_test "min" "$walk_args | min $first_char | $show_arg" "Hello"

@@ -134,6 +134,12 @@ class Walker(abc.ABC):
         '''Join `cmd_parts` with the type & value string describing `element`'''
         return '{}'.format(element).join(cmd_parts)
 
+    def ev_cmd(self, element, args=None):
+        '''
+        '''
+        args = args if args else self.cmd
+        return self.calc(args.format(element))
+
     def eval_command(self, element, cmd_parts=None):
         '''Helper
         

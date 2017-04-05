@@ -5,10 +5,17 @@ Most notable are the addition of `walkers` (idea taken from `mdb`) over complex
 data structures, `call-graph` command (idea taken from `dtrace -F`), and
 `shellpipe` that pipes the output of a command to a shell process.
 
-The information passed between each walker is a single integer without any type
-information. As most pipelines use this integer to represent a pointer to some
-data structure, most pipelines contain casting to tell gdb what data structure
-that integer points to.
+The information passed between each walker is a single integer and a type
+string. In many pipelines that type string is a pointer. Many walkers can take
+a format marker of `{}` that marks where the string `((type)value)` is to be
+placed. In these walkers the marker can be replaced with `{.v}` or `{.t}` to
+use the value or type only respectively. Due to an implementation detail, if
+you are using the same item in multiple places in one sub-expression, you can't
+just use `{}`, but have to use `{0}` instead.
+When using the value in a command that separates based on whitespace, sometimes
+the marker `{}` will work, but other times not. It depends on whether the type
+is `struct somestruct` or `int *`. To avoid surprises it's recommended to use
+`{.v}` when the type information is not needed.
 
 Note: In order to avoid surprises, `call-graph` by default doesn't work with
 non-debug functions. This is so that naive regular expressions don't end up
@@ -40,7 +47,7 @@ main (argc=2, argv=0x7fffffffe4c8) at demos/tree.c:93
 93	    free_tree(tree_root);
 (gdb) source demos/tree_walker.py
 (gdb) // Show all pure leaf elements in the tree.
-(gdb) pipe tree-elements tree_root | if ((node_t *){})->children[0] == 0 && ((node_t *){})->children[1] == 0 | show print *(node_t *){}
+(gdb) pipe tree-elements tree_root | if {0}->children[0] == 0 && {0}->children[1] == 0 | show print *{}
 $1 = {children = {0x0, 0x0}, datum = 1753820418}
 $2 = {children = {0x0, 0x0}, datum = 1255532675}
 $3 = {children = {0x0, 0x0}, datum = 679162307}
@@ -85,7 +92,7 @@ much just a for loop).
 (gdb) // The below differs from the above because the iteration is cut short.
 (gdb) pipe follow-until 1; {} > 100; {} + 1 | take-while $count++ < 10
 (gdb) set variable $count = 0
-(gdb) pipe array char; 1; 100 | take-while {} % 2 == 0 || $count++ < 5
+(gdb) pipe array char; 1; 100 | take-while (int){} % 2 == 0 || $count++ < 5
 (gdb) pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse
 (gdb) // Combine the addresses of more than one walker.
 (gdb) shellpipe pipe array char; 1; 5 ! cat > addresses
@@ -110,7 +117,7 @@ much just a for loop).
 I know ... that doesn't quite sound right does it?
 ```
 (gdb) set variable $sum = 0
-(gdb) pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {}, {} | devnull
+(gdb) pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {0}, {0} | devnull
 (gdb) print $sum
 $1 = 5050
 (gdb) 
@@ -149,7 +156,7 @@ create_random_tree	demos/tree.c:69
 in this case, use the global function `free_tree`, if you have a global
 variable this would work just as well.
 ```
-(gdb) pipe defined-functions tree.c:.* | if $_output_contains("global-used {} free_tree", "free_tree") | show whereis {}
+(gdb) pipe defined-functions tree.c:.* | if $_output_contains("global-used {.v} free_tree", "free_tree") | show whereis {.v}
 (gdb) // Walk over all functions ending with 'tree' (including those in dynamic libraries)
 (gdb) pipe defined-functions .*:.*tree$ True | show print-string $_function_of({}); "\n"
 (gdb) // NOTE, I use my own command `print-string` above to avoid
@@ -160,7 +167,7 @@ variable this would work just as well.
 
 ### List hypothetical call stack of functions called by main that use a global
 ```
-(gdb) pipe called-functions main; .*; -1 | if $_output_contains("global-used {} free_tree", "free_tree") | show hypothetical-stack
+(gdb) pipe called-functions main; .*; -1 | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
 main demos/tree.c:85
 
 main demos/tree.c:85
