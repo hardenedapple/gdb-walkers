@@ -22,7 +22,7 @@ gdb.walkers = {}
 def register_walker(walker_class):
     # Use the manually defined objfile name (defined in 'importer' in
     # basic-config.py)
-    if gdb.objfile_name != None:
+    if gdb.objfile_name is not None:
         objfile_tag = os.path.basename(gdb.objfile_name)
         if objfile_tag not in walker_class.tags:
             walker_class.tags.append(objfile_tag)
@@ -50,6 +50,7 @@ class PipeElement():
     def __init__(self, t, v):
         self.t = t
         self.v = v
+
     def __str__(self):
         return '(({}){:#x})'.format(self.t, self.v)
 
@@ -83,6 +84,10 @@ class Walker(abc.ABC):
     def __init__(self, args, first, last):
         pass
 
+    @abc.abstractmethod
+    def iter_def(self, inpipe):
+        pass
+
     @staticmethod
     def calc(gdb_expr):
         main_val = gdb.parse_and_eval(gdb_expr)
@@ -91,10 +96,6 @@ class Walker(abc.ABC):
         if any(val in string_type for val in '()[]&'):
             string_type = 'void *'
         return PipeElement(string_type, int(main_val.cast(helpers.uintptr_t)))
-
-    @abc.abstractmethod
-    def iter_def(self, inpipe):
-        pass
 
     @classmethod
     def parse_args(cls, args, nargs=None, split_string=None,
@@ -115,7 +116,7 @@ class Walker(abc.ABC):
         if not args:
             if nargs[0] > 0:
                 raise ValueError('Walker "{}" requires at least one argument'
-                        .format(cls.name))
+                                 .format(cls.name))
             return []
 
         # TODO Ignore escaped versions of split_string, then remove the escape
@@ -129,28 +130,17 @@ class Walker(abc.ABC):
             retval = [val.strip() for val in retval]
         return retval
 
-    @classmethod
-    def form_command(cls, cmd_parts, element):
-        '''Join `cmd_parts` with the type & value string describing `element`'''
-        return '{}'.format(element).join(cmd_parts)
+    def eval_command(self, element, args=None):
+        '''Helper method
 
-    def ev_cmd(self, element, args=None):
-        '''
-        '''
+        Without `args` argument this function does
+        return self.calc(self.cmd.format(element))
+
+        Otherwise uses `cmd_parts` instead of `self.cmd`
+
+         '''
         args = args if args else self.cmd
         return self.calc(args.format(element))
-
-    def eval_command(self, element, cmd_parts=None):
-        '''Helper
-        
-        Without `cmd_parts` argument is just 
-        return self.calc(self.form_command(self.command_parts, element))
-
-        Otherwise uses `cmd_parts` instead of `self.command_parts`
-
-        '''
-        cmd_parts = cmd_parts if cmd_parts else self.command_parts
-        return self.calc(self.form_command(cmd_parts, element))
 
     def call_with(self, start, inpipe, helper):
         if start:
@@ -235,8 +225,7 @@ def create_pipeline(arg):
     Return the iterator over all walkers.
 
     '''
-    # XXX allow escaped `|` chars by removing the escaped characters after
-    # splitting.
+    # XXX allow escaped ` | ` string.
     args = arg.split(' | ')
     # Create the first walker with an argument that tells it it's going to
     # be the first.
@@ -299,7 +288,7 @@ class WalkerCommand(gdb.Command):
         # so that I can provide the PREFIX argument while still using the
         # complete() function to provide manual completion.
         super(WalkerCommand, self).__init__('walker', gdb.COMMAND_USER,
-                                     gdb.COMPLETE_COMMAND, True)
+                                            gdb.COMPLETE_COMMAND, True)
 
 
 class WalkerHelp(gdb.Command):

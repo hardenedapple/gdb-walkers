@@ -6,7 +6,6 @@ gdb.walkers dictionary with gdb.register_walker().
 
 '''
 import re
-import math
 import operator
 import gdb
 # Need the global value so that we don't get a copy of helpers.uintptr_t, and
@@ -83,7 +82,7 @@ class Eval(gdb.Walker):
     name = 'eval'
     tags = ['general', 'interface']
 
-    def __init__(self, args, first, last):
+    def __init__(self, args, first, _):
         self.cmd = args
         if first:
             self.__iter_helper = self.__iter_without_input
@@ -96,7 +95,7 @@ class Eval(gdb.Walker):
 
     def __iter_with_input(self, inpipe):
         for element in inpipe:
-            yield self.ev_cmd(element)
+            yield self.eval_command(element)
 
     def iter_def(self, inpipe):
         return self.__iter_helper(inpipe)
@@ -129,7 +128,7 @@ class Show(gdb.Walker):
     def iter_def(self, inpipe):
         for element in inpipe:
             command = self.command.format(element)
-            gdb_output = gdb.execute(command, False)
+            gdb.execute(command, False)
             if not self.is_last:
                 yield element
 
@@ -213,11 +212,11 @@ class If(gdb.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.command = args
+        self.cmd = args
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if eval_int(self.command.format(element)):
+            if self.eval_command(element).v:
                 yield element
 
 
@@ -233,7 +232,7 @@ class Head(gdb.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.limit = eval_int(self.parse_args(args, [1, 1])[0])
+        self.limit = eval_int(args)
 
     def iter_def(self, inpipe):
         for count, element in enumerate(inpipe):
@@ -254,7 +253,7 @@ class Tail(gdb.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.limit = eval_int(self.parse_args(args, [1, 1])[0])
+        self.limit = eval_int(args)
 
     def iter_def(self, inpipe):
         # Could have the constant memory version of having a list of the number
@@ -345,7 +344,7 @@ class Array(gdb.Walker):
 # here, but right now it seems much more effort than it's worth.
 class Max(gdb.Walker):
     '''Pass through the value that results in the maximum expression.
-    
+
     For each element, it evaluates the expression given, and returns the
     element for which this expression gives the maximum value.
 
@@ -357,7 +356,8 @@ class Max(gdb.Walker):
 
     Example:
         // Find argument that starts with the last letter in the alphabet.
-        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | max (*(char *){})[0]
+        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
+            max (*(char *){})[0]
 
     '''
     name = 'max'
@@ -365,13 +365,13 @@ class Max(gdb.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.command_parts = self.parse_args(args, [1, math.inf], '{}', False)
+        self.cmd = args
 
     def iter_def(self, inpipe):
         try:
             _, retelement = max(
-                    ((self.eval_command(element).v, element) for element in inpipe),
-                    key=operator.itemgetter(0)
+                ((self.eval_command(element).v, element) for element in inpipe),
+                key=operator.itemgetter(0)
             )
             yield retelement
         except ValueError as e:
@@ -381,7 +381,7 @@ class Max(gdb.Walker):
 
 class Min(gdb.Walker):
     '''Pass through the value that results in the minimum expression.
-    
+
     For each element, it evaluates the expression given, and returns the
     element for which this expression gives the minimum value.
 
@@ -393,7 +393,8 @@ class Min(gdb.Walker):
 
     Example:
         // Find argument that starts with the last letter in the alphabet.
-        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | min (*(char *){})[0]
+        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
+            min (*(char *){})[0]
 
     '''
     name = 'min'
@@ -401,13 +402,13 @@ class Min(gdb.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.command_parts = self.parse_args(args, [1, math.inf], '{}', False)
+        self.cmd = args
 
     def iter_def(self, inpipe):
         try:
             _, retelement = min(
-                    ((self.eval_command(element).v, element) for element in inpipe),
-                    key=operator.itemgetter(0)
+                ((self.eval_command(element).v, element) for element in inpipe),
+                key=operator.itemgetter(0)
             )
             yield retelement
         except ValueError as e:
@@ -417,7 +418,7 @@ class Min(gdb.Walker):
 
 class Sort(gdb.Walker):
     '''Yield elements from the previous walker sorted on expression given.
-    
+
     For each element, it evaluates the expression given. It then yields the
     elements in their sorted order.
 
@@ -428,7 +429,8 @@ class Sort(gdb.Walker):
 
     Example:
         // Sort arguments alphabetically
-        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | sort (*(char **){})[0]
+        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
+            sort (*(char **){})[0]
 
     '''
     name = 'sort'
@@ -436,23 +438,23 @@ class Sort(gdb.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.command_parts = self.parse_args(args, [1, math.inf], '{}', False)
+        self.cmd = args
 
     def iter_def(self, inpipe):
         retlist = sorted(
-                ((self.eval_command(element).v, element) for element in inpipe),
-                key=operator.itemgetter(0)
+            ((self.eval_command(element).v, element) for element in inpipe),
+            key=operator.itemgetter(0)
         )
         for _, element in retlist:
             yield element
-        
+
 
 class Dedup(gdb.Walker):
     '''Remove duplicate elements.
 
     For each element, evaluates the expression given and removes those that
     repeat the same value as the one previous.
-    
+
     Use:
         pipe ... | dedup {}
 
@@ -462,7 +464,7 @@ class Dedup(gdb.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.command_parts = self.parse_args(args, [1, math.inf], '{}', False)
+        self.cmd = args
 
     def iter_def(self, inpipe):
         prev_value = None
@@ -487,7 +489,7 @@ class Until(gdb.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.command_parts = self.parse_args(args, None, '{}', False)
+        self.cmd = args
 
     def iter_def(self, inpipe):
         for element in inpipe:
@@ -510,11 +512,12 @@ class Since(gdb.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.command_parts = self.parse_args(args, None, '{}', False)
+        self.cmd = args
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if self.eval_command(ele).v:
+            if self.eval_command(element).v:
+                yield element
                 break
         for element in inpipe:
             yield element
@@ -836,6 +839,8 @@ class File(gdb.Walker):
             raise ValueError('`file` walker cannot take input')
         self.filenames = gdb.string_to_argv(args)
 
+    # NOTE, name the argument `inpipe` so that connect_pipe() can pass the
+    # argument via keyword.
     def iter_def(self, inpipe):
         for filename in self.filenames:
             with open(filename, 'r') as infile:
@@ -847,9 +852,9 @@ class DefinedFunctions(gdb.Walker):
     '''Walk over defined functions that match the given regexp.
 
     This walker iterates over all functions defined in the current program.
-    It takes a regular expression of the form file_regexp:func_regexp and limits matches
-    based on whether they are defined in a file that matches the file regexp
-    and if the function name matches the function regexp.
+    It takes a regular expression of the form file_regexp:func_regexp and
+    limits matches based on whether they are defined in a file that matches the
+    file regexp and if the function name matches the function regexp.
 
     To ignore the file regexp, use the regular expression .*.
 
@@ -888,9 +893,11 @@ class DefinedFunctions(gdb.Walker):
             self.include_dynlibs = False
         self.file_regex, self.func_regex = helpers.file_func_split(argv[0])
 
+    # NOTE, name the argument `inpipe` so that connect_pipe() can pass the
+    # argument via keyword.
     def iter_def(self, inpipe):
         for symbol in helpers.search_symbols(self.func_regex, self.file_regex,
-                self.include_dynlibs):
+                                             self.include_dynlibs):
             yield self.ele('void *', int(symbol.value().cast(helpers.uintptr_t)))
 
 

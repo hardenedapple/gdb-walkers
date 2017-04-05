@@ -8,6 +8,7 @@ run_basic_test "if basic" "set variable \$count = 0\npipe follow-until 1; {} > 1
 run_basic_test "takewhile basic" "set variable \$count = 0\npipe follow-until 1; {} > 100; {} + 1 | take-while \$count++ < 10\n" $ten_count
 run_basic_test "takewhile complex" "set variable \$count = 0\npipe array char; 1; 100 | take-while (int){} % 2 == 0 || \$count++ < 5\n" $ten_count
 run_basic_test "reverse tail" "pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse\n" $ten_count
+run_basic_test "reverse since" "pipe follow-until 100; {} <= 0; {} - 1 | skip-until {} == 10 | reverse\n" $ten_count
 run_basic_test "file pipe" "shellpipe pipe array char; 1; 5 ! cat > addresses\nshellpipe pipe array char; 6; 5 ! cat >> addresses\npipe file addresses\n!rm addresses\n" $ten_count
 unset ten_count
 
