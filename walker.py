@@ -64,6 +64,16 @@ class Walker(abc.ABC):
     def iter_def(self, inpipe):
         pass
 
+    @staticmethod
+    def fmt(string, value):
+        '''
+        `string` contains {} format specifiers.
+        `value` is of the form (type, intval).
+        Replace all occurances of {} with ((type)intval).
+        Remove all spaces in that section.
+        '''
+        return string.format('(({}){})'.format(value[0], hex(value[1])))
+
     @classmethod
     def parse_args(cls, args, nargs=None, split_string=None,
                    strip_whitespace=True, maxsplit=-1):
@@ -97,10 +107,10 @@ class Walker(abc.ABC):
             retval = [val.strip() for val in retval]
         return retval
 
-    @staticmethod
-    def form_command(cmd_parts, element):
+    @classmethod
+    def form_command(cls, cmd_parts, element):
         '''Join `cmd_parts` with the hexadecimal string of `element`'''
-        addr_str = '{}'.format(hex(int(element)))
+        addr_str = cls.fmt('{}', element)
         return addr_str.join(cmd_parts)
 
     def eval_command(self, element, cmd_parts=None):
@@ -249,7 +259,7 @@ class Pipeline(gdb.Command):
             return
 
         for element in pipeline_end:
-            print(hex(element))
+            print(hex(element[1]))
 
     def complete(self, _, word):
         return [key for key in gdb.walkers if key.startswith(word)]

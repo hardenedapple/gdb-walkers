@@ -173,21 +173,21 @@ class Instruction(gdb.Walker):
         '''
         # TODO arch.disassemble default args.
         if self.end_address and self.count:
-            return self.arch.disassemble(start_address,
-                                         self.end_address,
-                                         self.count)
+            return self.arch.disassemble(start_address[1],
+                                         self.end_address[1],
+                                         self.count[1])
         elif self.count:
-            return self.arch.disassemble(start_address,
-                                         count=self.count)
+            return self.arch.disassemble(start_address[1],
+                                         count=self.count[1])
         elif self.end_address:
-            return self.arch.disassemble(start_address,
-                                         self.end_address)
+            return self.arch.disassemble(start_address[1],
+                                         self.end_address[1])
 
-        return self.arch.disassemble(start_address)
+        return self.arch.disassemble(start_address[1])
 
     def iter_helper(self, start_addr):
         for instruction in self.disass(start_addr):
-            yield instruction['addr']
+            yield ('void *', instruction['addr'])
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_address, inpipe, self.iter_helper)
@@ -216,7 +216,7 @@ class If(gdb.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if self.eval_command(element):
+            if self.eval_command(element)[1]:
                 yield element
 
 
@@ -232,9 +232,7 @@ class Head(gdb.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        # Use eval_int() so  user can use variables from the inferior without
-        # having to wrap them in $##.
-        self.limit = eval_int(self.parse_args(args, [1, 1])[0])
+        self.limit = eval_int(self.parse_args(args, [1, 1])[0])[1]
 
     def iter_def(self, inpipe):
         for count, element in enumerate(inpipe):
@@ -255,14 +253,15 @@ class Tail(gdb.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.limit = eval_int(self.parse_args(args, [1, 1])[0])
+        self.limit = eval_int(self.parse_args(args, [1, 1])[0])[1]
 
     def iter_def(self, inpipe):
-        # Could have the supposedly constant memory version of having a list
-        # of the number of elements required, and setting each of those values
-        # in turn, wrapping around when reaching the end.
-        # In practice, it turns out this doesn't actually change the running
-        # time.
+        # Could have the constant memory version of having a list of the number
+        # of elements required, and setting each of those values in turn,
+        # wrapping around when reaching the end.
+        # In practice, this is a pain and doesn't change the running time.
+        # I could look into whether the list is implemented as an array etc,
+        # but it doesn't seem worth the trouble at the moment.
         all_elements = list(inpipe)
         for element in all_elements[-self.limit:]:
             yield element
@@ -286,7 +285,7 @@ class Count(gdb.Walker):
         i = None
         for i, _ in enumerate(inpipe):
             pass
-        yield i + 1 if i is not None else 0
+        yield ('int', i + 1 if i is not None else 0)
 
 
 class Array(gdb.Walker):
@@ -308,32 +307,32 @@ class Array(gdb.Walker):
 
     def __init__(self, args, first, _):
         if first:
-            typename, start_addr, count = self.parse_args(args, [3, 3], ';')
+            self.typename, start_addr, count = self.parse_args(args, [3, 3], ';')
             self.start_addr = eval_int(start_addr)
             self.__iter_helper = self.__iter_first
         else:
-            typename, count = self.parse_args(args, [2, 2], ';')
+            self.typename, count = self.parse_args(args, [2, 2], ';')
             self.start_addr = None
             self.__iter_helper = self.__iter_pipe
 
         # TODO This is hacky, and we don't handle char[], &char that users
         # might like to use.
-        if typename.find('*') != -1:
+        if self.typename.find('*') != -1:
             self.element_size = helpers.uintptr_t.sizeof
         else:
-            self.element_size = gdb.lookup_type(typename).sizeof
+            self.element_size = gdb.lookup_type(self.typename).sizeof
 
-        self.count = eval_int(count)
+        self.count = eval_int(count)[1]
 
     def __iter_first(self, _):
-        cur_pos = self.start_addr
+        cur_pos = self.start_addr[1]
         for _ in range(self.count):
-            yield cur_pos
+            yield (self.typename, cur_pos)
             cur_pos += self.element_size
 
     def __iter_pipe(self, inpipe):
         for element in inpipe:
-            self.start_addr = int(element)
+            self.start_addr = element
             yield from self.__iter_first(None)
 
     def iter_def(self, inpipe):
@@ -369,7 +368,7 @@ class Max(gdb.Walker):
     def iter_def(self, inpipe):
         try:
             _, retelement = max(
-                    ((self.eval_command(element), element) for element in inpipe),
+                    ((self.eval_command(element)[1], element) for element in inpipe),
                     key=operator.itemgetter(0)
             )
             yield retelement
@@ -405,7 +404,7 @@ class Min(gdb.Walker):
     def iter_def(self, inpipe):
         try:
             _, retelement = min(
-                    ((self.eval_command(element), element) for element in inpipe),
+                    ((self.eval_command(element)[1], element) for element in inpipe),
                     key=operator.itemgetter(0)
             )
             yield retelement
@@ -439,7 +438,7 @@ class Sort(gdb.Walker):
 
     def iter_def(self, inpipe):
         retlist = sorted(
-                ((self.eval_command(element), element) for element in inpipe),
+                ((self.eval_command(element)[1], element) for element in inpipe),
                 key=operator.itemgetter(0)
         )
         for _, element in retlist:
@@ -465,7 +464,7 @@ class Dedup(gdb.Walker):
 
     def iter_def(self, inpipe):
         prev_value = None
-        for element, value in ((ele, self.eval_command(ele)) for ele in inpipe):
+        for element, value in ((ele, self.eval_command(ele)[1]) for ele in inpipe):
             if value == prev_value:
                 continue
             prev_value = value
@@ -490,7 +489,7 @@ class Until(gdb.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if not self.eval_command(element):
+            if not self.eval_command(element)[1]:
                 break
             yield element
 
@@ -513,7 +512,7 @@ class Since(gdb.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if self.eval_command(ele):
+            if self.eval_command(ele)[1]:
                 break
         for element in inpipe:
             yield element
@@ -555,7 +554,7 @@ class Terminated(gdb.Walker):
         self.follow_cmd = self.parse_args(follow_expr, None, '{}', False)
 
     def follow_to_termination(self, start):
-        while self.eval_command(start, self.test_cmd) == 0:
+        while self.eval_command(start, self.test_cmd)[1] == 0:
             yield start
             start = self.eval_command(start, self.follow_cmd)
 
@@ -588,11 +587,11 @@ class LinkedList(gdb.Walker):
             self.start = None
 
     def __iter_helper(self, element):
-        walker_text = ''.join(['follow-until {};'.format(element),
-                               ' {} == 0;',
-                               ' (({} *)'.format(self.list_type),
-                               '{})',
-                               '->{}'.format(self.next_member)])
+        walker_text = ''.join([
+            self.fmt('follow-until {};', (self.list_type + '*', element[1])),
+            ' {} == 0; {}',
+            '->{}'.format(self.next_member)
+        ])
         yield from gdb.create_pipeline(walker_text)
 
     def iter_def(self, inpipe):
@@ -677,7 +676,7 @@ class CalledFunctions(gdb.Walker):
     #   Allow default arguments?
     def __init__(self, args, first, _):
         self.cmd_parts = self.parse_args(args, [3,3] if first else [2,2], ';')
-        self.maxdepth = eval_int(self.cmd_parts[-1])
+        self.maxdepth = eval_int(self.cmd_parts[-1])[1]
         self.file_regex = self.cmd_parts[-2].strip()
         # User asked for specific files, wo only know the filename if there is
         # debugging information, hence ignore all functions that don't have
@@ -689,7 +688,7 @@ class CalledFunctions(gdb.Walker):
         # hypothetical-call-stack walker to see what the current stack is.
         type(self).hypothetical_stack = []
         if first:
-            self.__add_addr(eval_int(self.cmd_parts[0]), 0)
+            self.__add_addr(eval_int(self.cmd_parts[0])[1], 0)
         self.arch = gdb.current_arch()
 
     def __add_addr(self, addr, depth):
@@ -744,7 +743,7 @@ class CalledFunctions(gdb.Walker):
             # Store the current value in the hypothetical_stack for someone
             # else to query - remember to set the class attribute.
             type(self).hypothetical_stack[depth:] = [func_addr]
-            yield func_addr
+            yield ('void *', func_addr)
 
             # Go backwards through the list so that we pop off elements in the
             # order they will be called.
@@ -758,40 +757,10 @@ class CalledFunctions(gdb.Walker):
             return
 
         # Deal with each given function (and all their descendants) in turn.
-        for element in inpipe:
+        for _, element in inpipe:
             type(self).hypothetical_stack = []
             self.__add_addr(element, 0)
             yield from self.__iter_helper()
-
-
-class File(gdb.Walker):
-    '''Walk over numbers read in from a file.
-
-    Yields addresses read in from a file, one line at a time.
-    Addresses in the file sholud be hexadecimal strings.
-
-    Often used to concatenate two walkers.
-        shellpipe pipe walker1 [args1 ..] ! cat > output.txt
-        shellpipe pipe walker2 [args2 ..] ! cat >> output.txt
-        pipe file output.txt | ...
-
-    Usage:
-        pipe file addresses.txt | ...
-
-    '''
-    name = 'file'
-    tags = ['general']
-
-    def __init__(self, args, first, _):
-        if not first:
-            raise ValueError('`file` walker cannot take input')
-        self.filenames = gdb.string_to_argv(args)
-
-    def iter_def(self, inpipe):
-        for filename in self.filenames:
-            with open(filename, 'r') as infile:
-                for line in infile:
-                    yield int(line, base=16)
 
 
 class HypotheticalStack(gdb.Walker):
@@ -837,11 +806,43 @@ class HypotheticalStack(gdb.Walker):
 
     def iter_def(self, inpipe):
         if not inpipe:
-            yield from self.called_funcs_class.hypothetical_stack
+            yield from (('void *', ele) for ele in
+                        self.called_funcs_class.hypothetical_stack)
             return
 
         for _ in inpipe:
-            yield from self.called_funcs_class.hypothetical_stack
+            yield from (('void *', ele) for ele in
+                        self.called_funcs_class.hypothetical_stack)
+
+
+class File(gdb.Walker):
+    '''Walk over numbers read in from a file.
+
+    Yields addresses read in from a file, one line at a time.
+    Addresses in the file sholud be hexadecimal strings.
+
+    Often used to concatenate two walkers.
+        shellpipe pipe walker1 [args1 ..] ! cat > output.txt
+        shellpipe pipe walker2 [args2 ..] ! cat >> output.txt
+        pipe file output.txt | ...
+
+    Usage:
+        pipe file addresses.txt | ...
+
+    '''
+    name = 'file'
+    tags = ['general']
+
+    def __init__(self, args, first, _):
+        if not first:
+            raise ValueError('`file` walker cannot take input')
+        self.filenames = gdb.string_to_argv(args)
+
+    def iter_def(self, inpipe):
+        for filename in self.filenames:
+            with open(filename, 'r') as infile:
+                for line in infile:
+                    yield ('void *', int(line, base=16))
 
 
 class DefinedFunctions(gdb.Walker):
@@ -892,7 +893,7 @@ class DefinedFunctions(gdb.Walker):
     def iter_def(self, inpipe):
         for symbol in helpers.search_symbols(self.func_regex, self.file_regex,
                 self.include_dynlibs):
-            yield int(symbol.value().cast(helpers.uintptr_t))
+            yield ('void *', int(symbol.value().cast(helpers.uintptr_t)))
 
 
 for walker in [Eval, Show, Instruction, Head, Tail, If, Array, Count, Max, Min,

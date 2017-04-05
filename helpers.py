@@ -49,15 +49,23 @@ def find_uintptr_t():
 uintptr_t = find_uintptr_t()
 
 def eval_int(gdb_expr):
-    '''Return the python integer value of `gdb_expr`
+    '''Return the python integer value of `gdb_expr` and it's type
 
     This is to be used over `int(gdb.parse_and_eval(gdb_expr))` to
     account for the given description being a symbol.
 
+    Returns (type_description, integer_value)
+    where type_description is a string.
+
     '''
     # Cast to uintptr_t to find addresses of functions (e.g.
     # gdb.parse_and_eval('main')).
-    return int(gdb.parse_and_eval(gdb_expr).cast(uintptr_t))
+    main_value = gdb.parse_and_eval(gdb_expr)
+    string_type = str(main_value.type)
+    # *really* don't want to start bothering with function types etc.
+    if any(val in string_type for val in '()[]&'):
+        string_type = 'void*'
+    return string_type, int(main_value.cast(uintptr_t))
 
 
 def start_handler(_):

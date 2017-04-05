@@ -1,3 +1,15 @@
+Tidy up:
+    Eval() walker
+        Use self.call_with() ?
+    Array() walker
+        Could use self.call_with() -- make __iter_first() take an argument.
+    instead of a tuple (typename, value), I should have a named tuple
+        (typename, value).
+    Reverse() just use yield from all_elements[::-1] ??
+    eval_int() and eval_value()
+        Split the two, so I have one that returns just an integer, and one that
+        returns my pair.
+        The pair version could probably be put into walker.py
 Gdb problems:
     info functions
         Mises out numbers in the function names -- this may be on purpose.

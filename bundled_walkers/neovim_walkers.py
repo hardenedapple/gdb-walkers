@@ -41,7 +41,7 @@ class NvimFold(gdb.Walker):
         self.start_addr = None
 
     def iter_folds(self, init_addr):
-        gar_ptr = '((garray_T *){})'.format(init_addr)
+        gar_ptr = self.fmt('((garray_T *){})', init_addr)
         array_walk = 'array fold_T; {0}->ga_data; {0}->ga_len'.format(gar_ptr)
         for fold in gdb.create_pipeline(array_walk):
             yield fold
@@ -93,12 +93,12 @@ class NvimUndoTree(gdb.Walker):
 
     def iter_def(self, inpipe):
         if self.start_addr:
-            yield self.start_addr
-            yield from self.walk_alts(self.start_addr)
-            yield from self.walk_hist(self.start_addr)
+            yield ('u_header_T *', self.start_addr[1])
+            yield from self.walk_alts(self.start_addr[1])
+            yield from self.walk_hist(self.start_addr[1])
         else:
-            for element in inpipe:
-                yield element
+            for _, element in inpipe:
+                yield ('u_header_T *', element)
                 yield from self.walk_alts(element)
                 yield from self.walk_hist(element)
 
