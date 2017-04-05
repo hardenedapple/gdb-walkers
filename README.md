@@ -127,7 +127,7 @@ $1 = 5050
 ```
 (gdb) start 20 100 Hello there this is a test
 (gdb) set variable $i = -1
-(gdb) pipe array char*; argv; argc  | if $i++, $_output_contains("print/s *(char **){}", "t") | show print $i
+(gdb) pipe array char*; argv; argc  | if $i++, $_output_contains("print *{}", "t") | show print $i
 $103 = 0
 $108 = 4
 $110 = 5

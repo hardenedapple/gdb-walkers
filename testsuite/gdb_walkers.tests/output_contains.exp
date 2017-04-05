@@ -1,7 +1,7 @@
 set commands ""
 lappend commands "start 20 100 Hello there this is a test"
 lappend commands "set variable \$i = -1"
-lappend commands "pipe array char*; argv; argc  | if \$i++, \$_output_contains(\"print/s *(char **){}\", \"t\") | show output \$i"
+lappend commands "pipe array char*; argv; argc  | if \$i++, \$_output_contains(\"print *{}\", \"t\") | show output \$i"
 set commands [join $commands "\n"]
 
 run_basic_test "debug filter args" "inferior $debug_inferior\n$commands\n" 0458
