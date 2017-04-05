@@ -14,7 +14,7 @@ import abc
 import gdb
 import os
 import re
-from helpers import eval_int
+import helpers
 
 # Define the framework
 gdb.walkers = {}
@@ -33,6 +33,26 @@ def register_walker(walker_class):
 
 
 gdb.register_walker = register_walker
+
+
+class PipeElement():
+    '''
+    A type to pass between walkers.
+
+    Consists of `t`a a string describing the type of the value in the inferior,
+    and `v`: an integer storing the actual value.
+
+    Only integer values may be passed between walkers, these can be pointers or
+    integers, but NOT complex types.
+
+    '''
+    # Use t and v mainly because I don't want to shadow the `type` builtin
+    def __init__(self, t, v):
+        self.t = t
+        self.v = v
+    def __str__(self):
+        return '(({}){:#x})'.format(self.t, self.v)
+
 
 class Walker(abc.ABC):
     '''
@@ -56,23 +76,25 @@ class Walker(abc.ABC):
     require_input = False
     require_output = False
     tags = []
+    # Store the `PipeElement` value in the class as it's almost always needed
+    # when writing a walker.
+    ele = PipeElement
 
     def __init__(self, args, first, last):
         pass
 
+    @staticmethod
+    def calc(gdb_expr):
+        main_val = gdb.parse_and_eval(gdb_expr)
+        string_type = str(main_val.type)
+        # *really* don't want to start bothering with function types etc.
+        if any(val in string_type for val in '()[]&'):
+            string_type = 'void *'
+        return PipeElement(string_type, int(main_val.cast(helpers.uintptr_t)))
+
     @abc.abstractmethod
     def iter_def(self, inpipe):
         pass
-
-    @staticmethod
-    def fmt(string, value):
-        '''
-        `string` contains {} format specifiers.
-        `value` is of the form (type, intval).
-        Replace all occurances of {} with ((type)intval).
-        Remove all spaces in that section.
-        '''
-        return string.format('(({}){})'.format(value[0], hex(value[1])))
 
     @classmethod
     def parse_args(cls, args, nargs=None, split_string=None,
@@ -109,21 +131,20 @@ class Walker(abc.ABC):
 
     @classmethod
     def form_command(cls, cmd_parts, element):
-        '''Join `cmd_parts` with the hexadecimal string of `element`'''
-        addr_str = cls.fmt('{}', element)
-        return addr_str.join(cmd_parts)
+        '''Join `cmd_parts` with the type & value string describing `element`'''
+        return '{}'.format(element).join(cmd_parts)
 
     def eval_command(self, element, cmd_parts=None):
         '''Helper
         
         Without `cmd_parts` argument is just 
-        return eval_int(self.form_command(self.command_parts, element))
+        return self.calc(self.form_command(self.command_parts, element))
 
         Otherwise uses `cmd_parts` instead of `self.command_parts`
 
         '''
         cmd_parts = cmd_parts if cmd_parts else self.command_parts
-        return eval_int(self.form_command(cmd_parts, element))
+        return self.calc(self.form_command(cmd_parts, element))
 
     def call_with(self, start, inpipe, helper):
         if start:
@@ -259,7 +280,7 @@ class Pipeline(gdb.Command):
             return
 
         for element in pipeline_end:
-            print(hex(element[1]))
+            print('{.v:#x}'.format(element))
 
     def complete(self, _, word):
         return [key for key in gdb.walkers if key.startswith(word)]

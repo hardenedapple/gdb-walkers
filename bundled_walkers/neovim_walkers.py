@@ -36,16 +36,17 @@ class NvimFold(gdb.Walker):
     def __init__(self, args, first, _):
         self.nested_offset = offsetof('fold_T', 'fd_nested')
         if first:
-            self.start_addr = eval_int(args)
+            self.start_addr = self.calc(args)
             return
         self.start_addr = None
 
     def iter_folds(self, init_addr):
-        gar_ptr = self.fmt('((garray_T *){})', init_addr)
+        gar_ptr = self.ele('garray_T *', init_addr.v)
         array_walk = 'array fold_T; {0}->ga_data; {0}->ga_len'.format(gar_ptr)
         for fold in gdb.create_pipeline(array_walk):
             yield fold
-            yield from self.iter_folds(fold + self.nested_offset)
+            yield from self.iter_folds(
+                self.ele(fold.t, fold.v + self.nested_offset))
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_addr, inpipe, self.iter_folds)
@@ -73,11 +74,11 @@ class NvimUndoTree(gdb.Walker):
     def walk_alts(self, init_addr):
         # First walk over all in the 'alt_next' direction
         next_text = ('follow-until ' +
-                     '((u_header_T *){})->uh_alt_next.ptr;'.format(init_addr) +
-                     ' {} == 0; ((u_header_T *){})->uh_alt_next.ptr')
+                     '{}->uh_alt_next.ptr;'.format(init_addr) +
+                     ' {} == 0; {}->uh_alt_next.ptr')
         prev_text = ('follow-until ' +
-                     '((u_header_T *){})->uh_alt_prev.ptr;'.format(init_addr) +
-                     ' {} == 0; ((u_header_T *){})->uh_alt_prev.ptr')
+                     '{}->uh_alt_prev.ptr;'.format(init_addr) +
+                     ' {} == 0; {}->uh_alt_prev.ptr')
         for uh in itt.chain(gdb.create_pipeline(next_text),
                             gdb.create_pipeline(prev_text)):
             yield uh
@@ -85,22 +86,24 @@ class NvimUndoTree(gdb.Walker):
 
     def walk_hist(self, init_addr):
         wlkr_text = ('follow-until ' +
-                     '((u_header_T *){})->uh_prev.ptr;'.format(init_addr) +
-                     ' {} == 0; ((u_header_T *){})->uh_prev.ptr')
+                     '{}->uh_prev.ptr;'.format(init_addr) +
+                     ' {} == 0; {}->uh_prev.ptr')
         for uh in gdb.create_pipeline(wlkr_text):
             yield uh
             yield from self.walk_alts(uh)
 
     def iter_def(self, inpipe):
         if self.start_addr:
-            yield ('u_header_T *', self.start_addr[1])
-            yield from self.walk_alts(self.start_addr[1])
-            yield from self.walk_hist(self.start_addr[1])
+            ele = self.ele('u_header_T *', self.start_addr)
+            yield ele
+            yield from self.walk_alts(ele)
+            yield from self.walk_hist(ele)
         else:
-            for _, element in inpipe:
-                yield ('u_header_T *', element)
-                yield from self.walk_alts(element)
-                yield from self.walk_hist(element)
+            for element in inpipe:
+                ele = self.ele('u_header_T *', element.v)
+                yield ele
+                yield from self.walk_alts(ele)
+                yield from self.walk_hist(ele)
 
 
 # For walking over buffers
@@ -109,7 +112,7 @@ class NvimBuffers(gdb.Walker):
     '''Walk over all buffers
 
     Convenience walker, is equivalent to
-        (gdb) pipe follow-until firstbuf; {} == 0; ((buf_T *){})->b_next
+        (gdb) pipe follow-until firstbuf; {} == 0; {}->b_next
     i.e. it walks over all buffers in neovim.
 
     Use:
@@ -118,14 +121,14 @@ class NvimBuffers(gdb.Walker):
     Example:
         // Print all buffers viewing a file whose path contains 'runtime'
         pipe nvim-buffers | \
-                if ((buf_T *){})->b_ffname | \
-                if $_regex(((buf_T *){})->b_ffname, ".*runtime.*") | \
-                show print ((buf_T *){})->b_ffname
+                if {}->b_ffname | \
+                if $_regex({}->b_ffname, ".*runtime.*") | \
+                show print {}->b_ffname
 
     '''
     name = 'nvim-buffers'
     def iter_def(self, inpipe):
-        wlkr_text = 'follow-until firstbuf; {} == 0; ((buf_T *){})->b_next'
+        wlkr_text = 'follow-until firstbuf; {} == 0; {}->b_next'
         yield from gdb.create_pipeline(wlkr_text)
 
 
@@ -133,7 +136,7 @@ class NvimTabs(gdb.Walker):
     '''Walk over all vim tabs
 
     Convenience walker, is equivalent to
-        (gdb) pipe follow-until first_tabpage; {} == 0; ((tabpage_T *){})->tp_next
+        (gdb) pipe follow-until first_tabpage; {} == 0; {}->tp_next
     i.e. it walks over all tabs in the instance.
 
     Use:
@@ -141,13 +144,13 @@ class NvimTabs(gdb.Walker):
 
     Example:
         pipe nvim-tabs | \
-                if ((tabpage_T *){})->localdir | \
-                show print ((tabpage_T *){})->localdir
+                if {}->tp_localdir | \
+                show print {}->tp_localdir
 
     '''
     name = 'nvim-tabs'
     def iter_def(self, inpipe):
-        wlkr_text = 'follow-until first_tabpage; {} == 0; ((tabpage_T *){})->tp_next'
+        wlkr_text = 'follow-until first_tabpage; {} == 0; {}->tp_next'
         yield from gdb.create_pipeline(wlkr_text)
 
 
@@ -189,16 +192,16 @@ class NvimWindows(gdb.Walker):
                             if element is not None else self.startptr)
         # The current tab doesn't have windows stored in it.
         if startptr == eval_int('curtab'):
-            # Deosn't really matter if startptr is evaluated or not before
+            # Doesn't really matter if startptr is evaluated or not before
             # passing to follow-until (because follow-until evaluates the
             # expression as an integer anyway).
             # But we have to evaluate it to check if the tab pointer is to
             # curtab.
-            startptr = 'firstwin'
+            startstr = 'firstwin'
         else:
-            startptr = '((tabpage_T *){})->tp_firstwin'.format(startptr)
+            startstr = '((tabpage_T *){})->tp_firstwin'.format(startptr)
 
-        ret = 'follow-until {};'.format(startptr)
+        ret = 'follow-until {};'.format(startstr)
         return ret + '{} == 0; ((win_T *){})->w_next'
 
     def __iter_helper(self, element):
@@ -208,7 +211,11 @@ class NvimWindows(gdb.Walker):
             yield from gdb.create_pipeline('nvim-tabs | nvim-windows {}')
 
     def iter_def(self, inpipe):
-        yield from self.call_with(None, inpipe, self.__iter_helper)
+        if inpipe:
+            for element in inpipe:
+                yield from self.__iter_helper(element)
+        else:
+            yield from self.__iter_helper(None)
 
 
 class NvimMultiQueues(gdb.Walker):
@@ -275,12 +282,14 @@ class NvimMultiQueues(gdb.Walker):
                 item_ptr = self.__q_next(child_queue_p + self.mq_headtail_offset)
                 item_ptr -= self.mqi_q_offset
 
-            yield item_ptr
+            yield self.ele('Event *' if self.deref else 'MultiQueueItem *',
+                           item_ptr)
 
     def iter_def(self, inpipe):
         if inpipe:
             for element in inpipe:
-                yield from self.iter_queue(self.expr.format(element))
+                pos = self.calc(self.expr.format(element))
+                yield from self.iter_queue(pos.v)
         else:
             yield from self.iter_queue(self.start)
 
@@ -296,7 +305,7 @@ class NvimCharBuffer(gdb.Walker):
         pipe eval ... | nvim-buffblocks | ...
 
     Examples:
-        pipe nvim-buffblocks &readbuf1 | show printf "%s\n", ((buffblock_T *){})->b_str
+        pipe nvim-buffblocks &readbuf1 | show printf "%s\n", {}->b_str
         pipe eval &readbuf1 | nvim-buffblocks
 
     '''
@@ -350,9 +359,9 @@ class NvimMappings(gdb.Walker):
     '''Walk over all mappings in a buffer, or all global mappings.
 
     Equivalent to
-        pipe array mapblock_T **; maphash; 256 | if *(mapblock_T **){} != 0 | eval ((mapblock_T *){})->m_next | nvim-mapblock
+        pipe array mapblock_T *; maphash; 256 | eval *{} | if {} != 0 | nvim-mapblock
     or
-        pipe array mapblock_T **; <buffer>->b_maphash; 256 | if *(mapblock_T **){} != 0 | eval ((mapblock_T *){})->m_next | nvim-mapblock
+        pipe array mapblock_T *; <buffer>->b_maphash; 256 | eval *{} | if {} != 0 | nvim-mapblock
 
     Usage:
         pipe nvim-maps <buffer>
@@ -362,23 +371,23 @@ class NvimMappings(gdb.Walker):
         // print-string and printf are different because printf prints
         // non-printable characters directly while print-string escapes them with
         // a backslash.
-        pipe nvim-maps | show print-string ((mapblock_T*){})->m_keys; "  -->  "; ((mapblock_T*){})->m_str; "\n"
-        pipe nvim-maps | show printf "%s  -->  %s\n", ((mapblock_T*){})->m_keys, ((mapblock_T*){})->m_str
+        pipe nvim-maps | show print-string {0}->m_keys; "  -->  "; {0}->m_str; "\n"
+        pipe nvim-maps | show printf "%s  -->  %s\n", {0}->m_keys, {0}->m_str
         // Or only maps of a given buffer
         pipe nvim-maps curbuf | ...
         pipe nvim-buffers | nvim-maps | ...
 
     '''
     name = 'nvim-maps'
-    __conversion_pipe = ' | if *(mapblock_T **){} != 0 | eval ((mapblock_T *){})->m_next | nvim-mapblock'
+    __conversion_pipe = ' | eval *{} | if {} != 0 | nvim-mapblock'
     def __init__(self, args, first, _):
         self.first = first
         self.use_global = first and not args
-        self.start_buf = None if not args else eval_int(args)
+        self.start_buf = None if not args else self.ele('buf_T *', eval_int(args))
 
     def __iter_helper(self, arg):
         map_array = 'maphash' if self.use_global else '((buf_T *){})->b_maphash'.format(arg)
-        init_pipe = 'array mapblock_T **; {}; 256'.format(map_array)
+        init_pipe = 'array mapblock_T *; {}; 256'.format(map_array)
         yield from gdb.create_pipeline(init_pipe + self.__conversion_pipe)
 
     def iter_def(self, inpipe):

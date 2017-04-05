@@ -60,12 +60,7 @@ def eval_int(gdb_expr):
     '''
     # Cast to uintptr_t to find addresses of functions (e.g.
     # gdb.parse_and_eval('main')).
-    main_value = gdb.parse_and_eval(gdb_expr)
-    string_type = str(main_value.type)
-    # *really* don't want to start bothering with function types etc.
-    if any(val in string_type for val in '()[]&'):
-        string_type = 'void*'
-    return string_type, int(main_value.cast(uintptr_t))
+    return int(gdb.parse_and_eval(gdb_expr).cast(uintptr_t))
 
 
 def start_handler(_):

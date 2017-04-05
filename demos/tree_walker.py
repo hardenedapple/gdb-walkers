@@ -16,7 +16,7 @@ class TreeElements(gdb.Walker):
 
     Example:
         // All pure leaf elements in the tree.
-        pipe tree-elements tree_root | if ((node_t *){})->children[0] == 0 && ((node_t *){})->children[1] == 0
+        pipe tree-elements tree_root | if {0}->children[0] == 0 && {0}->children[1] == 0
         pipe eval tree_root | tree-elements | ...
 
     '''
@@ -25,19 +25,18 @@ class TreeElements(gdb.Walker):
 
     def __init__(self, args, first, _):
         if first:
-            self.start_addr = eval_int(args)
+            self.start_addr = self.ele('node_t *', eval_int(args))
             return
         self.start_addr = None
 
     def iter_elements(self, init_addr):
-        if init_addr == 0:
+        if init_addr.v == 0:
             return
 
-        as_nodep = '((node_t *){})'.format(init_addr)
-        left_child = '{}->children[0]'.format(as_nodep)
-        right_child = '{}->children[1]'.format(as_nodep)
-        yield from self.iter_elements(eval_int(right_child))
-        yield from self.iter_elements(eval_int(left_child))
+        left_child = '{}->children[0]'.format(init_addr)
+        right_child = '{}->children[1]'.format(init_addr)
+        yield from self.iter_elements(self.calc(right_child))
+        yield from self.iter_elements(self.calc(left_child))
         yield init_addr
 
     def iter_def(self, inpipe):
