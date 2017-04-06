@@ -34,7 +34,6 @@ def register_walker(walker_class):
 
 gdb.register_walker = register_walker
 
-
 class PipeElement():
     '''
     A type to pass between walkers.
@@ -258,7 +257,7 @@ class Pipeline(gdb.Command):
     '''
 
     def __init__(self):
-        super(Pipeline, self).__init__('pipe', gdb.COMMAND_USER)
+        super(Pipeline, self).__init__('pipe', gdb.COMMAND_DATA)
 
     def invoke(self, arg, _):
         '''
@@ -287,7 +286,7 @@ class WalkerCommand(gdb.Command):
         # It doesn't say anywhere, but -1 appears to be the constant to give
         # so that I can provide the PREFIX argument while still using the
         # complete() function to provide manual completion.
-        super(WalkerCommand, self).__init__('walker', gdb.COMMAND_USER,
+        super(WalkerCommand, self).__init__('walker', gdb.COMMAND_DATA,
                                             gdb.COMPLETE_COMMAND, True)
 
 
