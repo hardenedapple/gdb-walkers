@@ -16,7 +16,7 @@ class TreeElements(gdb.Walker):
 
     Example:
         // All pure leaf elements in the tree.
-        pipe tree-elements tree_root | if {0}->children[0] == 0 && {0}->children[1] == 0
+        pipe tree-elements tree_root | if {}->children[0] == 0 && {}->children[1] == 0
         pipe eval tree_root | tree-elements | ...
 
     '''

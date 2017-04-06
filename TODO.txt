@@ -1,13 +1,6 @@
 Tidy up:
     Eval() walker
         Use self.call_with() ?
-    Array() walker
-        Could use self.call_with() -- make __iter_first() take an argument.
-    instead of a tuple (typename, value), I should have a named tuple
-        (typename, value).
-    Reverse() just use yield from all_elements[::-1] ??
-    Change stuff such that {0}->vala && {0}->valb can be written
-        {}->vala && {}->valb
     Make a PipeElement a numeric type
         define __add__() etc
 Gdb problems:

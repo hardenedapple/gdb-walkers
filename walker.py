@@ -129,17 +129,42 @@ class Walker(abc.ABC):
             retval = [val.strip() for val in retval]
         return retval
 
+    def format_command(self, element, args):
+        '''Does args.format(element) but ensures can use {} instead of {0}.'''
+        try:
+            # Start off allowing 4 occurances of {} to cover most cases.
+            return args.format(element, element, element, element)
+        except IndexError:
+            pass
+
+        guess = 8
+        while True:
+            # Just a paranoia thing -- I keep separate the call to format() and
+            # self.calc() so the try/except clause only acts on the format()
+            # call.
+            # This is just in case IndexError raises from self.calc() as that
+            # would otherwise keep me in a never-ending loop.
+            try:
+                gdb_cmd = args.format(*((element,)*guess))
+            except IndexError:
+                guess *= 2
+                continue
+            return gdb_cmd
+
     def eval_command(self, element, args=None):
         '''Helper method
 
         Without `args` argument this function does
         return self.calc(self.cmd.format(element))
+        except that it makes sure the user doesn't have to have {0} in the
+        self.cmd by keeping doubling the number of times `element` is in the
+        format() argument list until we no longer have an IndexError.
 
         Otherwise uses `cmd_parts` instead of `self.cmd`
 
          '''
         args = args if args else self.cmd
-        return self.calc(args.format(element))
+        return self.calc(self.format_command(element, args))
 
     def call_with(self, start, inpipe, helper):
         if start:

@@ -9,9 +9,7 @@ The information passed between each walker is a single integer and a type
 string. In many pipelines that type string is a pointer. Many walkers can take
 a format marker of `{}` that marks where the string `((type)value)` is to be
 placed. In these walkers the marker can be replaced with `{.v}` or `{.t}` to
-use the value or type only respectively. Due to an implementation detail, if
-you are using the same item in multiple places in one sub-expression, you can't
-just use `{}`, but have to use `{0}` instead.
+use the value or type respectively.
 When using the value in a command that separates based on whitespace, sometimes
 the marker `{}` will work, but other times not. It depends on whether the type
 is `struct somestruct` or `int *`. To avoid surprises it's recommended to use
@@ -47,7 +45,7 @@ main (argc=2, argv=0x7fffffffe4c8) at demos/tree.c:93
 93	    free_tree(tree_root);
 (gdb) source demos/tree_walker.py
 (gdb) // Show all pure leaf elements in the tree.
-(gdb) pipe tree-elements tree_root | if {0}->children[0] == 0 && {0}->children[1] == 0 | show print *{}
+(gdb) pipe tree-elements tree_root | if {}->children[0] == 0 && {}->children[1] == 0 | show print *{}
 $1 = {children = {0x0, 0x0}, datum = 1753820418}
 $2 = {children = {0x0, 0x0}, datum = 1255532675}
 $3 = {children = {0x0, 0x0}, datum = 679162307}
@@ -117,7 +115,7 @@ much just a for loop).
 I know ... that doesn't quite sound right does it?
 ```
 (gdb) set variable $sum = 0
-(gdb) pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {0}, {0} | devnull
+(gdb) pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {}, {} | devnull
 (gdb) print $sum
 $1 = 5050
 (gdb) 

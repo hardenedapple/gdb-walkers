@@ -188,7 +188,7 @@ class NvimWindows(gdb.Walker):
 
     def __make_wlkr_text(self, element):
         # So the user can put '{}' in their tabpage definition.
-        startptr = eval_int(self.startptr.format(element)
+        startptr = eval_int(self.format_command(element, self.startptr)
                             if element is not None else self.startptr)
         # The current tab doesn't have windows stored in it.
         if startptr == eval_int('curtab'):
@@ -288,7 +288,7 @@ class NvimMultiQueues(gdb.Walker):
     def iter_def(self, inpipe):
         if inpipe:
             for element in inpipe:
-                pos = self.calc(self.expr.format(element))
+                pos = self.eval_command(element, self.expr)
                 yield from self.iter_queue(pos.v)
         else:
             yield from self.iter_queue(self.start)
@@ -371,8 +371,8 @@ class NvimMappings(gdb.Walker):
         // print-string and printf are different because printf prints
         // non-printable characters directly while print-string escapes them with
         // a backslash.
-        pipe nvim-maps | show print-string {0}->m_keys; "  -->  "; {0}->m_str; "\n"
-        pipe nvim-maps | show printf "%s  -->  %s\n", {0}->m_keys, {0}->m_str
+        pipe nvim-maps | show print-string {}->m_keys; "  -->  "; {}->m_str; "\n"
+        pipe nvim-maps | show printf "%s  -->  %s\n", {}->m_keys, {}->m_str
         // Or only maps of a given buffer
         pipe nvim-maps curbuf | ...
         pipe nvim-buffers | nvim-maps | ...

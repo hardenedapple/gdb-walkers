@@ -2,7 +2,7 @@ vshcmd: > gdb demos/tree_debug
 vshcmd: > python import demos.tree_walker
 vshcmd: > tbreak tree.c:93
 vshcmd: > run 10
-vshcmd: > pipe tree-elements tree_root | if {0}->children[0] == 0 && {0}->children[1] == 0 | show printf "%d\n", {}->datum
+vshcmd: > pipe tree-elements tree_root | if {}->children[0] == 0 && {}->children[1] == 0 | show printf "%d\n", {}->datum
 Reading symbols from demos/tree_debug...done.
 (gdb) (gdb) Temporary breakpoint 1 at 0x4009b7: file demos/tree.c, line 93.
 (gdb) Starting program: /home/matthew/share/repos/gdb-config/demos/tree_debug 10
@@ -189,7 +189,7 @@ vshcmd: > pipe nvim-buffblocks &readbuf1 | show printf "%s\n", {}->b_str
 
 ahello there
 (gdb) 
-vshcmd: > pipe array mapblock_T *; maphash; 256 | eval *{} | if {} != 0 | nvim-mapblock | show print-string {0}->m_keys; "  -->  "; {0}->m_str; "\n"
+vshcmd: > pipe array mapblock_T *; maphash; 256 | eval *{} | if {} != 0 | nvim-mapblock | show print-string {}->m_keys; "  -->  "; {}->m_str; "\n"
 \x80\xfdRvimple_completers_trigger  -->  complete#trigger('completers#trigger')
 \x80k3  -->  =UltiSnips#ListSnippets()
 \x80\xfdRISurround  -->  =\x80\xfdQ95_insert(1)

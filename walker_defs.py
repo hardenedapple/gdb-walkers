@@ -127,7 +127,7 @@ class Show(gdb.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            command = self.command.format(element)
+            command = self.format_command(element, self.command)
             gdb.execute(command, False)
             if not self.is_last:
                 yield element
@@ -554,9 +554,9 @@ class Terminated(gdb.Walker):
             self.start = None
 
     def follow_to_termination(self, start):
-        while eval_int(self.test.format(start)) == 0:
+        while eval_int(self.format_command(start, self.test)) == 0:
             yield start
-            start = self.calc(self.follow.format(start))
+            start = self.eval_command(start, self.follow)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start, inpipe, self.follow_to_termination)
