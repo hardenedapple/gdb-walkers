@@ -93,13 +93,17 @@ class NvimUndoTree(gdb.Walker):
             yield from self.walk_alts(uh)
 
     def iter_def(self, inpipe):
-        if self.start_addr:
+        if self.start_addr is not None:
+            if self.start_addr == 0:
+                return
             ele = self.ele('u_header_T *', self.start_addr)
             yield ele
             yield from self.walk_alts(ele)
             yield from self.walk_hist(ele)
         else:
             for element in inpipe:
+                if element.v == 0:
+                    continue
                 ele = self.ele('u_header_T *', element.v)
                 yield ele
                 yield from self.walk_alts(ele)
