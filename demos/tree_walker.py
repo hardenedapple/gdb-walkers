@@ -33,10 +33,10 @@ class TreeElements(gdb.Walker):
         if init_addr.v == 0:
             return
 
-        left_child = '{}->children[0]'.format(init_addr)
-        right_child = '{}->children[1]'.format(init_addr)
-        yield from self.iter_elements(self.calc(right_child))
-        yield from self.iter_elements(self.calc(left_child))
+        left_child = self.eval_command(init_addr, '{}->children[0]')
+        right_child = self.eval_command(init_addr, '{}->children[1]')
+        yield from self.iter_elements(right_child)
+        yield from self.iter_elements(left_child)
         yield init_addr
 
     def iter_def(self, inpipe):
