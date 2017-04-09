@@ -89,10 +89,23 @@ class Walker(abc.ABC):
 
     @staticmethod
     def calc(gdb_expr):
-        main_val = gdb.parse_and_eval(gdb_expr)
+        try:
+            main_val = gdb.parse_and_eval(gdb_expr)
+        except:
+            print('Error parsing expression ', gdb_expr)
+            raise
         string_type = str(main_val.type)
         # *really* don't want to start bothering with function types etc.
-        if any(val in string_type for val in '()[]&'):
+        if '[' in string_type:
+            print('Get type', string_type, 'when evaluating', gdb_expr)
+            array_offset = string_type.find('[')
+            string_type = string_type[:array_offset] + '*'
+            print('Converting to', string_type, 'for pointer arithmetic to work')
+            print('If this is incorrect please modify your command.')
+            print('To avoid this warning, use   array + 0  instead of  array')
+        if any(val in string_type for val in '()&'):
+            print('Converting type ', string_type,
+                  ' to void * as are not sure we can handle it')
             string_type = 'void *'
         return PipeElement(string_type, int(main_val.cast(helpers.uintptr_t)))
 
