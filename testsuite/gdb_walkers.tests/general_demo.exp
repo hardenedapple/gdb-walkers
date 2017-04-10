@@ -14,6 +14,8 @@ run_basic_test "reverse since" "pipe follow-until 100; {} <= 0; {} - 1 | skip-un
 run_basic_test "file pipe" "shellpipe pipe array char; 1; 5 ! cat > addresses\nshellpipe pipe array char; 6; 5 ! cat >> addresses\npipe file addresses\n!rm addresses\n" $ten_count
 unset ten_count
 
+run_basic_test "head of 0 pulls nothing" "set variable \$count = 0\npipe follow-until 1; {} > 100; \$count++, {} + 1 | head 0 | devnull\nprint \$count\n" "0"
+run_basic_test "head truncates early" "set variable \$count = 0\npipe follow-until 1; {} > 100; \$count++, {} + 1 | head 10 | devnull\nprint \$count\n" "9"
 run_basic_test "foldl" "set variable \$sum = 0\npipe follow-until 1; {} > 100; {} + 1 | eval \$sum += {}, {} | devnull\nprint \$sum\n" "5050"
 run_basic_test "can use {} for more than 20 times at once" "pipe eval 1 | show printf \"\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\\n\", {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}\n" "111111111111111111111"
 run_basic_test "can use {} more than once in follow-until" "pipe follow-until 1; {} > 100 && {} != 99; {} + 1 | count\n" "99"

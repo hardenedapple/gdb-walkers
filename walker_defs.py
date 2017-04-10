@@ -235,10 +235,12 @@ class Head(gdb.Walker):
         self.limit = eval_int(args)
 
     def iter_def(self, inpipe):
+        if self.limit == 0:
+            return
         for count, element in enumerate(inpipe):
-            if count >= self.limit:
-                break
             yield element
+            if count + 1 >= self.limit:
+                break
 
 
 class Tail(gdb.Walker):
