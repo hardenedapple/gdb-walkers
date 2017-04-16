@@ -309,7 +309,7 @@ class NvimCharBuffer(gdb.Walker):
         pipe eval ... | nvim-buffblocks | ...
 
     Examples:
-        pipe nvim-buffblocks &readbuf1 | show printf "%s\n", {}->b_str
+        pipe nvim-buffblocks &readbuf1 | show printf "%s\\n", {}->b_str
         pipe eval &readbuf1 | nvim-buffblocks
 
     '''
@@ -375,8 +375,8 @@ class NvimMappings(gdb.Walker):
         // print-string and printf are different because printf prints
         // non-printable characters directly while print-string escapes them with
         // a backslash.
-        pipe nvim-maps | show print-string {}->m_keys; "  -->  "; {}->m_str; "\n"
-        pipe nvim-maps | show printf "%s  -->  %s\n", {}->m_keys, {}->m_str
+        pipe nvim-maps | show print-string {}->m_keys; "  -->  "; {}->m_str; "\\n"
+        pipe nvim-maps | show printf "%s  -->  %s\\n", {}->m_keys, {}->m_str
         // Or only maps of a given buffer
         pipe nvim-maps curbuf | ...
         pipe nvim-buffers | nvim-maps | ...
