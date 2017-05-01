@@ -1,0 +1,8 @@
+demos/list
+demos/tree
+demos/tree_debug
+
+gdb_walkers.sum
+gdb_walkers.log
+
+**/__pycache__
