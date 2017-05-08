@@ -402,6 +402,36 @@ class NvimMappings(gdb.Walker):
                 yield from self.__iter_helper(element)
 
 
+class NvimGarray(gdb.Walker):
+    '''Walk over all elements of a grow array in (Neo)Vim.
+    
+    Equivalent to
+        pipe array <argument2>; <argument1>->ga_data; <argument1>->ga_len
+    
+    Use:
+        pipe nvim-garray <growarray address>; <type>
+
+    Example:
+        pipe nvim-garray &curwin->w_folds; fold_T
+    '''
+    name = 'nvim-garray'
+
+    def __init__(self, args, first, _):
+        cmd_parts = self.parse_args(args, [2, 2] if first else [1, 1], ';')
+        self.t = cmd_parts[-1]
+        self.start_address = eval_int(cmd_parts[0]) if first else None
+    
+    def iter_helper(self, arg):
+        gar_ptr = '((garray_T *){})'.format(arg)
+        equiv_str = 'array {0}; {1}->ga_data; {1}->ga_len'.format(self.t, gar_ptr)
+        yield from gdb.create_pipeline(equiv_str)
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(self.start_address, inpipe, self.iter_helper)
+
+        
+
 for walker in [NvimFold, NvimUndoTree, NvimBuffers, NvimTabs, NvimWindows,
-               NvimMultiQueues, NvimCharBuffer, NvimMapBlock, NvimMappings]:
+               NvimMultiQueues, NvimCharBuffer, NvimMapBlock, NvimMappings,
+               NvimGarray]:
     gdb.register_walker(walker)

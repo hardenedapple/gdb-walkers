@@ -10,10 +10,18 @@ vshcmd: > detach
 vshcmd: > quit
 vshcmd: > gdb ~/share/repos/neovim/build/bin/nvim
 vshcmd: > attach-matching nvim walker-test
-vshcmd: > pipe nvim-folds &curwin->w_folds | show print *{}
-vshcmd: > pipe eval &curwin->w_folds | nvim-folds | show print *{}
-vshcmd: > pipe nvim-undohist curbuf->b_u_oldhead | show print *{}
-vshcmd: > pipe eval curbuf->b_u_oldhead | nvim-undohist | show print *{}
+vshcmd: > shellpipe pipe nvim-garray &curwin->w_folds; fold_T ! cat > garray.txt
+vshcmd: > shellpipe pipe nvim-folds &curwin->w_folds ! cat > folds.txt
+vshcmd: > !diff folds.txt garray.txt   # Should be same
+vshcmd: > pipe nvim-folds &curwin->w_folds | show print *{}  # Check these fit with your vim process
+vshcmd: > shellpipe pipe eval &curwin->w_folds | nvim-folds ! cat > folds.txt
+vshcmd: > !diff folds.txt garray.txt   # Should be same
+vshcmd: > !rm folds.txt garray.txt
+vshcmd: > pipe nvim-undohist curbuf->b_u_oldhead | show print *{} # Check these fit with your vim process
+vshcmd: > shellpipe pipe nvim-undohist curbuf->b_u_oldhead ! cat > undohist.txt
+vshcmd: > shellpipe pipe eval curbuf->b_u_oldhead | nvim-undohist ! cat > alt.txt
+vshcmd: > !diff alt.txt undohist.txt   # Should be same
+vshcmd: > !rm alt.txt undohist.txt
 vshcmd: > pipe nvim-buffers | show print {}->b_ffname
 vshcmd: > pipe nvim-buffers | if {}->b_ffname | if $_regex({}->b_ffname, ".*tree.*") | show print {}->b_ffname
 vshcmd: > pipe nvim-tabs | show print *{}
