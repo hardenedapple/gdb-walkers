@@ -22,6 +22,11 @@ lappend commands "else"
 lappend commands "python print('FAIL', 'ED', sep='')"
 lappend commands "end"
 
+# n.b. in some versions of gdb (8.0 known, possibly others) this doesn't work
+# (because of bug https://sourceware.org/bugzilla/show_bug.cgi?id=21688 )
+# When it doesn't work, it also messes up all following tests.
+# Just give removing the 3 commands below a shot and see if that gets rid of
+# problems.
 run_basic_test "if on output_contains success" "[join $commands \n]\n" "Worked nicely"
 
 set commands [lreplace $commands 0 0 {if $_output_contains("echo \"Hello\"", "xxx")}]
