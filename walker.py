@@ -114,8 +114,7 @@ class Walker(abc.ABC):
                    strip_whitespace=True, maxsplit=-1):
         '''General function for parsing walker arguments.
 
-        Replace occurances of $#<expression># with the evaluated expression,
-        then split based on the split string given (if None given split on
+        Split based on the split string given (if None given, split on
         whitespace), then check the number of arguments are within nargs[0] and
         nargs[1].
 
@@ -152,11 +151,6 @@ class Walker(abc.ABC):
 
         guess = 8
         while True:
-            # Just a paranoia thing -- I keep separate the call to format() and
-            # self.calc() so the try/except clause only acts on the format()
-            # call.
-            # This is just in case IndexError raises from self.calc() as that
-            # would otherwise keep me in a never-ending loop.
             try:
                 gdb_cmd = args.format(*((element,)*guess))
             except IndexError:
@@ -225,7 +219,7 @@ def create_walker(walker_def, first=False, last=False):
     return walker(args if args else None, first, last)
 
 
-def connect_pipe(source, segments, drain):
+def connect_pipe(segments):
     '''
     Each walker in the pipe is called with the iterator returned by its
     predecessor.
@@ -233,23 +227,10 @@ def connect_pipe(source, segments, drain):
     Return the iterator that the last walker returns.
 
     '''
-    # If there is one element in the pipe, we are given
-    # source=element, segments=[], drain=None
-    #
-    # If there are two elements in the pipe, we are given
-    # source=first, segments=[], drain=second
-    #
-    # Otherwise we are given
-    # source=first, segments=[rest], drain=last
-
-    walker = source.iter_def(inpipe=[])
-    if not segments and not drain:
-        return walker
-
+    walker = []
     for segment in segments:
         walker = segment.iter_def(inpipe=walker)
 
-    walker = drain.iter_def(inpipe=walker)
     return walker
 
 
@@ -262,17 +243,17 @@ def create_pipeline(arg):
     Return the iterator over all walkers.
 
     '''
-    # XXX allow escaped ` | ` string.
+    # XXX allow escaped ` | ` string (i.e. ` \| ` ).
     args = arg.split(' | ')
     # Create the first walker with an argument that tells it it's going to
     # be the first.
     only_one = len(args) == 1
-    first_val = create_walker(args[0], first=True, last=only_one)
-    middle = [create_walker(val) for val in args[1:-1] if val]
-    end = None if only_one else create_walker(args[-1],
-                                              first=False, last=True)
+    first_val = [create_walker(args[0], first=True, last=only_one)]
+    first_val.extend([create_walker(val) for val in args[1:-1] if val])
+    if not only_one:
+        first_val.append(create_walker(args[-1], first=False, last=True))
 
-    return connect_pipe(first_val, middle, end)
+    return connect_pipe(first_val)
 
 
 gdb.create_pipeline = create_pipeline
