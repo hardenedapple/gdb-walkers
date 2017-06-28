@@ -350,8 +350,7 @@ class NvimMapBlock(gdb.Walker):
             self.start_addr = None
 
     def iter_helper(self, addr):
-        map_list = ''.join(['linked-list {};'.format(addr),
-                               'mapblock_T; m_next'])
+        map_list = 'linked-list {}; mapblock_T; m_next'.format(addr)
         for mapping in gdb.create_pipeline(map_list):
             yield mapping
 
