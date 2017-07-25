@@ -42,5 +42,3 @@ class TreeElements(gdb.Walker):
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_addr, inpipe, self.iter_elements)
 
-
-gdb.register_walker(TreeElements)

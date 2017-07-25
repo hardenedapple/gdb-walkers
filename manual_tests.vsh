@@ -12,12 +12,16 @@ vshcmd: > gdb ~/share/repos/neovim/build/bin/nvim
 vshcmd: > attach-matching nvim walker-test
 vshcmd: > shellpipe pipe nvim-garray &curwin->w_folds; fold_T ! cat > garray.txt
 vshcmd: > shellpipe pipe nvim-folds &curwin->w_folds ! cat > folds.txt
-vshcmd: > !diff folds.txt garray.txt   # Should be same
-vshcmd: > pipe nvim-folds &curwin->w_folds | show print *{}  # Check these fit with your vim process
+vshcmd: > # Should be same if there are only top-level folds.
+vshcmd: > # Otherwise nested folds should only be shown in the nvim-folds output.
+vshcmd: > !diff folds.txt garray.txt
+vshcmd: > # Check these fit with your vim process
+vshcmd: > pipe nvim-folds &curwin->w_folds | show print *{}
 vshcmd: > shellpipe pipe eval &curwin->w_folds | nvim-folds ! cat > folds.txt
 vshcmd: > !diff folds.txt garray.txt   # Should be same
 vshcmd: > !rm folds.txt garray.txt
-vshcmd: > pipe nvim-undohist curbuf->b_u_oldhead | show print *{} # Check these fit with your vim process
+vshcmd: > # Check these fit with your vim process
+vshcmd: > pipe nvim-undohist curbuf->b_u_oldhead | show print *{}
 vshcmd: > shellpipe pipe nvim-undohist curbuf->b_u_oldhead ! cat > undohist.txt
 vshcmd: > shellpipe pipe eval curbuf->b_u_oldhead | nvim-undohist ! cat > alt.txt
 vshcmd: > !diff alt.txt undohist.txt   # Should be same

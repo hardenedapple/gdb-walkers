@@ -3,8 +3,8 @@ Define the framework for creating walkers that can make a pipeline in gdb.
 
 This module adds 4 commands `pipe` `walker` `walker help` and `walker apropos`.
 It also adds the python functions gdb.register_walker() and
-gdb.create_pipeline() that adds a walker into the gdb walker namespace and
-connects a group of walkers into an iterator respectively.
+gdb.create_pipeline() that add a walker into the gdb walker namespace and
+connect a group of walkers into an iterator respectively.
 
 Finally, it introduces the gdb.Walker base class for defining new walkers.
 
@@ -34,12 +34,12 @@ def register_walker(walker_class):
         or not isinstance(walker_class.name, str)
         or not inspect.isfunction(iter_func)
         or not inspect.getfullargspec(iter_func).args == ['self', 'inpipe']):
-        raise ValueError('Failure registering {}\n'
+        raise ValueError('Failure registering "{}"\n'
                          'All registered walkers must fully implement'
                          ' the Walker interface.\n'
                          'This consists of a `name` string attribute and an'
                          ' `iter_def` method that takes an iterator'
-                         'named "inpipe"'.format(walker_class.name))
+                         'named "inpipe"'.format(walker_class.__name__))
 
     if gdb.walkers.setdefault(walker_class.name, walker_class) != walker_class:
         raise KeyError('A walker with the name "{}" already exits!'.format(
@@ -68,12 +68,20 @@ class PipeElement():
         return '(({}){:#x})'.format(self.t, self.v)
 
 
-class Walker(abc.ABC):
+class WalkerMetaclass(abc.ABCMeta):
+    '''Automatically register walkers once defined.'''
+    def __init__(cls, *args, **kwargs):
+        if cls.__name__ != 'Walker':
+            register_walker(cls)
+        return super().__init__(cls, args, kwargs)
+
+
+class Walker(metaclass=WalkerMetaclass):
     '''
     Class for a walker type.
 
-    These walkers should be registered with register_walker() so that they can
-    be used with the `pipe` command.
+    These walkers are automatically registered to be used with the `pipe`
+    command.
 
     Each walker class is instantiated with the arguments given to it as a
     string, and two parameters indicating whether it is first or last in a

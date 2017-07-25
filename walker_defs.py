@@ -1,8 +1,10 @@
 '''Contains the definitions for general walkers
 
 This module defines all the general walkers that can be applicable anywhere.
-When making your own walkers, define them anywhere, and load them into the
-gdb.walkers dictionary with gdb.register_walker().
+When making your own walkers, define them anywhere.
+If inheriting from the gdb.Walker class, then walkers are automatically
+registered, otherwise you must register them manually with
+gdb.register_walker().
 
 '''
 import re
@@ -901,10 +903,3 @@ class DefinedFunctions(gdb.Walker):
         for symbol in helpers.search_symbols(self.func_regex, self.file_regex,
                                              self.include_dynlibs):
             yield self.ele('void *', int(symbol.value().cast(helpers.uintptr_t)))
-
-
-for walker in [Eval, Show, Instruction, Head, Tail, If, Array, Count, Max, Min,
-               Terminated, LinkedList, Until, Devnull, Since, Reverse,
-               CalledFunctions, File, HypotheticalStack, DefinedFunctions,
-               Sort, Dedup]:
-    gdb.register_walker(walker)
