@@ -15,6 +15,7 @@ import gdb
 import os
 import re
 import helpers
+import inspect
 
 # Define the framework
 gdb.walkers = {}
@@ -26,6 +27,19 @@ def register_walker(walker_class):
         objfile_tag = os.path.basename(gdb.objfile_name)
         if objfile_tag not in walker_class.tags:
             walker_class.tags.append(objfile_tag)
+
+    # Just ensure the protocol is followed.
+    iter_func = walker_class.iter_def
+    if (len(walker_class.__abstractmethods__) != 0
+        or not isinstance(walker_class.name, str)
+        or not inspect.isfunction(iter_func)
+        or not inspect.getfullargspec(iter_func).args == ['self', 'inpipe']):
+        raise ValueError('Failure registering {}\n'
+                         'All registered walkers must fully implement'
+                         ' the Walker interface.\n'
+                         'This consists of a `name` string attribute and an'
+                         ' `iter_def` method that takes an iterator'
+                         'named "inpipe"'.format(walker_class.name))
 
     if gdb.walkers.setdefault(walker_class.name, walker_class) != walker_class:
         raise KeyError('A walker with the name "{}" already exits!'.format(
@@ -72,7 +86,8 @@ class Walker(abc.ABC):
     These integers usually represent addresses in the program space.
 
     '''
-    name = 'XXX Default XXX Must name this class XXXX'
+    @abc.abstractproperty
+    def name(self): pass
     require_input = False
     require_output = False
     tags = []
