@@ -189,7 +189,7 @@ class Instruction(gdb.Walker):
 
     def iter_helper(self, start_addr):
         for instruction in self.disass(start_addr):
-            yield self.ele('void *', instruction['addr'])
+            yield self.Ele('void *', instruction['addr'])
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_address, inpipe, self.iter_helper)
@@ -289,7 +289,7 @@ class Count(gdb.Walker):
         i = None
         for i, _ in enumerate(inpipe):
             pass
-        yield self.ele('int', i + 1 if i is not None else 0)
+        yield self.Ele('int', i + 1 if i is not None else 0)
 
 
 class Array(gdb.Walker):
@@ -332,7 +332,7 @@ class Array(gdb.Walker):
     def __iter_first(self, _):
         cur_pos = self.start_addr
         for _ in range(self.count):
-            yield self.ele(self.typename, cur_pos)
+            yield self.Ele(self.typename, cur_pos)
             cur_pos += self.element_size
 
     def __iter_pipe(self, inpipe):
@@ -593,7 +593,7 @@ class LinkedList(gdb.Walker):
 
     def __iter_helper(self, element):
         walker_text = ''.join([
-            'follow-until {};'.format(self.ele(self.list_type, element.v)),
+            'follow-until {};'.format(self.Ele(self.list_type, element.v)),
             ' {} == 0; {}',
             '->{}'.format(self.next_member)
         ])
@@ -748,7 +748,7 @@ class CalledFunctions(gdb.Walker):
             # Store the current value in the hypothetical_stack for someone
             # else to query - remember to set the class attribute.
             type(self).hypothetical_stack[depth:] = [func_addr]
-            yield self.ele('void *', func_addr)
+            yield self.Ele('void *', func_addr)
 
             # Go backwards through the list so that we pop off elements in the
             # order they will be called.
@@ -811,12 +811,12 @@ class HypotheticalStack(gdb.Walker):
 
     def iter_def(self, inpipe):
         if not inpipe:
-            yield from (self.ele('void *', ele) for ele in
+            yield from (self.Ele('void *', ele) for ele in
                         self.called_funcs_class.hypothetical_stack)
             return
 
         for _ in inpipe:
-            yield from (self.ele('void *', ele) for ele in
+            yield from (self.Ele('void *', ele) for ele in
                         self.called_funcs_class.hypothetical_stack)
 
 
@@ -849,7 +849,7 @@ class File(gdb.Walker):
         for filename in self.filenames:
             with open(filename, 'r') as infile:
                 for line in infile:
-                    yield self.ele('void *', int(line, base=16))
+                    yield self.Ele('void *', int(line, base=16))
 
 
 class DefinedFunctions(gdb.Walker):
@@ -902,4 +902,4 @@ class DefinedFunctions(gdb.Walker):
     def iter_def(self, inpipe):
         for symbol in helpers.search_symbols(self.func_regex, self.file_regex,
                                              self.include_dynlibs):
-            yield self.ele('void *', int(symbol.value().cast(helpers.uintptr_t)))
+            yield self.Ele('void *', int(symbol.value().cast(helpers.uintptr_t)))

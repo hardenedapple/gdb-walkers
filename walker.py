@@ -101,7 +101,7 @@ class Walker(metaclass=WalkerMetaclass):
     tags = []
     # Store the `PipeElement` value in the class as it's almost always needed
     # when writing a walker.
-    ele = PipeElement
+    Ele = PipeElement
 
     def __init__(self, args, first, last):
         pass

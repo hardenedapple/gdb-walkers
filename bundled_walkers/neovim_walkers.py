@@ -41,12 +41,12 @@ class NvimFold(gdb.Walker):
         self.start_addr = None
 
     def iter_folds(self, init_addr):
-        gar_ptr = self.ele('garray_T *', init_addr.v)
+        gar_ptr = self.Ele('garray_T *', init_addr.v)
         array_walk = 'array fold_T; {0}->ga_data; {0}->ga_len'.format(gar_ptr)
         for fold in gdb.create_pipeline(array_walk):
             yield fold
             yield from self.iter_folds(
-                self.ele(fold.t, fold.v + self.nested_offset))
+                self.Ele(fold.t, fold.v + self.nested_offset))
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_addr, inpipe, self.iter_folds)
@@ -96,7 +96,7 @@ class NvimUndoTree(gdb.Walker):
         if self.start_addr is not None:
             if self.start_addr == 0:
                 return
-            ele = self.ele('u_header_T *', self.start_addr)
+            ele = self.Ele('u_header_T *', self.start_addr)
             yield ele
             yield from self.walk_alts(ele)
             yield from self.walk_hist(ele)
@@ -104,7 +104,7 @@ class NvimUndoTree(gdb.Walker):
             for element in inpipe:
                 if element.v == 0:
                     continue
-                ele = self.ele('u_header_T *', element.v)
+                ele = self.Ele('u_header_T *', element.v)
                 yield ele
                 yield from self.walk_alts(ele)
                 yield from self.walk_hist(ele)
@@ -286,7 +286,7 @@ class NvimMultiQueues(gdb.Walker):
                 item_ptr = self.__q_next(child_queue_p + self.mq_headtail_offset)
                 item_ptr -= self.mqi_q_offset
 
-            yield self.ele('Event *' if self.deref else 'MultiQueueItem *',
+            yield self.Ele('Event *' if self.deref else 'MultiQueueItem *',
                            item_ptr)
 
     def iter_def(self, inpipe):
@@ -386,7 +386,7 @@ class NvimMappings(gdb.Walker):
     def __init__(self, args, first, _):
         self.first = first
         self.use_global = first and not args
-        self.start_buf = None if not args else self.ele('buf_T *', eval_int(args))
+        self.start_buf = None if not args else self.Ele('buf_T *', eval_int(args))
 
     def __iter_helper(self, arg):
         map_array = 'maphash' if self.use_global else '((buf_T *){})->b_maphash'.format(arg)

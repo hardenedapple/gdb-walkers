@@ -25,7 +25,7 @@ class TreeElements(gdb.Walker):
 
     def __init__(self, args, first, _):
         if first:
-            self.start_addr = self.ele('node_t *', eval_int(args))
+            self.start_addr = self.Ele('node_t *', eval_int(args))
             return
         self.start_addr = None
 
