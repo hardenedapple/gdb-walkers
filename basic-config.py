@@ -4,20 +4,25 @@ import sys
 from contextlib import suppress
 import importlib
 
-# TODO
-#   Import `walkers` module properly.
-#   Store the confdir variable in the `walkers` module.
-#   Store the `gdb.walkers{}` dict in the `walkers` module.
-
 if os.getenv('TERM') == 'dumb':
     gdb.execute('set pagination off')
 
+# A little bit of hacking ...
+# I calculate an important variable in the "global" namespace so I can use
+# "import" on the walkers.
+# Once I've done that I store the variables in the walkers module so as not to
+# pollute the "global" namespace.
+# There's a bit of interplay between that module and this file, but it's fine,
+# just think of them as the same package.
+confdir = os.path.expanduser('~/.config/gdb')
+if confdir not in sys.path:
+    sys.path.append(confdir)
 
-gdb.confdir = os.path.expanduser('~/.config/gdb')
-if gdb.confdir not in sys.path:
-    sys.path.append(gdb.confdir)
+import walkers
+import walker_defs
 
-gdb.objfile_name = None
+walkers.confdir = confdir
+del confdir
 
 # TODO
 #   At the moment I don't know whether to use a MetaPathFinder or a
@@ -26,16 +31,31 @@ gdb.objfile_name = None
 #       Can ensure import_module(x) isn't cached.
 #       Can translate that call into something that does a non-standard import.
 class AutoImportsFinder(importlib.abc.MetaPathFinder):
+    '''A Finder for the import protocol.
+
+    This Finder is implemented so that we can load files named e.g.
+    libstdc++.so.6 in the autoimports/ directory.
+
+    Without a specialised Finder we would have to have some sort of naming
+    convention to remove '.' chars in the filename.
+    The user would then have to store files as e.g. libstdc++_so_6
+
+    '''
+    # NOTE:
+    #   Even though we import the correct file, we store it in sys.modules
+    #   under a modified name.
+    #   This could cause problems if the user wants two files that produce the
+    #   same name (e.g. my.file and my_file).
+    #   This is why we run the check at startup check_autoimport_names()
     @staticmethod
     def __get_filename():
-        if gdb.objfile_name is None:
+        if walkers.objfile_name is None:
             raise ImportError
-        gdb.confdir = os.path.expanduser('~/.config/gdb')
-        matchname = os.path.basename(gdb.objfile_name) + '-gdb.py'
-        return '{}/autoimports/{}'.format(gdb.confdir, matchname)
+        matchname = os.path.basename(walkers.objfile_name) + '-gdb.py'
+        return '{}/autoimports/{}'.format(walkers.confdir, matchname)
 
     def find_spec(self, fullname, path, target=None):
-        if path == [gdb.confdir + '/autoimports']:
+        if path == [walkers.confdir + '/autoimports']:
             actual_path = self.__get_filename()
             # Ignore the race condition here ...
             if os.path.exists(actual_path):
@@ -47,6 +67,20 @@ class AutoImportsFinder(importlib.abc.MetaPathFinder):
 
 
 sys.meta_path.append(AutoImportsFinder())
+
+def check_autoimport_names():
+    seen_files = {}
+    for filename in os.listdir(walkers.confdir + '/autoimports'):
+        key = filename.replace('.', '_')
+        if key in seen_files:
+            err_msg = ''.join(['Cannot autoimport both ',
+                               '{} and {}\n'.format(filename, seen_files[key]),
+                               'Those names are treated the same internally.'])
+            raise ValueError(err_msg)
+        seen_files[key] = filename
+
+check_autoimport_names()
+
 
 def importer(event):
     '''Emulates gdb auto-load scripts-directory but matches on basename.
@@ -63,29 +97,16 @@ def importer(event):
     # Would like to use the gdb.current_objfile() function, but since I can't
     # use autoloading (because I need the entire filename instead of just the
     # basename), I have to manually store the current program file somewhere.
-    gdb.objfile_name = progname
+    walkers.objfile_name = progname
     basename = os.path.basename(progname)
-    # TODO Check whether we need a name here.
-    #       We can't pass the name directly, which means we either need some
-    #       escaping method or to be able to always hook into the same
-    #       Finder/Loader.
-    #       progname is already in gdb.objfile_name, which means the
-    #       Finder/Loader already has access to it.
-    #       If we can ensure the import machinery doesn't cache things and skip
-    #       our special Finder/Loader, then we can just use the same string
-    #       each time.
-    #
-    #   I believe a unique name is required ... in PEP302 it lists the
-    #   responsibilities of load_module(), which icludes checking for an
-    #   existing module object in sys.modules
-    #   If I break that I expect there'll be a host of complications.
+    # I believe a unique name is required ... in PEP302 it lists the
+    # responsibilities of load_module(), which icludes checking for an
+    # existing module object in sys.modules
+    # If I break that I expect there'll be a host of complications.
     load_name = 'autoimports.' + basename.replace('.', '_')
     with suppress(ModuleNotFoundError):
         importlib.import_module(load_name)
-    gdb.objfile_name = None
+    walkers.objfile_name = None
 
 
 gdb.events.new_objfile.connect(importer)
-
-import walkers
-import walker_defs

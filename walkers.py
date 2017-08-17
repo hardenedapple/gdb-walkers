@@ -20,12 +20,13 @@ import inspect
 
 # Define the framework
 walkers = {}
+objfile_name = None
 
 def register_walker(walker_class):
     # Use the manually defined objfile name (defined in 'importer' in
     # basic-config.py)
-    if gdb.objfile_name is not None:
-        objfile_tag = os.path.basename(gdb.objfile_name)
+    if objfile_name is not None:
+        objfile_tag = os.path.basename(objfile_name)
         if objfile_tag not in walker_class.tags:
             walker_class.tags.append(objfile_tag)
 
