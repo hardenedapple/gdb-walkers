@@ -2,11 +2,11 @@
 # This does mean we have to access the correct scope with `upvar`
 # proc test_shellpipe {} {
 set known_calls ""
-lappend known_calls "   0x0000000000400984 <+48>:	callq  0x400630 <fprintf@plt>"
-lappend known_calls "   0x000000000040098e <+58>:	callq  0x400650 <exit@plt>"
-lappend known_calls "   0x00000000004009a1 <+77>:	callq  0x400640 <atoi@plt>"
-lappend known_calls "   0x00000000004009ae <+90>:	callq  0x4008cb <create_random_tree>"
-lappend known_calls "   0x00000000004009be <+106>:	callq  0x40085c <free_tree>"
+lappend known_calls "   0x0000000100000b10 <+50>:	callq  0x100000790 <fprintf@plt>"
+lappend known_calls "   0x0000000100000b1a <+60>:	callq  0x1000007b0 <exit@plt>"
+lappend known_calls "   0x0000000100000b2d <+79>:	callq  0x1000007a0 <atoi@plt>"
+lappend known_calls "   0x0000000100000b3a <+92>:	callq  0x100000a53 <create_random_tree>"
+lappend known_calls "   0x0000000100000b4a <+108>:	callq  0x1000009e4 <free_tree>"
 # # For some reason I don't know, each line is appended with a \r character, so
 # # we only add a \n character to each to match the output we're seeing.
 set known_calls [join $known_calls "\r\n"]

@@ -274,3 +274,13 @@ Continuing.
 [Inferior 1 (process 10473) exited normally]
 (gdb) 
 ```
+
+## Testing
+Testing is done with DejaGNU and can be run with `make test`.
+These are brittle enough that I don't recommend running them to check that
+things are working, they are there to aid developers.
+
+There is a known bug in gdb that breaks the test for
+`"if on output_countains failure"`.
+Tests for `call_graph` and `shellpipe` both rely on known memory addresses,
+that can easily be different on other machines.
