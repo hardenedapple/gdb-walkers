@@ -43,3 +43,6 @@ def importer(event):
 
 
 gdb.events.new_objfile.connect(importer)
+
+import walkers
+import walker_defs

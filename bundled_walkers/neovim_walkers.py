@@ -16,9 +16,10 @@ it.
 import itertools as itt
 import gdb
 from helpers import offsetof, eval_int
+import walkers
 
 
-class NvimFold(gdb.Walker):
+class NvimFold(walkers.Walker):
     '''Walk over all folds defined in a garray_T recursively.
 
     If it is the first walker it can take an argument of the garray of folds
@@ -43,7 +44,7 @@ class NvimFold(gdb.Walker):
     def iter_folds(self, init_addr):
         gar_ptr = self.Ele('garray_T *', init_addr.v)
         array_walk = 'array fold_T; {0}->ga_data; {0}->ga_len'.format(gar_ptr)
-        for fold in gdb.create_pipeline(array_walk):
+        for fold in walkers.create_pipeline(array_walk):
             yield fold
             yield from self.iter_folds(
                 self.Ele(fold.t, fold.v + self.nested_offset))
@@ -52,7 +53,7 @@ class NvimFold(gdb.Walker):
         yield from self.call_with(self.start_addr, inpipe, self.iter_folds)
 
 
-class NvimUndoTree(gdb.Walker):
+class NvimUndoTree(walkers.Walker):
     '''Walk over all undo headers in the undo tree.
 
     Use:
@@ -79,8 +80,8 @@ class NvimUndoTree(gdb.Walker):
         prev_text = ('follow-until ' +
                      '{}->uh_alt_prev.ptr;'.format(init_addr) +
                      ' {} == 0; {}->uh_alt_prev.ptr')
-        for uh in itt.chain(gdb.create_pipeline(next_text),
-                            gdb.create_pipeline(prev_text)):
+        for uh in itt.chain(walkers.create_pipeline(next_text),
+                            walkers.create_pipeline(prev_text)):
             yield uh
             yield from self.walk_hist(uh)
 
@@ -88,7 +89,7 @@ class NvimUndoTree(gdb.Walker):
         wlkr_text = ('follow-until ' +
                      '{}->uh_prev.ptr;'.format(init_addr) +
                      ' {} == 0; {}->uh_prev.ptr')
-        for uh in gdb.create_pipeline(wlkr_text):
+        for uh in walkers.create_pipeline(wlkr_text):
             yield uh
             yield from self.walk_alts(uh)
 
@@ -112,7 +113,7 @@ class NvimUndoTree(gdb.Walker):
 
 # For walking over buffers
 # (gdb) pipe follow-until firstbuf; {} == 0; ((buf_T *){})->b_next
-class NvimBuffers(gdb.Walker):
+class NvimBuffers(walkers.Walker):
     '''Walk over all buffers
 
     Convenience walker, is equivalent to
@@ -133,10 +134,10 @@ class NvimBuffers(gdb.Walker):
     name = 'nvim-buffers'
     def iter_def(self, inpipe):
         wlkr_text = 'follow-until firstbuf; {} == 0; {}->b_next'
-        yield from gdb.create_pipeline(wlkr_text)
+        yield from walkers.create_pipeline(wlkr_text)
 
 
-class NvimTabs(gdb.Walker):
+class NvimTabs(walkers.Walker):
     '''Walk over all vim tabs
 
     Convenience walker, is equivalent to
@@ -155,10 +156,10 @@ class NvimTabs(gdb.Walker):
     name = 'nvim-tabs'
     def iter_def(self, inpipe):
         wlkr_text = 'follow-until first_tabpage; {} == 0; {}->tp_next'
-        yield from gdb.create_pipeline(wlkr_text)
+        yield from walkers.create_pipeline(wlkr_text)
 
 
-class NvimWindows(gdb.Walker):
+class NvimWindows(walkers.Walker):
     '''Walk over all vim windows or windows in a given tab
 
     Convenience walker,
@@ -210,9 +211,9 @@ class NvimWindows(gdb.Walker):
 
     def __iter_helper(self, element):
         if self.startptr:
-            yield from gdb.create_pipeline(self.__make_wlkr_text(element))
+            yield from walkers.create_pipeline(self.__make_wlkr_text(element))
         else:
-            yield from gdb.create_pipeline('nvim-tabs | nvim-windows {}')
+            yield from walkers.create_pipeline('nvim-tabs | nvim-windows {}')
 
     def iter_def(self, inpipe):
         if inpipe:
@@ -222,7 +223,7 @@ class NvimWindows(gdb.Walker):
             yield from self.__iter_helper(None)
 
 
-class NvimMultiQueues(gdb.Walker):
+class NvimMultiQueues(walkers.Walker):
     '''Walk over MultiQueueItems in a queue
 
     Pass in a MultiQueue pointer.
@@ -298,7 +299,7 @@ class NvimMultiQueues(gdb.Walker):
             yield from self.iter_queue(self.start)
 
 
-class NvimCharBuffer(gdb.Walker):
+class NvimCharBuffer(walkers.Walker):
     '''Walk over all buffblock_T items starting at given buffheader_T
 
     Equivalent to:
@@ -323,14 +324,14 @@ class NvimCharBuffer(gdb.Walker):
     def iter_helper(self, addr):
         buff_list = ''.join(['linked-list &(((buffheader_T *){})->bh_first);'.format(addr),
                                'buffblock_T; b_next'])
-        for buffblock in gdb.create_pipeline(buff_list):
+        for buffblock in walkers.create_pipeline(buff_list):
             yield buffblock
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_addr, inpipe, self.iter_helper)
 
 
-class NvimMapBlock(gdb.Walker):
+class NvimMapBlock(walkers.Walker):
     '''Walk over all mapblock_T structures in a linked list.
 
     Equivalent to
@@ -351,14 +352,14 @@ class NvimMapBlock(gdb.Walker):
 
     def iter_helper(self, addr):
         map_list = 'linked-list {}; mapblock_T; m_next'.format(addr)
-        for mapping in gdb.create_pipeline(map_list):
+        for mapping in walkers.create_pipeline(map_list):
             yield mapping
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_addr, inpipe, self.iter_helper)
 
 
-class NvimMappings(gdb.Walker):
+class NvimMappings(walkers.Walker):
     '''Walk over all mappings in a buffer, or all global mappings.
 
     Equivalent to
@@ -391,7 +392,7 @@ class NvimMappings(gdb.Walker):
     def __iter_helper(self, arg):
         map_array = 'maphash' if self.use_global else '((buf_T *){})->b_maphash'.format(arg)
         init_pipe = 'array mapblock_T *; {}; 256'.format(map_array)
-        yield from gdb.create_pipeline(init_pipe + self.__conversion_pipe)
+        yield from walkers.create_pipeline(init_pipe + self.__conversion_pipe)
 
     def iter_def(self, inpipe):
         if not inpipe:
@@ -401,7 +402,7 @@ class NvimMappings(gdb.Walker):
                 yield from self.__iter_helper(element)
 
 
-class NvimGarray(gdb.Walker):
+class NvimGarray(walkers.Walker):
     '''Walk over all elements of a grow array in (Neo)Vim.
 
     Equivalent to
@@ -423,7 +424,7 @@ class NvimGarray(gdb.Walker):
     def iter_helper(self, arg):
         gar_ptr = '((garray_T *){})'.format(arg)
         equiv_str = 'array {0}; {1}->ga_data; {1}->ga_len'.format(self.t, gar_ptr)
-        yield from gdb.create_pipeline(equiv_str)
+        yield from walkers.create_pipeline(equiv_str)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_address, inpipe, self.iter_helper)

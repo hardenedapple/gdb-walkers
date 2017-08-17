@@ -2,9 +2,9 @@
 
 This module defines all the general walkers that can be applicable anywhere.
 When making your own walkers, define them anywhere.
-If inheriting from the gdb.Walker class, then walkers are automatically
+If inheriting from the walkers.Walker class, then walkers are automatically
 registered, otherwise you must register them manually with
-gdb.register_walker().
+walkers.register_walker().
 
 '''
 import re
@@ -14,6 +14,7 @@ import gdb
 # instead we see the updates made by start_handler().
 import helpers
 from helpers import eval_int, function_disassembly
+import walkers
 
 # TODO
 #   I would like to use the python standard argparse library to parse
@@ -57,7 +58,7 @@ from helpers import eval_int, function_disassembly
 #      items in the class.
 
 
-class Eval(gdb.Walker):
+class Eval(walkers.Walker):
     '''Parse args as a gdb expression.
 
     Replaces occurances of `{}` in the argument string with the values from a
@@ -103,7 +104,7 @@ class Eval(gdb.Walker):
         return self.__iter_helper(inpipe)
 
 
-class Show(gdb.Walker):
+class Show(walkers.Walker):
     '''Parse the expression as a gdb command, and print its output.
 
     This must have input, and it re-uses that input as its output.
@@ -135,7 +136,7 @@ class Show(gdb.Walker):
                 yield element
 
 
-class Instruction(gdb.Walker):
+class Instruction(walkers.Walker):
     '''Next `count` instructions starting at `start-address`.
 
     Usage:
@@ -195,7 +196,7 @@ class Instruction(gdb.Walker):
         yield from self.call_with(self.start_address, inpipe, self.iter_helper)
 
 
-class If(gdb.Walker):
+class If(walkers.Walker):
     '''Reproduces items that satisfy a condition.
 
     Replaces occurances of `{}` with the input address.
@@ -222,7 +223,7 @@ class If(gdb.Walker):
                 yield element
 
 
-class Head(gdb.Walker):
+class Head(walkers.Walker):
     '''Only take first `N` items of the pipeline.
 
     Usage:
@@ -245,7 +246,7 @@ class Head(gdb.Walker):
                 break
 
 
-class Tail(gdb.Walker):
+class Tail(walkers.Walker):
     '''Limit walker to last `N` items of pipeline.
 
     Usage:
@@ -271,7 +272,7 @@ class Tail(gdb.Walker):
             yield element
 
 
-class Count(gdb.Walker):
+class Count(walkers.Walker):
     '''Count how many elements were in the previous walker.
 
     Usage:
@@ -292,7 +293,7 @@ class Count(gdb.Walker):
         yield self.Ele('int', i + 1 if i is not None else 0)
 
 
-class Array(gdb.Walker):
+class Array(walkers.Walker):
     '''Iterate over each element in an array.
 
     Usage:
@@ -346,7 +347,7 @@ class Array(gdb.Walker):
 
 # Probably should do something about the code duplication between Max and Min
 # here, but right now it seems much more effort than it's worth.
-class Max(gdb.Walker):
+class Max(walkers.Walker):
     '''Pass through the value that results in the maximum expression.
 
     For each element, it evaluates the expression given, and returns the
@@ -383,7 +384,7 @@ class Max(gdb.Walker):
                 raise
 
 
-class Min(gdb.Walker):
+class Min(walkers.Walker):
     '''Pass through the value that results in the minimum expression.
 
     For each element, it evaluates the expression given, and returns the
@@ -420,7 +421,7 @@ class Min(gdb.Walker):
                 raise
 
 
-class Sort(gdb.Walker):
+class Sort(walkers.Walker):
     '''Yield elements from the previous walker sorted on expression given.
 
     For each element, it evaluates the expression given. It then yields the
@@ -453,7 +454,7 @@ class Sort(gdb.Walker):
             yield element
 
 
-class Dedup(gdb.Walker):
+class Dedup(walkers.Walker):
     '''Remove duplicate elements.
 
     For each element, evaluates the expression given and removes those that
@@ -479,7 +480,7 @@ class Dedup(gdb.Walker):
             yield element
 
 
-class Until(gdb.Walker):
+class Until(walkers.Walker):
     '''Accept and pass through elements until a condition is broken.
 
     Can't be the first walker.
@@ -502,7 +503,7 @@ class Until(gdb.Walker):
             yield element
 
 
-class Since(gdb.Walker):
+class Since(walkers.Walker):
     '''Skip items until a condition is satisfied.
 
     Returns all items in a walker since a condition was satisfied.
@@ -527,7 +528,7 @@ class Since(gdb.Walker):
             yield element
 
 
-class Terminated(gdb.Walker):
+class Terminated(walkers.Walker):
     '''Follow "next" expression until reach terminating condition.
 
     Uses given expression to find the "next" pointer in a sequence, follows
@@ -566,7 +567,7 @@ class Terminated(gdb.Walker):
         yield from self.call_with(self.start, inpipe, self.follow_to_termination)
 
 
-class LinkedList(gdb.Walker):
+class LinkedList(walkers.Walker):
     '''Convenience walker for a NULL terminated linked list.
 
     The following walker
@@ -597,13 +598,13 @@ class LinkedList(gdb.Walker):
             ' {} == 0; {}',
             '->{}'.format(self.next_member)
         ])
-        yield from gdb.create_pipeline(walker_text)
+        yield from walkers.create_pipeline(walker_text)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start, inpipe, self.__iter_helper)
 
 
-class Devnull(gdb.Walker):
+class Devnull(walkers.Walker):
     '''Completely consume the previous walker, but yield nothing.
 
     Usage:
@@ -619,7 +620,7 @@ class Devnull(gdb.Walker):
             pass
 
 
-class Reverse(gdb.Walker):
+class Reverse(walkers.Walker):
     '''Reverse the iteration from the previous command.
 
     Usage:
@@ -640,7 +641,7 @@ class Reverse(gdb.Walker):
             yield element
 
 
-class CalledFunctions(gdb.Walker):
+class CalledFunctions(walkers.Walker):
     '''Walk through the call tree of all functions.
 
     Given a function name/address, walk over all functions this function calls,
@@ -768,7 +769,7 @@ class CalledFunctions(gdb.Walker):
             yield from self.__iter_helper()
 
 
-class HypotheticalStack(gdb.Walker):
+class HypotheticalStack(walkers.Walker):
     '''Print the hypothetical function stack called-functions has created.
 
     The `called-functions` walker creates a hypothetical stack each time it
@@ -807,7 +808,7 @@ class HypotheticalStack(gdb.Walker):
     def __init__(self, args, *_):
         if args and args.split() != []:
             raise ValueError('hypothetical-call-stack takes no arguments')
-        self.called_funcs_class = gdb.walkers['called-functions']
+        self.called_funcs_class = walkers.walkers['called-functions']
 
     def iter_def(self, inpipe):
         if not inpipe:
@@ -820,7 +821,7 @@ class HypotheticalStack(gdb.Walker):
                         self.called_funcs_class.hypothetical_stack)
 
 
-class File(gdb.Walker):
+class File(walkers.Walker):
     '''Walk over numbers read in from a file.
 
     Yields addresses read in from a file, one line at a time.
@@ -852,7 +853,7 @@ class File(gdb.Walker):
                     yield self.Ele('void *', int(line, base=16))
 
 
-class DefinedFunctions(gdb.Walker):
+class DefinedFunctions(walkers.Walker):
     '''Walk over defined functions that match the given regexp.
 
     This walker iterates over all functions defined in the current program.

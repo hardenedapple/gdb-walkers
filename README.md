@@ -58,7 +58,7 @@ This repo also contains some walkers over vim structures in
 program called `nvim`.
 
 Writing your own walker should be easy -- define a class inheriting from
-`gdb.Walker`, `__init__()` takes three arguments, the string the walker was
+`walkers.Walker`, `__init__()` takes three arguments, the string the walker was
 initialised with, whether the walker is first in the pipeline, and whether it
 is last. Then the `iter_def()` method is called with an iterator over elements
 from the preceding element in the pipe, and should return an iterator over

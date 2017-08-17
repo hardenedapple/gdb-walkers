@@ -2,11 +2,12 @@
 Define the framework for creating walkers that can make a pipeline in gdb.
 
 This module adds 4 commands `pipe` `walker` `walker help` and `walker apropos`.
-It also adds the python functions gdb.register_walker() and
-gdb.create_pipeline() that add a walker into the gdb walker namespace and
+
+It also adds the python functions walkers.register_walker() and
+walkers.create_pipeline() that add a walker into the gdb walker namespace and
 connect a group of walkers into an iterator respectively.
 
-Finally, it introduces the gdb.Walker base class for defining new walkers.
+Finally, it introduces the walkers.Walker base class for defining new walkers.
 
 '''
 
@@ -18,7 +19,7 @@ import helpers
 import inspect
 
 # Define the framework
-gdb.walkers = {}
+walkers = {}
 
 def register_walker(walker_class):
     # Use the manually defined objfile name (defined in 'importer' in
@@ -41,12 +42,10 @@ def register_walker(walker_class):
                          ' `iter_def` method that takes an iterator'
                          'named "inpipe"'.format(walker_class.__name__))
 
-    if gdb.walkers.setdefault(walker_class.name, walker_class) != walker_class:
+    if walkers.setdefault(walker_class.name, walker_class) != walker_class:
         raise KeyError('A walker with the name "{}" already exits!'.format(
             walker_class.name))
 
-
-gdb.register_walker = register_walker
 
 class PipeElement():
     '''
@@ -205,8 +204,6 @@ class Walker(metaclass=WalkerMetaclass):
                 yield from helper(element)
 
 
-gdb.Walker = Walker
-
 def create_walker(walker_def, first=False, last=False):
     '''
     Find walker called for by walker_def, initialise it with the walker_def
@@ -228,11 +225,11 @@ def create_walker(walker_def, first=False, last=False):
     args = command_split[1] if len(command_split) == 2 else ''
 
     # Default walker is to evaluate the expression
-    if walker_name not in gdb.walkers:
+    if walker_name not in walkers:
         args = walker_name + ' ' + args
         walker_name = 'eval'
 
-    walker = gdb.walkers[walker_name]
+    walker = walkers[walker_name]
     if walker.require_input and first or walker.require_output and last:
         raise ValueError('Walker "{}" either requires an input or an '
                          'output and has been put somewhere where this '
@@ -279,8 +276,6 @@ def create_pipeline(arg):
     return connect_pipe(first_val)
 
 
-gdb.create_pipeline = create_pipeline
-
 class Pipeline(gdb.Command):
     '''Combine logical filters to work on many addresses in sequence.
 
@@ -319,7 +314,7 @@ class Pipeline(gdb.Command):
             print('{.v:#x}'.format(element))
 
     def complete(self, _, word):
-        return [key for key in gdb.walkers if key.startswith(word)]
+        return [key for key in walkers if key.startswith(word)]
 
 
 class WalkerCommand(gdb.Command):
@@ -357,7 +352,7 @@ class WalkerHelp(gdb.Command):
 
     @staticmethod
     def all_walkers(_):
-        for name, walker in gdb.walkers.items():
+        for name, walker in walkers.items():
             print(name, '--', walker.__doc__.split('\n', 1)[0])
 
     @staticmethod
@@ -365,20 +360,20 @@ class WalkerHelp(gdb.Command):
         # NOTE I know this is extremely wasteful, but the likelyhood we're
         # going to have a huge number of walkers is small.
         all_tags = set()
-        for walker in gdb.walkers.values():
+        for walker in walkers.values():
             all_tags.update(set(walker.tags))
         for tag in sorted(list(all_tags)):
             print(tag)
 
     @staticmethod
     def one_tag(tagname):
-        for name, walker in gdb.walkers.items():
+        for name, walker in walkers.items():
             if tagname in walker.tags:
                 print(name, '--', walker.__doc__.split('\n', 1)[0])
 
     @staticmethod
     def one_walker(name):
-        walker = gdb.walkers.get(name)
+        walker = walkers.get(name)
         if not walker:
             raise KeyError('No walker {} found'.format(name))
         print(walker.__doc__)
@@ -417,12 +412,12 @@ class WalkerHelp(gdb.Command):
             # Completion is a tag -- find all tags and return those matching
             # the start of this word.
             matching_tags = set()
-            for walker in gdb.walkers.values():
+            for walker in walkers.values():
                 matching_tags.update({val for val in walker.tags
                                       if val.startswith(word)})
             return matching_tags
 
-        matching_walkers = [val for val in gdb.walkers if val.startswith(word)]
+        matching_walkers = [val for val in walkers if val.startswith(word)]
         matching_walkers.extend(val for val in ['tag', 'tags', 'walkers']
                                 if val.startswith(word))
         return matching_walkers
@@ -444,7 +439,7 @@ class WalkerApropos(gdb.Command):
                                             gdb.COMMAND_SUPPORT)
 
     def invoke(self, args, _):
-        for name, walker in gdb.walkers.items():
+        for name, walker in walkers.items():
             strings = walker.tags + [name, walker.__doc__]
             if any(re.search(args, val, re.IGNORECASE) for val in strings):
                 print(name, '--', walker.__doc__.split('\n', 1)[0])

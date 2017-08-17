@@ -12,8 +12,9 @@ import gdb
 # instead we see the updates made by start_handler().
 import helpers
 from helpers import eval_int, function_disassembly
+import walkers
 
-class StdList(gdb.Walker):
+class StdList(walkers.Walker):
     '''Walk over elements in a std::list<T> list.
 
     The walker
@@ -68,7 +69,7 @@ class StdList(gdb.Walker):
 
         yield from (self.Ele(self.list_type, e.v)
                     for e in
-                    gdb.create_pipeline(walker_text))
+                    walkers.create_pipeline(walker_text))
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start, inpipe, self.__iter_helper)

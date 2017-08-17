@@ -5,8 +5,9 @@ Example file that creates a walker over elements in the tree defined in tree.c
 
 import gdb
 from helpers import eval_int
+import walkers
 
-class TreeElements(gdb.Walker):
+class TreeElements(walkers.Walker):
     '''Walk over all elements in the tree.
 
     Only works for the tree defined in tree.c
