@@ -64,6 +64,12 @@ is last. Then the `iter_def()` method is called with an iterator over elements
 from the preceding element in the pipe, and should return an iterator over
 integers.
 
+To automatically load your walkers when a given object file is loaded in gdb
+put the python source file in the autoimports/ directory under the name
+`<basename-of-program>-gdb.py`.
+To load the walker definitions on startup put `source <your-file>` in
+`~/.gdbinit`.
+
 # Getting help
 
 All commands introduced are documented with docstrings so that the gdb `help`
