@@ -17,7 +17,7 @@ vshcmd: > # Otherwise nested folds should only be shown in the nvim-folds output
 vshcmd: > !diff folds.txt garray.txt
 vshcmd: > # Check these fit with your vim process
 vshcmd: > pipe nvim-folds &curwin->w_folds | show print *{}
-vshcmd: > shellpipe pipe eval &curwin->w_folds | nvim-folds ! cat > folds.txt
+vshcmd: > shellpipe pipe eval &curwin->w_folds | nvim-folds ! cat > garray.txt
 vshcmd: > !diff folds.txt garray.txt   # Should be same
 vshcmd: > !rm folds.txt garray.txt
 vshcmd: > # Check these fit with your vim process

@@ -1,1 +1,1 @@
-import bundled_walkers.cpp_std_walkers
+../bundled_walkers/cpp_std_walkers.py
