@@ -41,12 +41,6 @@ class AutoImportsFinder(importlib.abc.MetaPathFinder):
     The user would then have to store files as e.g. libstdc++_so_6
 
     '''
-    # NOTE:
-    #   Even though we import the correct file, we store it in sys.modules
-    #   under a modified name.
-    #   This could cause problems if the user wants two files that produce the
-    #   same name (e.g. my.file and my_file).
-    #   This is why we run the check at startup check_autoimport_names()
     @staticmethod
     def __get_filename():
         if walkers.objfile_name is None:
@@ -68,20 +62,9 @@ class AutoImportsFinder(importlib.abc.MetaPathFinder):
 
 sys.meta_path.append(AutoImportsFinder())
 
-def check_autoimport_names():
-    seen_files = {}
-    for filename in os.listdir(walkers.confdir + '/autoimports'):
-        key = filename.replace('.', '_')
-        if key in seen_files:
-            err_msg = ''.join(['Cannot autoimport both ',
-                               '{} and {}\n'.format(filename, seen_files[key]),
-                               'Those names are treated the same internally.'])
-            raise ValueError(err_msg)
-        seen_files[key] = filename
-
-check_autoimport_names()
-
-
+# Import just the package ... this allows us to store things off that package
+# That's good because that's where the data makes sense to be.
+import autoimports
 def importer(event):
     '''Emulates gdb auto-load scripts-directory but matches on basename.
 
@@ -103,7 +86,13 @@ def importer(event):
     # responsibilities of load_module(), which icludes checking for an
     # existing module object in sys.modules
     # If I break that I expect there'll be a host of complications.
-    load_name = 'autoimports.' + basename.replace('.', '_')
+    # That unique name doesn't have to be sensible though, we can just have an
+    # incrementing global variable.
+    # This global variable actually indicates the position in gdb.objfiles()
+    # where this objfile is stored.
+    # That's not on purpose or anything though ...
+    load_name = 'autoimports.' + str(autoimports.index)
+    autoimports.index += 1
     with suppress(ModuleNotFoundError):
         importlib.import_module(load_name)
     walkers.objfile_name = None
