@@ -75,6 +75,10 @@ def importer(event):
     This function means that you just need to create a file
     autoload-directory/program-gdb.py.
 
+    NOTE: gdb can load the same objects more than once while open.
+    The simplest example of this is calling `run` more than once on a binary.
+    When this happens the file in autoimports/ will be imported twice.
+
     '''
     progname = event.new_objfile.filename
     # Would like to use the gdb.current_objfile() function, but since I can't
@@ -91,8 +95,18 @@ def importer(event):
     # This global variable actually indicates the position in gdb.objfiles()
     # where this objfile is stored.
     # That's not on purpose or anything though ...
-    load_name = 'autoimports.' + str(autoimports.index)
-    autoimports.index += 1
+
+    # If the same object is loaded twice, then we import it twice.
+    # This isn't to allow anything in particular, but simply because that seems
+    # like the most intuitive behaviour when loading an object file twice.
+
+    if basename in autoimports.imported:
+        load_name = autoimports.imported[basename]
+    else:
+        load_name = 'autoimports.' + str(autoimports.index)
+        autoimports.imported[basename] = load_name
+        autoimports.index += 1
+
     with suppress(ModuleNotFoundError):
         importlib.import_module(load_name)
     walkers.objfile_name = None
