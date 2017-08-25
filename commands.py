@@ -596,7 +596,7 @@ class CallGraph(gdb.Command):
                                         gdb.COMPLETE_COMMAND, True)
 
 
-def retpoints(addr, arch):
+def fn_return_addresses(addr, arch):
     '''Return a list of addresses for all ret instructions in function `symbol`
 
     Disassembles the function that `symbol` refers to, and returns a list of
@@ -638,10 +638,10 @@ def add_tracer(symbol, arch):
     if addr not in CallGraph.ret_breaks:
         CallGraph.ret_breaks[addr] = [
             ReturnBreak(retloc, retdesc, *names)
-            for retloc, retdesc in retpoints(addr, arch)]
+            for retloc, retdesc in fn_return_addresses(addr, arch)]
 
 
-def trace_regexp(regexp):
+def trace_matching_functions(regexp):
     'Trace all functions matching `regexp` in the current symbol table.'
     file_regex, func_regex = file_func_split(regexp)
     if file_regex is None:
@@ -694,7 +694,7 @@ def remove_addr_trace(del_addr):
         raise RuntimeError('Tracer in return dict, not in entry dict')
 
 
-def remove_tracers(regexp):
+def remove_matching_tracers(regexp):
     'Remove all trace points matching `regexp` in the CallGraph class lists.'
     file_regex, func_regex = file_func_split(regexp)
     # If no file_regex given, remove *all* matching functions.
@@ -789,7 +789,7 @@ class CallGraphInit(gdb.Command):
     def invoke(self, arg, _):
         self.dont_repeat()
         CallGraph.clear_previous_breakpoints()
-        trace_regexp(arg)
+        trace_matching_functions(arg)
 
 
 class CallGraphUpdate(gdb.Command):
@@ -850,10 +850,10 @@ class CallGraphUpdate(gdb.Command):
             return
 
         if args[0] == '+':
-            trace_regexp(args[1])
+            trace_matching_functions(args[1])
             return
 
-        remove_tracers(args[1])
+        remove_matching_tracers(args[1])
 
 
 class CallGraphInfo(gdb.Command):
