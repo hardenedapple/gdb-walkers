@@ -1,3 +1,19 @@
+'''
+This file does three things.
+
+It adds to sys.path so that `import` statements work on files in this
+directory.
+
+It imports the walker module and the base walker definitions.
+
+It sets up the autoimport mechanism for importing python modules upon loading
+a new object file.
+
+It also ensures that pagination is off if the $TERM environment variable is
+'dumb'.
+
+'''
+
 import gdb
 import os
 import sys
