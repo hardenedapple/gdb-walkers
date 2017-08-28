@@ -1,15 +1,5 @@
 '''Helper functions -- used throughout the walkers files.
 
-The uintptr_t variable has to be a global variable because other functions want
-to use it.
-
-If using `from helpers import uintptr_t`, the `start_handler()` function
-doesn't change the value everywhere else because these other modules get their
-own local copy -- I don't know the logic behind this.
-
-Hence I either have to import the module everywhere and use qualified names,
-or source it directly in the gdbinit file.
-
 '''
 import gdb
 import re
@@ -45,8 +35,10 @@ def find_uintptr_t():
 
 # First guess -- on starting the program we update this.
 # This is because we don't actually know the size of a pointer type until we
-# attach to the process.
-uintptr_t = find_uintptr_t()
+# attach to a process.
+__uintptr_t = find_uintptr_t()
+def as_uintptr(x): return x.cast(__uintptr_t)
+def uintptr_size(): return __uintptr_t.sizeof
 
 def eval_int(gdb_expr):
     '''Return the python integer value of `gdb_expr` and it's type
@@ -58,10 +50,10 @@ def eval_int(gdb_expr):
     where type_description is a string.
 
     '''
-    # Cast to uintptr_t to find addresses of functions (e.g.
+    # Cast to __uintptr_t to find addresses of functions (e.g.
     # gdb.parse_and_eval('main')).
     try:
-        return int(gdb.parse_and_eval(gdb_expr).cast(uintptr_t))
+        return int(gdb.parse_and_eval(gdb_expr).cast(__uintptr_t))
     except:
         print('error parsing ', gdb_expr, ' and casting to uintptr_t')
         raise
@@ -69,13 +61,14 @@ def eval_int(gdb_expr):
 
 def start_handler(_):
     '''Upon startup, find the pointer type for this program'''
-    global uintptr_t
-    uintptr_t = find_uintptr_t()
+    global __uintptr_t
+    __uintptr_t = find_uintptr_t()
     # Remove us from the handler -- there is no reason to keep finding the same
     # pointer type.
     # NOTE:
     #   This may have trouble when inspecting both 32bit and 64 bit programs in
     #   the same gdb session.
+    #   TODO Check if this is the case ...
     #   In that case, just manually run
     #      (gdb) python find_uintptr_t()
     #   and you should be fine.
@@ -86,9 +79,9 @@ def offsetof(typename, field):
     return eval_int('&((({} *)0)->{})'.format(typename, field))
 
 
-# Update uintptr_t value on first objfile added because by then we'll know what
-# the current program file architecture is. If we find the current pointer type
-# before we do anything else gdb just guesses.
+# Update __uintptr_t value on first objfile added because by then we'll know
+# what the current program file architecture is. If we find the current pointer
+# type before we do anything else gdb just guesses.
 gdb.events.new_objfile.connect(start_handler)
 
 if not hasattr(gdb, 'current_arch'):

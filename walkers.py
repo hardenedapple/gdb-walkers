@@ -130,7 +130,7 @@ class Walker(metaclass=WalkerMetaclass):
             print('Converting type ', string_type,
                   ' to void * as are not sure we can handle it')
             string_type = 'void *'
-        return PipeElement(string_type, int(main_val.cast(helpers.uintptr_t)))
+        return PipeElement(string_type, int(helpers.as_uintptr(main_val)))
 
     @classmethod
     def parse_args(cls, args, nargs=None, split_string=None,
@@ -321,9 +321,6 @@ class Pipeline(gdb.Command):
 class WalkerCommand(gdb.Command):
     '''Prefix command for walker introspection commands.'''
     def __init__(self):
-        # It doesn't say anywhere, but -1 appears to be the constant to give
-        # so that I can provide the PREFIX argument while still using the
-        # complete() function to provide manual completion.
         super(WalkerCommand, self).__init__('walker', gdb.COMMAND_DATA,
                                             gdb.COMPLETE_COMMAND, True)
 

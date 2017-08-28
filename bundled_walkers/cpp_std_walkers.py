@@ -5,13 +5,7 @@ Since the implementation is not a part of the standard and subject to change
 without notice, the walkers in this file are inherently unstable.
 '''
 
-import re
-import operator
-import gdb
-# Need the global value so that we don't get a copy of helpers.uintptr_t, and
-# instead we see the updates made by start_handler().
-import helpers
-from helpers import eval_int, function_disassembly
+from helpers import eval_int
 import walkers
 
 class StdList(walkers.Walker):

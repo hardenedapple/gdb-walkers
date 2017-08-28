@@ -45,7 +45,7 @@ class WhereIs(gdb.Function):
         super(WhereIs, self).__init__('_whereis')
 
     def invoke(self, arg):
-        pos = gdb.find_pc_line(int(arg.cast(helpers.uintptr_t)))
+        pos = gdb.find_pc_line(int(helpers.as_uintptr(arg)))
         if not pos.symtab:
             return "\t\tUnknown"
         return pos.symtab.filename + ':' + str(pos.line)
@@ -64,7 +64,7 @@ class FunctionOf(gdb.Function):
         super(FunctionOf, self).__init__('_function_of')
 
     def invoke(self, arg):
-        pos_given = int(arg.cast(helpers.uintptr_t))
+        pos_given = int(helpers.as_uintptr(arg))
         function_name, offset = helpers.func_and_offset(pos_given)
 
         func_name = function_name if function_name else 'Unknown'

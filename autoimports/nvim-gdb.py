@@ -111,8 +111,6 @@ class NvimUndoTree(walkers.Walker):
                 yield from self.walk_hist(ele)
 
 
-# For walking over buffers
-# (gdb) pipe follow-until firstbuf; {} == 0; ((buf_T *){})->b_next
 class NvimBuffers(walkers.Walker):
     '''Walk over all buffers
 

@@ -10,10 +10,8 @@ walkers.register_walker().
 import re
 import operator
 import gdb
-# Need the global value so that we don't get a copy of helpers.uintptr_t, and
-# instead we see the updates made by start_handler().
-import helpers
-from helpers import eval_int, function_disassembly
+from helpers import (eval_int, function_disassembly, as_uintptr, uintptr_size,
+                     file_func_split, search_symbols)
 import walkers
 
 # TODO
@@ -323,7 +321,7 @@ class Array(walkers.Walker):
         # TODO This is hacky, and we don't handle char[], &char that users
         # might like to use.
         if typename.find('*') != -1:
-            self.element_size = helpers.uintptr_t.sizeof
+            self.element_size = uintptr_size()
         else:
             self.element_size = gdb.lookup_type(typename).sizeof
         # We're iterating over pointers to the values in the array.
@@ -844,7 +842,7 @@ class File(walkers.Walker):
             raise ValueError('`file` walker cannot take input')
         self.filenames = gdb.string_to_argv(args)
 
-    # NOTE, name the argument `inpipe` so that connect_pipe() can pass the
+    # NOTE, name unused argument `inpipe` so that connect_pipe() can pass the
     # argument via keyword.
     def iter_def(self, inpipe):
         for filename in self.filenames:
@@ -896,11 +894,11 @@ class DefinedFunctions(walkers.Walker):
             self.include_dynlibs = bool(argv[1])
         else:
             self.include_dynlibs = False
-        self.file_regex, self.func_regex = helpers.file_func_split(argv[0])
+        self.file_regex, self.func_regex = file_func_split(argv[0])
 
-    # NOTE, name the argument `inpipe` so that connect_pipe() can pass the
+    # NOTE, name unused argument `inpipe` so that connect_pipe() can pass the
     # argument via keyword.
     def iter_def(self, inpipe):
-        for symbol in helpers.search_symbols(self.func_regex, self.file_regex,
-                                             self.include_dynlibs):
-            yield self.Ele('void *', int(symbol.value().cast(helpers.uintptr_t)))
+        for symbol in search_symbols(self.func_regex, self.file_regex,
+                                     self.include_dynlibs):
+            yield self.Ele('void *', int(as_uintptr(symbol.value())))

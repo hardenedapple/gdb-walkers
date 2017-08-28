@@ -12,9 +12,8 @@ import subprocess as sp
 from collections import namedtuple
 import re
 import gdb
-import helpers
 from helpers import (eval_int, function_disassembly, func_and_offset,
-                     file_func_split)
+                     file_func_split, as_uintptr, FakeSymbol)
 
 
 class ShellPipe(gdb.Command):
@@ -620,7 +619,7 @@ def add_tracer(symbol, arch):
     a symtab member that itself has a filename member), and a `name` member.
 
     '''
-    addr = int(symbol.value().cast(helpers.uintptr_t))
+    addr = int(as_uintptr(symbol.value()))
 
     # Use hex just because it's pretty for `info call-graph exact`.
     entry_loc, *names = ('*{}'.format(hex(addr)),
@@ -832,7 +831,7 @@ class CallGraphUpdate(gdb.Command):
 
         if direction == '+':
             arch = gdb.current_arch()
-            return add_tracer(helpers.FakeSymbol(func_name, addr), arch)
+            return add_tracer(FakeSymbol(func_name, addr), arch)
 
         remove_addr_trace(int(addr, 0))
 
