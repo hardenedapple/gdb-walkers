@@ -14,11 +14,11 @@ check_so_far "Debug finds all functions with info" debug_commands debug_out
 
 lappend debug_commands "info call-graph exact"
 lappend debug_out "Functions currently traced by call-graph:"
-lappend debug_out "	 0x100000a25 	 create_tree"
-lappend debug_out "	 0x1000009e4 	 free_tree"
-lappend debug_out "	 0x1000008fa 	 insert_entry"
-lappend debug_out "	 0x100000ade 	 main"
-lappend debug_out "	 0x100000a53 	 create_random_tree"
+lappend debug_out "	 0x555555554a25 	 create_tree"
+lappend debug_out "	 0x5555555549e4 	 free_tree"
+lappend debug_out "	 0x5555555548fa 	 insert_entry"
+lappend debug_out "	 0x555555554ade 	 main"
+lappend debug_out "	 0x555555554a53 	 create_random_tree"
 check_so_far "Debug shows exact position" debug_commands debug_out
 
 lappend debug_commands "call-graph update - free_tree"
@@ -169,7 +169,7 @@ check_so_far "Plain finds correct functions including dynlibs" plain_commands pl
 # back in. This shows we can ignore dynamic libraries with our regular
 # expressions.
 
-lappend plain_commands "call-graph update - exact 0x1000009e4"
+lappend plain_commands "call-graph update - exact 0x5555555549e4"
 lappend plain_commands "info call-graph"
 lappend plain_out "Functions currently traced by call-graph:"
 lappend plain_out "	 insert_entry"
@@ -179,7 +179,7 @@ lappend plain_out "	 main"
 lappend plain_out "	 free_tree"
 check_so_far "Plain call-graph update removes exact" plain_commands plain_out
 
-lappend plain_commands "call-graph update + exact 0x1000009e4"
+lappend plain_commands "call-graph update + exact 0x5555555549e4"
 lappend plain_commands "info call-graph"
 lappend plain_out "Functions currently traced by call-graph:"
 lappend plain_out "	 insert_entry"
@@ -211,12 +211,12 @@ lappend plain_out "	 free_tree"
 check_so_far "Plain call-graph update adds exact functions" plain_commands plain_out
 
 lappend plain_commands "info call-graph exact"
-lappend plain_out "Functions currently traced by call-graph:"
-lappend plain_out "	 0x1000008fa 	 insert_entry"
-lappend plain_out "	 0x100000a25 	 create_tree"
-lappend plain_out "	 0x100000a53 	 create_random_tree"
-lappend plain_out "	 0x100000ade 	 main"
-lappend plain_out "	 0x1000009e4 	 free_tree"
+lappend debug_out "Functions currently traced by call-graph:"
+lappend debug_out "     0x5555555548fa 	 insert_entry"
+lappend debug_out "     0x555555554a25 	 create_tree"
+lappend debug_out "     0x555555554a53 	 create_random_tree"
+lappend debug_out "     0x555555554ade 	 main"
+lappend debug_out "     0x5555555549e4 	 free_tree"
 check_so_far "Plain shows exact position" plain_commands plain_out
 
 lappend plain_commands "cont"
