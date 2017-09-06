@@ -128,7 +128,15 @@ if not hasattr(gdb, 'search_symbols'):
         try:
             unparsed, sal_options = gdb.decode_line("'{}':1".format(filename))
         except gdb.error as e:
+            # n.b. This is very brittle -- nothing in gdb specifies these error
+            # strings, so they could easily change.
+            # Until I find a better way, I'm simply adding each exception I
+            # come across that I know is fine to ignore.
+            # The only real way to get this is to add search_symbols as a
+            # function into the gdb python interface.
             if e.args[0].startswith('No line 1 in file "'):
+                return
+            if e.args[0].startswith('No source file named '):
                 return
             raise
 
