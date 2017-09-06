@@ -119,6 +119,16 @@ expect {
     default {unresolved "Didn't finish after continuing debug tracer"}
 }
 
+send "set call-graph-enabled off\nrun\n"
+expect {
+    # I would like to have "fail" here, but seeing as all other tests use
+    # 'unresolved', for consistency this seems like the best way.
+    "free_tree" { unresolved "Disabled call graph still printed trace" }
+    "(gdb)" { pass "Disabled call-graph did not print trace" } 
+    default { unresolved "Run with disabled call-graph did not finish" }
+}
+send "set call-graph-enabled on\n"
+
 lappend debug_commands "call-graph update + free_tree"
 lappend debug_out "No frame is currently selected."
 check_so_far "Debug call-graph adding elements gives reasonable error" debug_commands debug_out

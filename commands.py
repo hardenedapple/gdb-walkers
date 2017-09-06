@@ -515,6 +515,9 @@ class FuncGraph1(gdb.Command):
         print(print_str)
 
 
+# NOTE: Would like to have the call-graph-* parameters set as COMMAND_USER to
+# match the call-graph command, but this is an "Invalid command class argument"
+# and raises a RuntimeError.
 class CallGraphDynlibs(gdb.Parameter):
     '''Should `call-graph` trace symbols in dynamic libraries.
 
@@ -555,6 +558,41 @@ class CallGraphNonDebug(gdb.Parameter):
         return curval + ': ' + self.get_set_string()
 
 
+def set_call_graph_activity(should_enable):
+    '''Disable all breakpoints for the call-graph command'''
+    for addr in CallGraph.entry_breaks.keys():
+        CallGraph.entry_breaks[addr].enabled = should_enable
+        try:
+            for bp in CallGraph.ret_breaks[addr]:
+                bp.enabled = should_enable
+        except KeyError:
+            raise RuntimeError('Tracer in entry dict, not in return dict'
+                                ': {}'.format(addr))
+
+
+class CallGraphEnabled(gdb.Parameter):
+    '''Should `call-graph` be printing things out?
+
+    Boolean: true => `call-graph` breakpoints are enabled.
+             false => `call-graph` breakpoints are disabled.
+
+    '''
+    def __init__(self):
+        super(CallGraphEnabled, self).__init__('call-graph-enabled',
+                                               gdb.COMMAND_NONE,
+                                               gdb.PARAM_BOOLEAN)
+        # Default is enabled
+        self.value = True
+
+    def get_set_string(self):
+        set_call_graph_activity(self.value)
+        return 'call-graph tracing is {}'.format(
+            'enabled' if self.value else 'disabled')
+
+    def get_show_string(self, curval):
+        return curval + ': ' + self.get_set_string()
+
+
 class CallGraph(gdb.Command):
     '''Prefix command for call graph tracing commands.
 
@@ -584,6 +622,9 @@ class CallGraph(gdb.Command):
 
     @classmethod
     def clear_previous_breakpoints(cls):
+        # Can't iterate over the keys directly because we're modifying the
+        # dictionary, the keys() method returns a view into it, and modifying a
+        # structure while iterating over it will raise an exception.
         all_addresses = list(cls.entry_breaks.keys())
         for addr in all_addresses:
             remove_addr_trace(addr)
@@ -632,12 +673,18 @@ def add_tracer(symbol, arch):
     # address.
     # This also means that if the given regexp matches functions already
     # traced, we don't end up with duplicate tracers.
+    should_enable = gdb.parameter('call-graph-enabled')
     if addr not in CallGraph.entry_breaks:
-        CallGraph.entry_breaks[addr] = EntryBreak(entry_loc, *names)
+        new_bp = EntryBreak(entry_loc, *names)
+        new_bp.enabled = should_enable
+        CallGraph.entry_breaks[addr] = new_bp
     if addr not in CallGraph.ret_breaks:
-        CallGraph.ret_breaks[addr] = [
+        new_bps = [
             ReturnBreak(retloc, retdesc, *names)
             for retloc, retdesc in fn_return_addresses(addr, arch)]
+        for bp in new_bps:
+            bp.enabled = should_enable
+        CallGraph.ret_breaks[addr] = new_bps
 
 
 def trace_matching_functions(regexp):
@@ -897,3 +944,4 @@ CallGraphUpdate()
 CallGraphInfo()
 CallGraphNonDebug()
 CallGraphDynlibs()
+CallGraphEnabled()
