@@ -558,18 +558,6 @@ class CallGraphNonDebug(gdb.Parameter):
         return curval + ': ' + self.get_set_string()
 
 
-def set_call_graph_activity(should_enable):
-    '''Disable all breakpoints for the call-graph command'''
-    for addr in CallGraph.entry_breaks.keys():
-        CallGraph.entry_breaks[addr].enabled = should_enable
-        try:
-            for bp in CallGraph.ret_breaks[addr]:
-                bp.enabled = should_enable
-        except KeyError:
-            raise RuntimeError('Tracer in entry dict, not in return dict'
-                                ': {}'.format(addr))
-
-
 class CallGraphEnabled(gdb.Parameter):
     '''Should `call-graph` be printing things out?
 
@@ -584,8 +572,19 @@ class CallGraphEnabled(gdb.Parameter):
         # Default is enabled
         self.value = True
 
+    def set_call_graph_activity(self):
+        '''Disable all breakpoints for the call-graph command'''
+        for addr in CallGraph.entry_breaks.keys():
+            CallGraph.entry_breaks[addr].enabled = self.value
+            try:
+                for bp in CallGraph.ret_breaks[addr]:
+                    bp.enabled = self.value
+            except KeyError:
+                raise RuntimeError('Tracer in entry dict, not in return dict'
+                                    ': {}'.format(addr))
+
     def get_set_string(self):
-        set_call_graph_activity(self.value)
+        self.set_call_graph_activity()
         return 'call-graph tracing is {}'.format(
             'enabled' if self.value else 'disabled')
 
