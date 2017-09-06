@@ -41,7 +41,6 @@ lappend debug_out "	 free_tree"
 check_so_far "Debug call-graph update adds functions" debug_commands debug_out
 
 lappend debug_commands "cont"
-lappend debug_out "Continuing."
 lappend debug_out "     --> create_random_tree"
 lappend debug_out "         --> create_tree"
 lappend debug_out "         <-- create_tree+45"
@@ -113,7 +112,7 @@ lappend debug_out "             <-- free_tree+64"
 lappend debug_out "         <-- free_tree+64"
 lappend debug_out "     <-- free_tree+64"
 lappend debug_out " <-- main+119"
-check_so_far "Debug call-graph traces function calls" debug_commands debug_out
+check_without_reset "Debug call-graph traces function calls" debug_commands debug_out
 expect {
     "exited" {pass "Finish after continuing debug tracer"}
     default {unresolved "Didn't finish after continuing debug tracer"}
@@ -128,6 +127,15 @@ expect {
     default { unresolved "Run with disabled call-graph did not finish" }
 }
 send "set call-graph-enabled on\n"
+
+send "set call-graph-output test.txt\nrun\nset call-graph-output stdout\n"
+expect {
+    "free_tree" { unresolved "Redirected call graph still printed trace" }
+    "(gdb)" { pass "Redirected call-graph did not print trace" } 
+    default { unresolved "Run with disabled call-graph did not finish" }
+}
+set debug_commands {"!cat test.txt"}
+check_so_far "Redirected call-graph should output to file" debug_commands debug_out
 
 lappend debug_commands "call-graph update + free_tree"
 lappend debug_out "No frame is currently selected."

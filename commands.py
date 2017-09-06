@@ -593,6 +593,43 @@ class CallGraphEnabled(gdb.Parameter):
         return curval + ': ' + self.get_set_string()
 
 
+class CallGraphOutput(gdb.Parameter):
+    '''File call-graph should write to or 'stdout'.
+    
+    When set, this value determines where call-graph writes its output to.
+    i.e. `set call-graph-output trace.txt`
+    means that future call-graph output will go into trace.txt.
+    
+    Note: output will be appended to the file.
+    If you want to truncate the file between uses, use the shell.
+        `(gdb) !: > trace.txt`
+
+    '''
+    def __init__(self):
+        super(CallGraphOutput, self).__init__(
+            'call-graph-output', gdb.COMMAND_NONE, gdb.PARAM_STRING)
+        # Default
+        self.value = 'stdout'
+
+    def redirect_output(self):
+        old_file = CallGraph.output_file
+        if self.value == 'stdout':
+            CallGraph.output_file = sys.stdout
+        else:
+            new_file = open(self.value, 'a')
+            CallGraph.output_file = new_file
+
+        if old_file != sys.stdout:
+            old_file.close()
+        
+    def get_set_string(self):
+        self.redirect_output()
+        return 'call-graph trace output directed to {}'.format(self.value)
+
+    def get_show_string(self, curval):
+        return self.get_set_string()
+
+
 class CallGraph(gdb.Command):
     '''Prefix command for call graph tracing commands.
 
@@ -612,6 +649,16 @@ class CallGraph(gdb.Command):
     `call-graph-nondebug`.
     This parameter may be set with `set call-graph-nondebug`.
 
+    You can disable and enable the call-graph tracing by setting the parameter
+    `set call-graph-enabled [on|off]`.
+
+    `call-graph` output may be directed to a file with
+    `set call-graph-output [file]`, and back to stdout with
+    `set call-graph-output stdout`.
+    When being directed to a file the output is buffered, one way to ensure
+    buffered output is writted to disk is by directing the output back to the
+    same file.
+
     By default, call-graph ignores functions in the dynamic libraries (i.e.
     libc etc). This can be configured using `set call-graph-dynlib`.
 
@@ -619,6 +666,12 @@ class CallGraph(gdb.Command):
     entry_breaks = {}
     ret_breaks = {}
     indent_level = 0
+    output_file = sys.stdout
+
+    @classmethod
+    def do_trace(cls, message):
+        cls.output_file.write(message)
+        cls.output_file.write('\n')
 
     @classmethod
     def clear_previous_breakpoints(cls):
@@ -773,7 +826,7 @@ class EntryBreak(gdb.Breakpoint):
 
     def stop(self):
         CallGraph.indent_level += 4
-        print('{} --> {}'.format(' '*CallGraph.indent_level, self.desc))
+        CallGraph.do_trace('{} --> {}'.format(' '*CallGraph.indent_level, self.desc))
         return False
 
 
@@ -793,7 +846,7 @@ class ReturnBreak(gdb.Breakpoint):
         self.filename = filename
 
     def stop(self):
-        print('{} <-- {}'.format(' '*CallGraph.indent_level, self.desc))
+        CallGraph.do_trace('{} <-- {}'.format(' '*CallGraph.indent_level, self.desc))
         CallGraph.indent_level -= 4
         return False
 
@@ -945,3 +998,4 @@ CallGraphInfo()
 CallGraphNonDebug()
 CallGraphDynlibs()
 CallGraphEnabled()
+CallGraphOutput()

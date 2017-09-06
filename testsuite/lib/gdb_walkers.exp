@@ -69,6 +69,11 @@ proc ensure_finished { name } {
     }
 }
 
+proc check_without_reset { name command_name out_name} {
+    upvar 1 $command_name commands $out_name out
+    run_basic_test $name  "[join $commands \n]\n" [join $out "\r\n"]
+}
+
 proc check_so_far { name command_name out_name} {
     upvar 1 $command_name commands $out_name out
     run_basic_test $name  "[join $commands \n]\n" [join $out "\r\n"]
