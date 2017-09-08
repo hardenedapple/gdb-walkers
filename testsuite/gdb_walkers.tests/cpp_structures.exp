@@ -12,7 +12,7 @@ lappend output "850673521"
 lappend output "1140597833"
 lappend output "726325504"
 
-lappend commands "inferior 5"
+lappend commands "inferior $cpp_inferior"
 lappend commands "start 10"
 lappend commands "break -function 'create_and_print<std::__cxx11::list<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >' -label after_defined"
 lappend commands "cont"
