@@ -1,0 +1,30 @@
+set commands ""
+
+set output ""
+lappend output "1283169405"
+lappend output "89128932"
+lappend output "2124247567"
+lappend output "1902734705"
+lappend output "2141071321"
+lappend output "965494256"
+lappend output "108111773"
+lappend output "850673521"
+lappend output "1140597833"
+lappend output "726325504"
+
+lappend commands "inferior 5"
+lappend commands "start 10"
+lappend commands "break -function 'create_and_print<std::__cxx11::list<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >' -label after_defined"
+lappend commands "cont"
+lappend commands "pipe std-list &rand_container | show print-string {}->front(); \"\\n\""
+check_without_reset "Std List walker can print list elements" commands output
+
+set commands ""
+lappend commands "break -function 'create_and_print<std::vector<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >' -label after_defined"
+lappend commands "cont"
+lappend commands "pipe std-vector &rand_container | show print-string *{}; \"\\n\""
+check_without_reset "Std Vector walker can print vector elements" commands output
+
+ensure_finished "After cpp-structure walker tests"
+unset commands
+unset output

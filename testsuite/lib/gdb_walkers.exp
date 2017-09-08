@@ -14,6 +14,7 @@ expect {
 send "add-inferior -exec demos/tree\n"
 send "add-inferior -exec demos/tree_debug\n"
 send "add-inferior -exec demos/list\n"
+send "add-inferior -exec demos/cpp_structures\n"
 # set timeout 5
 # TODO For now assume we can never have a different inferior number (I don't
 # see how we can), but later on I should parse the output of the command and
@@ -21,6 +22,7 @@ send "add-inferior -exec demos/list\n"
 set plain_inferior 2
 set debug_inferior 3
 set list_inferior 4
+set cpp_inferior 5
 # expect {
 #     "
 

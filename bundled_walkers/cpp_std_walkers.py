@@ -12,31 +12,29 @@ class StdList(walkers.Walker):
     '''Walk over elements in a std::list<T> list.
 
     The walker
-        std-list <list start>; <element type>;
+        std-list <list start>
     is the equivalent of follow-until on the std::__detail::_List_node_base
     pointers of the underlying list cast to <element type>.
 
+    NOTE:
+        We take the type of the list from the expression given, no guarantees
+        are given about failing gracefully if the expression is of the wrong
+        type.
+
     Usage:
-        std-list &l; int | show print {}
-        eval &l | std-list int
-        std-list &l; int | show print {}->front()
+        std-list &l | show print {}
+        eval &l | std-list
+        # If the address is known but no special
+        eval ('std::__cxx11::list<int, std::allocator<int> >*')0x1111 | std-list
+        # For the elements of that list.
+        std-list &l | show print {}->front()
 
     '''
     name = 'std-list'
     tags = ['data']
 
     def __init__(self, args, first, _):
-        if first:
-            start, self.element_type = self.parse_args(args, [2, 2], ';')
-            self.start = self.calc(start)
-        else:
-            self.element_type = args
-            self.start = None
-
-        # TODO Is the list type always of this form?
-        # NOTE: the space between the last two angle brackets is required.
-        self.list_type = "'std::__cxx11::list<{},std::allocator<{}> >'*".format(
-            self.element_type, self.element_type)
+        self.start = self.calc(args.strip()) if first else None
 
     def __iter_helper(self, element):
         # Observations of the implementation of std::list<int>
@@ -61,9 +59,38 @@ class StdList(walkers.Walker):
                        ' {cur} == {end};'
                        ' (({type}){cur}).{next}').format(**kwargs)
 
-        yield from (self.Ele(self.list_type, e.v)
+        yield from (self.Ele(element.t, e.v)
                     for e in
                     walkers.create_pipeline(walker_text))
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(self.start, inpipe, self.__iter_helper)
+
+
+class StdVector(walkers.Walker):
+    '''Walk over elements in std::vector<T> vector.
+
+    NOTE:
+        This walker takes the type of the vector from the expression given.
+        If the vector is not of the same type as the expression given there may
+        very well be problems.
+
+    Usage:
+        std-vector &v | show print *{}
+        eval &v | std-vector | show print *{}
+
+    '''
+    name = 'std-vector'
+    tags = ['data']
+
+    def __init__(self, args, first, _):
+        self.start = self.calc(args.strip()) if first else None
+
+    def __iter_helper(self, element):
+        walker_text = ('follow-until {0}._M_impl._M_start; '
+                       '{{}} >= {0}._M_impl._M_finish; '
+                       '{{}} + 1').format(element)
+        yield from walkers.create_pipeline(walker_text)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start, inpipe, self.__iter_helper)
