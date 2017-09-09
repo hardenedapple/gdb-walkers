@@ -6,19 +6,20 @@
 #include <list>
 #include <vector>
 #include <utility>
+#include <map>
 
 
 using namespace std;
 
 /*
-   vimcmd: let &makeprg="clang++ -std=c++11 -Wall -W -g % -o %:r"
+   vimcmd: let &makeprg="g++ -Wall -W -g % -o %:r"
    Some functions to create a few STL containers.
    I should then be able to test my walkers on these containers.
  */
 
 // Just create a random container so I can test my gdb extensions on it.
 template<typename container, typename Iter>
-void create_and_print(Iter start, Iter end)
+void create_container(Iter start, Iter end)
 {
   container rand_container(start, end);
 after_defined:
@@ -50,8 +51,20 @@ int main(int argc, char *argv[])
   auto begin_it = rand_elements.begin();
   auto end_it = rand_elements.end();
 
-  create_and_print<list<int>>(begin_it, end_it);
-  create_and_print<vector<int>>(begin_it, end_it);
+  create_container<list<int>>(begin_it, end_it);
+  create_container<vector<int>>(begin_it, end_it);
+
+  // All things that require an iterator over pairs.
+  // Make an iterator over pairs where the key is an index and the value is the
+  // random element at that index.
+  // This means that the order should be preserved in things like std::map
+  vector<pair<int, int>> rand_pairs;
+  for (size_t i = 0; i < rand_elements.size(); ++i)
+    rand_pairs.push_back(pair<int, int>(i, rand_elements[i]));
+
+  auto pair_begin_it = rand_pairs.begin();
+  auto pair_end_it = rand_pairs.end();
+  create_container<map<int, int>>(pair_begin_it, pair_end_it);
 
   return 0;
 }

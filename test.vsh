@@ -990,20 +990,20 @@ vshcmd: > shellpipe disassemble main ! grep call
 vshcmd: > # Inspecting the CPP structures
 vshcmd: > inferior 5
 vshcmd: > start 10
-vshcmd: > break -function 'create_and_print<std::__cxx11::list<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >' -label after_defined
+vshcmd: > break -function 'create_container<std::__cxx11::list<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >' -label after_defined
 vshcmd: > cont
 vshcmd: > pipe std-list &rand_container | show print-string {}->front(); "\n"
 [Switching to inferior 5 [<null>] (/home/matthew/share/repos/gdb-config/demos/cpp_structures)]
 (gdb) Temporary breakpoint 1 at 0xaae: main. (4 locations)
 Starting program: /home/matthew/share/repos/gdb-config/demos/cpp_structures 10
 
-Temporary breakpoint 1, main (argc=2, argv=0x7fffffffe4b8) at demos/cpp_structures.cpp:29
-29	{
-(gdb) Breakpoint 2 at 0x555555555b04: file demos/cpp_structures.cpp, line 24.
+Temporary breakpoint 1, main (argc=2, argv=0x7fffffffe4b8) at demos/cpp_structures.cpp:30
+30	{
+(gdb) Breakpoint 2 at 0x555555555dd0: file demos/cpp_structures.cpp, line 25.
 (gdb) Continuing.
 
-Breakpoint 2, create_and_print<std::__cxx11::list<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > > (start=1283169405, end=0) at demos/cpp_structures.cpp:23
-23	  container rand_container(start, end);
+Breakpoint 2, create_container<std::__cxx11::list<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > > (start=1283169405, end=0) at demos/cpp_structures.cpp:24
+24	  container rand_container(start, end);
 (gdb) 1283169405
 89128932
 2124247567
@@ -1015,14 +1015,14 @@ Breakpoint 2, create_and_print<std::__cxx11::list<int, std::allocator<int> >, __
 1140597833
 726325504
 (gdb) 
-vshcmd: > break -function 'create_and_print<std::vector<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >' -label after_defined
+vshcmd: > break -function 'create_container<std::vector<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >' -label after_defined
 vshcmd: > cont
 vshcmd: > pipe std-vector &rand_container | show print-string *{}; "\n"
-Breakpoint 3 at 0x555555555b99: file demos/cpp_structures.cpp, line 24.
+Breakpoint 3 at 0x555555555e65: file demos/cpp_structures.cpp, line 25.
 (gdb) Continuing.
 
-Breakpoint 3, create_and_print<std::vector<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > > (start=1283169405, end=0) at demos/cpp_structures.cpp:23
-23	  container rand_container(start, end);
+Breakpoint 3, create_container<std::vector<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > > (start=1283169405, end=0) at demos/cpp_structures.cpp:24
+24	  container rand_container(start, end);
 (gdb) 1283169405
 89128932
 2124247567
