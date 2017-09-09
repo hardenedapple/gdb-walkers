@@ -295,11 +295,11 @@ class Array(walkers.Walker):
     '''Iterate over each element in an array.
 
     Usage:
-        If this is the first walker:
-            array type; start_address; count
+        array type; start_address; count
 
-        Otherwise:
-            array type; count
+        start_address and count are arbitrary expressions, if this walker is
+        not the first walker in the pipeline then {} is replaced by the
+        incoming element.
 
     Example:
         array char *; argv; argc
@@ -309,14 +309,14 @@ class Array(walkers.Walker):
     tags = ['data']
 
     def __init__(self, args, first, _):
+        typename, self.start_expr, self.count_expr = self.parse_args(
+            args, [3, 3], ';')
+
         if first:
-            typename, start_addr, count = self.parse_args(args, [3, 3], ';')
-            self.start_addr = eval_int(start_addr)
-            self.__iter_helper = self.__iter_first
+            self.start = eval_int(self.start_expr)
+            self.count = eval_int(self.count_expr)
         else:
-            typename, count = self.parse_args(args, [2, 2], ';')
-            self.start_addr = None
-            self.__iter_helper = self.__iter_pipe
+            self.start = None
 
         # TODO This is hacky, and we don't handle char[], &char that users
         # might like to use.
@@ -326,21 +326,24 @@ class Array(walkers.Walker):
             self.element_size = gdb.lookup_type(typename).sizeof
         # We're iterating over pointers to the values in the array.
         self.typename = typename + '*'
-        self.count = eval_int(count)
 
-    def __iter_first(self, _):
-        cur_pos = self.start_addr
-        for _ in range(self.count):
-            yield self.Ele(self.typename, cur_pos)
-            cur_pos += self.element_size
+    def __iter_single(self, start, count):
+        pos = start
+        for _ in range(count):
+            yield self.Ele(self.typename, pos)
+            pos += self.element_size
 
-    def __iter_pipe(self, inpipe):
-        for element in inpipe:
-            self.start_addr = element.v
-            yield from self.__iter_first(None)
+    def __iter_helper(self, element):
+        count = eval_int(self.format_command(element, self.count_expr))
+        start = eval_int(self.format_command(element, self.start_expr))
+        yield from self.__iter_single(start, count)
 
     def iter_def(self, inpipe):
-        return self.__iter_helper(inpipe)
+        if self.start:
+            yield from self.__iter_single(self.start, self.count)
+        else:
+            for element in inpipe:
+                yield from self.__iter_helper(element)
 
 
 # Probably should do something about the code duplication between Max and Min

@@ -687,7 +687,7 @@ vshcmd: > pipe array char; 1; 10
 0x9
 0xa
 (gdb) 
-vshcmd: > pipe eval 1 | array char; 10
+vshcmd: > pipe eval 1 | array char; {}; 10
 0x1
 0x2
 0x3
