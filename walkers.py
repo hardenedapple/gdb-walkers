@@ -67,6 +67,9 @@ class PipeElement():
     def __str__(self):
         return '(({}){:#x})'.format(self.t, self.v)
 
+    def __int__(self):
+        return self.v
+
 
 class WalkerMetaclass(abc.ABCMeta):
     '''Automatically register walkers once defined.'''

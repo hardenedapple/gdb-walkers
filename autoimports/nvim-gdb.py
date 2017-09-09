@@ -67,10 +67,7 @@ class NvimUndoTree(walkers.Walker):
     name = 'nvim-undohist'
 
     def __init__(self, args, first, _):
-        if first:
-            self.start_addr = eval_int(args)
-            return
-        self.start_addr = None
+        self.start_addr = eval_int(args) if first else None
 
     def walk_alts(self, init_addr):
         # First walk over all in the 'alt_next' direction
@@ -93,22 +90,14 @@ class NvimUndoTree(walkers.Walker):
             yield uh
             yield from self.walk_alts(uh)
 
+    def __iter_helper(self, element):
+        ele = self.Ele('u_header_T *', int(element))
+        yield ele
+        yield from self.walk_alts(ele)
+        yield from self.walk_hist(ele)
+
     def iter_def(self, inpipe):
-        if self.start_addr is not None:
-            if self.start_addr == 0:
-                return
-            ele = self.Ele('u_header_T *', self.start_addr)
-            yield ele
-            yield from self.walk_alts(ele)
-            yield from self.walk_hist(ele)
-        else:
-            for element in inpipe:
-                if element.v == 0:
-                    continue
-                ele = self.Ele('u_header_T *', element.v)
-                yield ele
-                yield from self.walk_alts(ele)
-                yield from self.walk_hist(ele)
+        yield from self.call_with(self.start_addr, inpipe, self.__iter_helper)
 
 
 class NvimBuffers(walkers.Walker):

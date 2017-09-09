@@ -21,6 +21,9 @@ vshcmd: > shellpipe pipe eval &curwin->w_folds | nvim-folds ! cat > garray.txt
 vshcmd: > !diff folds.txt garray.txt   # Should be same
 vshcmd: > !rm folds.txt garray.txt
 vshcmd: > # Check these fit with your vim process
+vshcmd: > # Note that this will print what text was originally in the changed range.
+vshcmd: > # The easiest method to check everything makes sense is by deleting a line
+vshcmd: > pipe nvim-undohist curbuf->b_u_oldhead | if {}->uh_entry->ue_array != 0 | show print *{} | array char *; {}->uh_entry->ue_array; {}->uh_entry->ue_size | show print *{}
 vshcmd: > pipe nvim-undohist curbuf->b_u_oldhead | show print *{}
 vshcmd: > shellpipe pipe nvim-undohist curbuf->b_u_oldhead ! cat > undohist.txt
 vshcmd: > shellpipe pipe eval curbuf->b_u_oldhead | nvim-undohist ! cat > alt.txt
