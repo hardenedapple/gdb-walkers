@@ -5,7 +5,7 @@ Since the implementation is not a part of the standard and subject to change
 without notice, the walkers in this file are inherently unstable.
 '''
 
-from helpers import eval_int
+from helpers import eval_uint
 import walkers
 
 class StdList(walkers.Walker):
@@ -54,7 +54,7 @@ class StdList(walkers.Walker):
             'cur': '{}'
         }
         length_node = '(({type}){init}).{prev}'.format(**kwargs)
-        kwargs['end'] = eval_int(length_node)
+        kwargs['end'] = eval_uint(length_node)
         walker_text = ('follow-until (({type}){init});'
                        ' {cur} == {end};'
                        ' (({type}){cur}).{next}').format(**kwargs)

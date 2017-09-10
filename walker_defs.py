@@ -10,7 +10,7 @@ walkers.register_walker().
 import re
 import operator
 import gdb
-from helpers import (eval_int, function_disassembly, as_uintptr, uintptr_size,
+from helpers import (eval_uint, function_disassembly, as_uintptr, uintptr_size,
                      file_func_split, search_symbols)
 import walkers
 
@@ -164,8 +164,8 @@ class Instruction(walkers.Walker):
         if first:
             self.start_address = self.calc(cmd_parts.pop(0))
         end = cmd_parts.pop(0)
-        self.end_address = None if end == 'NULL' else eval_int(end)
-        self.count = eval_int(cmd_parts.pop(0)) if cmd_parts else None
+        self.end_address = None if end == 'NULL' else eval_uint(end)
+        self.count = eval_uint(cmd_parts.pop(0)) if cmd_parts else None
 
     def disass(self, start_address):
         '''
@@ -313,8 +313,8 @@ class Array(walkers.Walker):
             args, [3, 3], ';')
 
         if first:
-            self.start = eval_int(self.start_expr)
-            self.count = eval_int(self.count_expr)
+            self.start = eval_uint(self.start_expr)
+            self.count = eval_uint(self.count_expr)
         else:
             self.start = None
 
@@ -334,8 +334,8 @@ class Array(walkers.Walker):
             pos += self.element_size
 
     def __iter_helper(self, element):
-        count = eval_int(self.format_command(element, self.count_expr))
-        start = eval_int(self.format_command(element, self.start_expr))
+        count = eval_uint(self.format_command(element, self.count_expr))
+        start = eval_uint(self.format_command(element, self.start_expr))
         yield from self.__iter_single(start, count)
 
     def iter_def(self, inpipe):
@@ -560,7 +560,7 @@ class Terminated(walkers.Walker):
             self.start = None
 
     def follow_to_termination(self, start):
-        while eval_int(self.format_command(start, self.test)) == 0:
+        while eval_uint(self.format_command(start, self.test)) == 0:
             yield start
             start = self.eval_command(start, self.follow)
 
@@ -683,7 +683,7 @@ class CalledFunctions(walkers.Walker):
     #   Allow default arguments?
     def __init__(self, args, first, _):
         self.cmd_parts = self.parse_args(args, [3,3] if first else [2,2], ';')
-        self.maxdepth = eval_int(self.cmd_parts[-1])
+        self.maxdepth = eval_uint(self.cmd_parts[-1])
         self.file_regex = self.cmd_parts[-2].strip()
         # User asked for specific files, wo only know the filename if there is
         # debugging information, hence ignore all functions that don't have
@@ -695,7 +695,7 @@ class CalledFunctions(walkers.Walker):
         # hypothetical-call-stack walker to see what the current stack is.
         type(self).hypothetical_stack = []
         if first:
-            self.__add_addr(eval_int(self.cmd_parts[0]), 0)
+            self.__add_addr(eval_uint(self.cmd_parts[0]), 0)
         self.arch = gdb.current_arch()
 
     def __add_addr(self, addr, depth):

@@ -15,7 +15,7 @@ it.
 '''
 import itertools as itt
 import gdb
-from helpers import offsetof, eval_int
+from helpers import offsetof, eval_uint
 import walkers
 
 
@@ -67,7 +67,7 @@ class NvimUndoTree(walkers.Walker):
     name = 'nvim-undohist'
 
     def __init__(self, args, first, _):
-        self.start_addr = eval_int(args) if first else None
+        self.start_addr = eval_uint(args) if first else None
 
     def walk_alts(self, init_addr):
         # First walk over all in the 'alt_next' direction
@@ -180,10 +180,10 @@ class NvimWindows(walkers.Walker):
 
     def __make_wlkr_text(self, element):
         # So the user can put '{}' in their tabpage definition.
-        startptr = eval_int(self.format_command(element, self.startptr)
-                            if element is not None else self.startptr)
+        startptr = eval_uint(self.format_command(element, self.startptr)
+                             if element is not None else self.startptr)
         # The current tab doesn't have windows stored in it.
-        if startptr == eval_int('curtab'):
+        if startptr == eval_uint('curtab'):
             # Doesn't really matter if startptr is evaluated or not before
             # passing to follow-until (because follow-until evaluates the
             # expression as an integer anyway).
@@ -243,7 +243,7 @@ class NvimMultiQueues(walkers.Walker):
         arg_list = self.parse_args(args, [1, 2], ';')
         self.deref = len(arg_list) == 2
         self.expr = arg_list[0]
-        self.start = eval_int(self.expr) if first else None
+        self.start = eval_uint(self.expr) if first else None
 
     def __ptr_to_type(self, pointer, ptype):
         return gdb.Value(pointer).cast(ptype).dereference()
@@ -304,7 +304,7 @@ class NvimCharBuffer(walkers.Walker):
     name = 'nvim-buffblocks'
     def __init__(self, args, first, _):
         if first:
-            self.start_addr = eval_int(args)
+            self.start_addr = eval_uint(args)
         else:
             self.start_addr = None
 
@@ -333,7 +333,7 @@ class NvimMapBlock(walkers.Walker):
     name = 'nvim-mapblock'
     def __init__(self, args, first, _):
         if first:
-            self.start_addr = eval_int(args)
+            self.start_addr = eval_uint(args)
         else:
             self.start_addr = None
 
@@ -374,7 +374,7 @@ class NvimMappings(walkers.Walker):
     def __init__(self, args, first, _):
         self.first = first
         self.use_global = first and not args
-        self.start_buf = None if not args else self.Ele('buf_T *', eval_int(args))
+        self.start_buf = None if not args else self.Ele('buf_T *', eval_uint(args))
 
     def __iter_helper(self, arg):
         map_array = 'maphash' if self.use_global else '((buf_T *){})->b_maphash'.format(arg)
@@ -406,7 +406,7 @@ class NvimGarray(walkers.Walker):
     def __init__(self, args, first, _):
         cmd_parts = self.parse_args(args, [2, 2] if first else [1, 1], ';')
         self.t = cmd_parts[-1]
-        self.start_address = eval_int(cmd_parts[0]) if first else None
+        self.start_address = eval_uint(cmd_parts[0]) if first else None
 
     def iter_helper(self, arg):
         gar_ptr = '((garray_T *){})'.format(arg)

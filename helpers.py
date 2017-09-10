@@ -40,14 +40,11 @@ __uintptr_t = find_uintptr_t()
 def as_uintptr(x): return x.cast(__uintptr_t)
 def uintptr_size(): return __uintptr_t.sizeof
 
-def eval_int(gdb_expr):
-    '''Return the python integer value of `gdb_expr` and it's type
+def eval_uint(gdb_expr):
+    '''Return the python unsigned integer value of `gdb_expr` without it's type
 
     This is to be used over `int(gdb.parse_and_eval(gdb_expr))` to
     account for the given description being a symbol.
-
-    Returns (type_description, integer_value)
-    where type_description is a string.
 
     '''
     # Cast to __uintptr_t to find addresses of functions (e.g.
@@ -76,7 +73,7 @@ def start_handler(_):
 
 
 def offsetof(typename, field):
-    return eval_int('&((({} *)0)->{})'.format(typename, field))
+    return eval_uint('&((({} *)0)->{})'.format(typename, field))
 
 
 # Update __uintptr_t value on first objfile added because by then we'll know

@@ -4,7 +4,7 @@ Example file that creates a walker over elements in the tree defined in tree.c
 '''
 
 import gdb
-from helpers import eval_int
+from helpers import eval_uint
 import walkers
 
 class TreeElements(walkers.Walker):
@@ -26,7 +26,7 @@ class TreeElements(walkers.Walker):
 
     def __init__(self, args, first, _):
         if first:
-            self.start_addr = self.Ele('node_t *', eval_int(args))
+            self.start_addr = self.Ele('node_t *', eval_uint(args))
             return
         self.start_addr = None
 

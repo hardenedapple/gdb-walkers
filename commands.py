@@ -12,7 +12,7 @@ import subprocess as sp
 from collections import namedtuple
 import re
 import gdb
-from helpers import (eval_int, function_disassembly, func_and_offset,
+from helpers import (eval_uint, function_disassembly, func_and_offset,
                      file_func_split, as_uintptr, FakeSymbol)
 
 
@@ -245,7 +245,7 @@ class GlobalUsed(gdb.Command):
 
     def invoke(self, arg, _):
         args = gdb.string_to_argv(arg)
-        func_addr = eval_int(''.join(args[:-1]))
+        func_addr = eval_uint(''.join(args[:-1]))
         # Let possible error raise -- user needs to know something went wrong.
         func_dis, func_name, func_file = function_disassembly(func_addr)
         glob_name = args[-1]
@@ -455,7 +455,7 @@ class FuncGraph1(gdb.Command):
         leaving a function), True otherwise.
 
         '''
-        curfp = eval_int('$rbp')
+        curfp = eval_uint('$rbp')
         if not self.fp_stack or curfp < self.fp_stack[-1]:
             self.fp_stack.append(curfp)
             return True
@@ -469,7 +469,7 @@ class FuncGraph1(gdb.Command):
         return False
 
     def invoke(self, *_):
-        pos = eval_int('$pc')
+        pos = eval_uint('$pc')
         line = gdb.find_pc_line(pos)
         if not line.symtab:
             return
