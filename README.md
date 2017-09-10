@@ -6,14 +6,14 @@ data structures, `call-graph` command (idea taken from `dtrace -F`), and
 `shellpipe` that pipes the output of a command to a shell process.
 
 The information passed between each walker is a single integer and a type
-string. In many pipelines that type string is a pointer. Many walkers can take
-a format marker of `{}` that marks where the string `((type)value)` is to be
+string. In many pipelines that represents a pointer. Many walkers can take a
+format marker of `{}` that marks where the string `((type)value)` is to be
 placed. In these walkers the marker can be replaced with `{.v}` or `{.t}` to
 use the value or type respectively.
-When using the value in a command that separates based on whitespace, sometimes
-the marker `{}` will work, but other times not. It depends on whether the type
-is `struct somestruct` or `int *`. To avoid surprises it's recommended to use
-`{.v}` when the type information is not needed.
+When passing this value to a gdb command that separates based on whitespace,
+sometimes the marker `{}` will work, but other times not. It depends on whether
+the type is `struct somestruct` or `int *`. To avoid surprises it's recommended
+to use `{.v}` when the type information is not needed.
 
 Note: In order to avoid surprises, `call-graph` by default doesn't work with
 non-debug functions. This is so that naive regular expressions don't end up
@@ -68,7 +68,9 @@ To automatically load your walkers when a given object file is loaded in gdb
 put the python source file in the autoimports/ directory under the name
 `<basename-of-program>-gdb.py`.
 To load the walker definitions on startup put `source <your-file>` in
-`~/.gdbinit`.
+`~/.gdbinit` after sourcing `~/.config/gdb/gdbinit`.
+Alternatively, you can put `import <pathname>` in a python module that you are
+sourceing yourself.
 
 # Getting help
 
