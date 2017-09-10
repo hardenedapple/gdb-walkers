@@ -230,8 +230,8 @@ def create_walker(walker_def, first=False, last=False):
 
     # Default walker is to evaluate the expression
     if walker_name not in walkers:
-        args = walker_name + ' ' + args
-        walker_name = 'eval'
+        # TODO make suggestions (e.g. No walker "aray" .. did you mean "array"?)
+        raise ValueError('Walker {} does not exist'.format(walker_name))
 
     walker = walkers[walker_name]
     if walker.require_input and first or walker.require_output and last:
