@@ -912,6 +912,13 @@ of
 set
 there
 (gdb) 
+vshcmd: > pipe array auto; argv; argc | array auto; *{}; 3 | show printf "%c", *{}
+/hoHelthethiisassetofarg(gdb) 
+vshcmd: > cont
+Continuing.
+Usage: /home/matthew/share/repos/gdb-config/demos/tree_debug <seed>
+[Inferior 3 (process 8762) exited with code 01]
+(gdb) 
 vshcmd: > pipe defined-functions tree.c:.* | show whereis {.v}
 create_tree demos/tree.c:62
 free_tree demos/tree.c:53

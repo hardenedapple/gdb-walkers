@@ -42,6 +42,11 @@ run_basic_test "max" "$walk_args | max $first_char | $show_arg\n" "there"
 run_basic_test "min" "$walk_args | min $first_char | $show_arg" "Hello"
 run_basic_test "sort" "$walk_args | sort $first_char | $show_arg" "Hello\r\na\r\narguments\r\nis\r\nof\r\nset\r\nthere\r\nthis"
 run_basic_test "dedup" "$walk_args | sort $first_char | dedup $first_char | $show_arg" "Hello\r\na\r\nis\r\nof\r\nset\r\nthere\r\n"
+
+set walk_args "pipe array auto; argv; argc"
+set inner_walk "array auto; *{}; 3"
+run_basic_test "array auto" "$walk_args | $inner_walk | show printf \"\%c\", *{}\n" "/hoHelthethiisassetofarg"
+
 wait_for_exit "Finish after arguments"
 unset walk_args
 unset show_arg

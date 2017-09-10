@@ -13,6 +13,7 @@ import gdb
 from helpers import (eval_uint, function_disassembly, as_uintptr, uintptr_size,
                      file_func_split, search_symbols)
 import walkers
+import itertools as itt
 
 # TODO
 #   I would like to use the python standard argparse library to parse
@@ -325,10 +326,24 @@ class Array(walkers.Walker):
             args, [3, 3], ';')
 
         if first:
-            self.start = eval_uint(self.start_expr)
             self.count = eval_uint(self.count_expr)
+            start = self.calc(self.start_expr)
+            self.start = start.v
+            if typename == 'auto':
+                self.typename = start.t
+                # We could add some special stuff in self.calc() just for this
+                # one function, we could reimplement self.calc() here, or we
+                # could just parse the expression twice and take the
+                # performance hit in exchange for simplicity.
+                self.element_size = gdb.parse_and_eval(self.start_expr
+                                                       ).type.target().sizeof
+                return
         else:
             self.start = None
+            if typename == 'auto':
+                self.typename = None
+                self.element_size = None
+                return
 
         # TODO This is hacky, and we don't handle char[], &char that users
         # might like to use.
@@ -339,23 +354,38 @@ class Array(walkers.Walker):
         # We're iterating over pointers to the values in the array.
         self.typename = typename + '*'
 
-    def __iter_single(self, start, count):
+    def __iter_single(self, start, count, typename, element_size):
         pos = start
         for _ in range(count):
-            yield self.Ele(self.typename, pos)
-            pos += self.element_size
+            yield self.Ele(typename, pos)
+            pos += element_size
 
-    def __iter_helper(self, element):
-        count = eval_uint(self.format_command(element, self.count_expr))
+    def __iter_known(self, element):
         start = eval_uint(self.format_command(element, self.start_expr))
-        yield from self.__iter_single(start, count)
+        count = eval_uint(self.format_command(element, self.count_expr))
+        yield from self.__iter_single(start, count,
+                                      self.typename,
+                                      self.element_size)
+
+    def __iter_unknown(self, element):
+        count = eval_uint(self.format_command(element, self.count_expr))
+        start = self.eval_command(element, self.start_expr)
+        # Like in __init__() seems simpler to evaluate twice than go for
+        # performance.
+        element_size = gdb.parse_and_eval(
+            self.format_command(element, self.start_expr)
+        ).type.target().sizeof
+        yield from self.__iter_single(start.v, count, start.t, element_size)
 
     def iter_def(self, inpipe):
         if self.start:
-            yield from self.__iter_single(self.start, self.count)
+            yield from self.__iter_single(
+                self.start, self.count, self.typename, self.element_size)
         else:
-            for element in inpipe:
-                yield from self.__iter_helper(element)
+            for iterobj in map(
+                    self.__iter_known if self.typename else self.__iter_unknown,
+                    inpipe):
+                yield from iterobj
 
 
 # Probably should do something about the code duplication between Max and Min
