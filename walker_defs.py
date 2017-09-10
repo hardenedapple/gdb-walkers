@@ -224,6 +224,8 @@ class If(walkers.Walker):
 class Head(walkers.Walker):
     '''Only take first `N` items of the pipeline.
 
+    Can use `head -N` to take all but the last N elements.
+
     Usage:
        head [N]
 
@@ -233,19 +235,27 @@ class Head(walkers.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.limit = eval_int(args)
+        # Don't use eval_uint as that means we can't use `-1`
+        # eval_uint() is really there to eval anything that could be a pointer.
+        self.limit = int(gdb.parse_and_eval(args))
 
     def iter_def(self, inpipe):
-        if self.limit == 0:
+        if self.limit < 0:
+            all_elements = list(inpipe)
+            yield from all_elements[:self.limit]
+        elif self.limit == 0:
             return
-        for count, element in enumerate(inpipe):
-            yield element
-            if count + 1 >= self.limit:
-                break
+        else:
+            for count, element in enumerate(inpipe):
+                yield element
+                if count + 1 >= self.limit:
+                    break
 
 
 class Tail(walkers.Walker):
     '''Limit walker to last `N` items of pipeline.
+
+    Can use `tail -N` to pass all but the N first elements.
 
     Usage:
         tail [N]
@@ -256,18 +266,29 @@ class Tail(walkers.Walker):
     tags = ['general']
 
     def __init__(self, args, *_):
-        self.limit = eval_int(args)
+        # Don't use eval_uint as that means we can't use `-1`
+        # eval_uint() is really there to eval anything that could be a pointer.
+        self.limit = int(gdb.parse_and_eval(args))
 
     def iter_def(self, inpipe):
-        # Could have the constant memory version of having a list of the number
-        # of elements required, and setting each of those values in turn,
-        # wrapping around when reaching the end.
-        # In practice, this is a pain and doesn't change the running time.
-        # I could look into whether the list is implemented as an array etc,
-        # but it doesn't seem worth the trouble at the moment.
-        all_elements = list(inpipe)
-        for element in all_elements[-self.limit:]:
-            yield element
+        if self.limit < 0:
+            limit = abs(self.limit)
+            # Consume the needed number of elements from our input
+            for count, _ in enumerate(inpipe):
+                if count + 1 >= limit:
+                    break
+            yield from inpipe
+        elif self.limit > 0:
+            # Could have the constant memory version of having a list of the
+            # number of elements required, and setting each of those values in
+            # turn, wrapping around when reaching the end.
+            # In practice, this is a pain and doesn't change the running time.
+            # I could look into whether the list is implemented as an array
+            # etc, but it doesn't seem worth the trouble at the moment.
+            all_elements = list(inpipe)
+            yield from all_elements[-self.limit:]
+        else:
+            return
 
 
 class Count(walkers.Walker):

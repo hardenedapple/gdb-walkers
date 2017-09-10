@@ -778,7 +778,31 @@ vshcmd: > pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse
 0x9
 0xa
 (gdb) 
+vshcmd: > pipe follow-until 20; {} <= 0; {} - 1 | tail -10 | reverse 
+0x1
+0x2
+0x3
+0x4
+0x5
+0x6
+0x7
+0x8
+0x9
+0xa
+(gdb) 
 vshcmd: > pipe follow-until 100; {} <= 0; {} - 1 | skip-until {} == 10 | reverse
+0x1
+0x2
+0x3
+0x4
+0x5
+0x6
+0x7
+0x8
+0x9
+0xa
+(gdb) 
+vshcmd: > pipe follow-until 1; {} > 20; {} + 1 | head -10
 0x1
 0x2
 0x3
@@ -937,8 +961,8 @@ Traceback (most recent call last):
   File "/home/matthew/.config/gdb/walkers.py", line 240, in create_walker
     return walker(args if args else None, first, last)
   File "/home/matthew/.config/gdb/walker_defs.py", line 314, in __init__
-    self.start_addr = eval_int(start_addr)
-  File "/home/matthew/.config/gdb/helpers.py", line 56, in eval_int
+    self.start_addr = eval_uint(start_addr)
+  File "/home/matthew/.config/gdb/helpers.py", line 56, in eval_uint
     return int(gdb.parse_and_eval(gdb_expr).cast(__uintptr_t))
 gdb.error: No symbol table is loaded.  Use the "file" command.
 Error occurred in Python command: No symbol table is loaded.  Use the "file" command.
