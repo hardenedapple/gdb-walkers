@@ -85,21 +85,13 @@ class Eval(walkers.Walker):
 
     def __init__(self, args, first, _):
         self.cmd = args
-        if first:
-            self.__iter_helper = self.__iter_without_input
-            return
-
-        self.__iter_helper = self.__iter_with_input
-
-    def __iter_without_input(self, _):
-        yield self.calc(self.cmd)
-
-    def __iter_with_input(self, inpipe):
-        for element in inpipe:
-            yield self.eval_command(element)
+        self.first = first
 
     def iter_def(self, inpipe):
-        return self.__iter_helper(inpipe)
+        if self.first:
+            yield self.calc(self.cmd)
+        else:
+            yield from (self.eval_command(ele) for ele in inpipe)
 
 
 class Show(walkers.Walker):
@@ -161,8 +153,7 @@ class Instruction(walkers.Walker):
         cmd_parts = self.parse_args(args, [2, 3] if first else [1, 2], ';')
         self.arch = gdb.current_arch()
 
-        if first:
-            self.start_address = self.calc(cmd_parts.pop(0))
+        self.start_address = self.calc(cmd_parts.pop(0)) if first else None
         end = cmd_parts.pop(0)
         self.end_address = None if end == 'NULL' else eval_uint(end)
         self.count = eval_uint(cmd_parts.pop(0)) if cmd_parts else None
@@ -546,8 +537,7 @@ class Since(walkers.Walker):
             if self.eval_command(element).v:
                 yield element
                 break
-        for element in inpipe:
-            yield element
+        yield from inpipe
 
 
 class Terminated(walkers.Walker):

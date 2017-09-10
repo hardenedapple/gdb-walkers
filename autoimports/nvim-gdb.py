@@ -36,10 +36,7 @@ class NvimFold(walkers.Walker):
 
     def __init__(self, args, first, _):
         self.nested_offset = offsetof('fold_T', 'fd_nested')
-        if first:
-            self.start_addr = self.calc(args)
-            return
-        self.start_addr = None
+        self.start_addr = self.calc(args) if first else None
 
     def iter_folds(self, init_addr):
         gar_ptr = self.Ele('garray_T *', init_addr.v)
@@ -303,10 +300,7 @@ class NvimCharBuffer(walkers.Walker):
     '''
     name = 'nvim-buffblocks'
     def __init__(self, args, first, _):
-        if first:
-            self.start_addr = eval_uint(args)
-        else:
-            self.start_addr = None
+        self.start_addr = eval_uint(args) if first else None
 
     def iter_helper(self, addr):
         buff_list = ''.join(['linked-list &(((buffheader_T *){})->bh_first);'.format(addr),
@@ -332,10 +326,7 @@ class NvimMapBlock(walkers.Walker):
     '''
     name = 'nvim-mapblock'
     def __init__(self, args, first, _):
-        if first:
-            self.start_addr = eval_uint(args)
-        else:
-            self.start_addr = None
+        self.start_addr = eval_uint(args) if first else None
 
     def iter_helper(self, addr):
         map_list = 'linked-list {}; mapblock_T; m_next'.format(addr)
