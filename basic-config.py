@@ -40,13 +40,7 @@ import walker_defs
 walkers.confdir = confdir
 del confdir
 
-# TODO
-#   At the moment I don't know whether to use a MetaPathFinder or a
-#   PathEntryFinder.
-#   Characteristics I want are:
-#       Can ensure import_module(x) isn't cached.
-#       Can translate that call into something that does a non-standard import.
-class AutoImportsFinder(importlib.abc.MetaPathFinder):
+class AutoImportsFinder(importlib.abc.PathEntryFinder):
     '''A Finder for the import protocol.
 
     This Finder is implemented so that we can load files named e.g.
@@ -64,23 +58,35 @@ class AutoImportsFinder(importlib.abc.MetaPathFinder):
         matchname = os.path.basename(walkers.objfile_name) + '-gdb.py'
         return '{}/autoimports/{}'.format(walkers.confdir, matchname)
 
-    def find_spec(self, fullname, path, target=None):
-        if path == [walkers.confdir + '/autoimports']:
-            actual_path = self.__get_filename()
-            # Ignore the race condition here ...
-            if os.path.exists(actual_path):
-                return importlib.machinery.ModuleSpec(
-                    fullname,
-                    importlib.machinery.SourceFileLoader(fullname, actual_path),
-                    origin=actual_path)
-        return None
+    def find_spec(self, fullname, target=None):
+        actual_path = self.__get_filename()
+        # Ignore the race condition here ...
+        # Hopefully no-one expects us to gracefully handle people deleting
+        # our files in the middle of use ... we're a little helper script!
+        if os.path.exists(actual_path):
+            return importlib.machinery.ModuleSpec(
+                fullname,
+                importlib.machinery.SourceFileLoader(fullname, actual_path),
+                origin=actual_path)
+        else:
+            return None
 
-
-sys.meta_path.append(AutoImportsFinder())
 
 # Import just the package ... this allows us to store things off that package
 # That's good because that's where the data makes sense to be.
 import autoimports
+
+def check_for_autoimport(path):
+    # Check we're trying to import a subpackage of autoimports
+    # n.b. we take advantage of our knowledge that autoimports is not a
+    # namespace module and hence only has one element in autoimports.__path__
+    if path == autoimports.__path__[0]:
+        return AutoImportsFinder()
+    raise ImportError
+
+
+sys.path_hooks.insert(0, check_for_autoimport)
+
 def importer(event):
     '''Emulates gdb auto-load scripts-directory but matches on basename.
 
@@ -93,7 +99,8 @@ def importer(event):
 
     NOTE: gdb can load the same objects more than once while open.
     The simplest example of this is calling `run` more than once on a binary.
-    When this happens the file in autoimports/ will be imported twice.
+    When this happens the file in autoimports/ will be imported twice, with the
+    second time importing using the cached module in the Python process.
 
     '''
     progname = event.new_objfile.filename
@@ -112,7 +119,9 @@ def importer(event):
     # where this objfile is stored.
     # That's not on purpose or anything though ...
 
-    # If the same object is loaded twice, then we import it twice.
+    # If the same object is loaded twice, then we do the import twice making
+    # sure that the second import works on the module object cached in the
+    # Python process.
     # This isn't to allow anything in particular, but simply because that seems
     # like the most intuitive behaviour when loading an object file twice.
 
