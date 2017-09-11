@@ -200,7 +200,7 @@ class Walker(metaclass=WalkerMetaclass):
         return self.calc(self.format_command(element, args))
 
     def call_with(self, start, inpipe, helper):
-        if start:
+        if start is not None:
             assert not inpipe
             yield from helper(start)
         else:
