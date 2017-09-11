@@ -368,7 +368,7 @@ class NvimMappings(walkers.Walker):
         self.start_buf = None if not args else self.Ele('buf_T *', eval_uint(args))
 
     def __iter_helper(self, arg):
-        map_array = 'maphash' if self.use_global else '((buf_T *){})->b_maphash'.format(arg)
+        map_array = 'maphash + 0' if self.use_global else '((buf_T *){})->b_maphash'.format(arg)
         init_pipe = 'array mapblock_T *; {}; 256'.format(map_array)
         yield from walkers.create_pipeline(init_pipe + self.__conversion_pipe)
 
