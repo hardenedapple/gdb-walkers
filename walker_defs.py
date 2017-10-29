@@ -84,9 +84,13 @@ class Eval(walkers.Walker):
     name = 'eval'
     tags = ['general', 'interface']
 
-    def __init__(self, args, first, _):
+    def __init__(self, args, first):
         self.cmd = args
         self.first = first
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(args, first)
 
     def iter_def(self, inpipe):
         if self.first:
@@ -115,9 +119,13 @@ class Show(walkers.Walker):
     require_input = True
     tags = ['general', 'interface']
 
-    def __init__(self, args, _, last):
+    def __init__(self, args, last):
         self.is_last = last
         self.command = args
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(args, last)
 
     def iter_def(self, inpipe):
         for element in inpipe:
@@ -150,14 +158,22 @@ class Instruction(walkers.Walker):
     name = 'instructions'
     tags = ['data']
 
-    def __init__(self, args, first, _):
-        cmd_parts = self.parse_args(args, [2, 3] if first else [1, 2], ';')
+    def __init__(self, start_addr, end_addr, count):
         self.arch = gdb.current_arch()
+        self.start_addr = start_addr
+        self.end_addr = end_addr
+        self.count = count
 
-        self.start_address = self.calc(cmd_parts.pop(0)) if first else None
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        cmd_parts = cls.parse_args(args, [2, 3] if first else [1, 2], ';')
+
+        start_addr = self.calc(cmd_parts.pop(0)) if first else None
         end = cmd_parts.pop(0)
-        self.end_address = None if end == 'NULL' else eval_uint(end)
-        self.count = eval_uint(cmd_parts.pop(0)) if cmd_parts else None
+        end_addr = None if end == 'NULL' else eval_uint(end)
+        count = eval_uint(cmd_parts.pop(0)) if cmd_parts else None
+
+        return cls(start_addr, end_addr, count)
 
     def disass(self, start_address):
         '''
@@ -204,8 +220,12 @@ class If(walkers.Walker):
     require_input = True
     tags = ['general']
 
-    def __init__(self, args, *_):
-        self.cmd = args
+    def __init__(self, cmd):
+        self.cmd = cmd
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(args)
 
     def iter_def(self, inpipe):
         for element in inpipe:
@@ -226,10 +246,14 @@ class Head(walkers.Walker):
     require_input = True
     tags = ['general']
 
-    def __init__(self, args, *_):
+    def __init__(self, limit):
+        self.limit = limit
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
         # Don't use eval_uint as that means we can't use `-1`
         # eval_uint() is really there to eval anything that could be a pointer.
-        self.limit = int(gdb.parse_and_eval(args))
+        return cls(int(gdb.parse_and_eval(args)))
 
     def iter_def(self, inpipe):
         if self.limit < 0:
@@ -257,10 +281,14 @@ class Tail(walkers.Walker):
     require_input = True
     tags = ['general']
 
-    def __init__(self, args, *_):
+    def __init__(self, limit):
+        self.limit = limit
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
         # Don't use eval_uint as that means we can't use `-1`
         # eval_uint() is really there to eval anything that could be a pointer.
-        self.limit = int(gdb.parse_and_eval(args))
+        return cls(int(gdb.parse_and_eval(args)))
 
     def iter_def(self, inpipe):
         if self.limit < 0:
@@ -297,6 +325,10 @@ class Count(walkers.Walker):
     require_input = True
     tags = ['general']
 
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls()
+
     def iter_def(self, inpipe):
         i = None
         for i, _ in enumerate(inpipe):
@@ -321,38 +353,64 @@ class Array(walkers.Walker):
     name = 'array'
     tags = ['data']
 
-    def __init__(self, args, first, _):
-        typename, self.start_expr, self.count_expr = self.parse_args(
-            args, [3, 3], ';')
-
+    def __init__(self, first, start, count, typename, element_size):
+        self.first = first
+        self.typename = typename
+        self.element_size = element_size
         if first:
-            self.count = eval_uint(self.count_expr)
-            start = self.calc(self.start_expr)
-            self.start = start.v
-            if typename == 'auto':
-                self.typename = start.t
-                # We could add some special stuff in self.calc() just for this
-                # one function, we could reimplement self.calc() here, or we
-                # could just parse the expression twice and take the
-                # performance hit in exchange for simplicity.
-                self.element_size = gdb.parse_and_eval(self.start_expr
-                                                       ).type.target().sizeof
-                return
+            self.start = start
+            self.count = count
         else:
-            self.start = None
-            if typename == 'auto':
-                self.typename = None
-                self.element_size = None
-                return
+            self.start_expr = start
+            self.count_expr = count
 
-        # TODO This is hacky, and we don't handle char[], &char that users
-        # might like to use.
-        if typename.find('*') != -1:
-            self.element_size = uintptr_size()
-        else:
-            self.element_size = gdb.lookup_type(typename).sizeof
-        # We're iterating over pointers to the values in the array.
-        self.typename = typename + '*'
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        type_arg, start_expr, count_expr = cls.parse_args(args, [3, 3], ';')
+
+        def __first(count_expr, start_expr):
+            return eval_uint(count_expr), cls.calc(start_expr)
+
+        def __noauto(type_arg):
+            # TODO This is hacky, and we don't handle char[], &char that users
+            # might like to use.
+            if type_arg.find('*') != -1:
+                element_size = uintptr_size()
+            else:
+                element_size = gdb.lookup_type(type_arg).sizeof
+            # We're iterating over pointers to the values in the array.
+            typename = type_arg + '*'
+            return typename, element_size
+
+        def __first_auto(start_expr, count_expr, _):
+            count, start_ele = __first(count_expr, start_expr)
+            start, typename = start_ele.v, start_ele.t
+            return (start, count, typename,
+                    gdb.parse_and_eval(start_expr).type.target().sizeof)
+
+        def __nofirst_auto(start_expr, count_expr, _):
+            return (start_expr, count_expr, None, None)
+
+        def __first_noauto(start_expr, count_expr, type_arg):
+            count, start_ele = __first(count_expr, start_expr)
+            start = start_ele.v
+            typename, element_size = __noauto(type_arg)
+            return (start, count, typename, element_size)
+
+        def __nofirst_noauto(start_expr, count_expr, type_arg):
+            typename, element_size = __noauto(type_arg)
+            return (start_expr, count_expr, typename, element_size)
+
+        options_dict = {
+            (True, True): __first_auto,
+            (False, True): __nofirst_auto,
+            (True, False): __first_noauto,
+            (False, False): __nofirst_noauto,
+        }
+
+        return cls(first,
+                   *options_dict[first, type_arg == 'auto'](
+                   start_expr, count_expr, type_arg))
 
     def __iter_single(self, start, count, typename, element_size):
         pos = start
@@ -378,7 +436,7 @@ class Array(walkers.Walker):
         yield from self.__iter_single(start.v, count, start.t, element_size)
 
     def iter_def(self, inpipe):
-        if self.start:
+        if self.first:
             yield from self.__iter_single(
                 self.start, self.count, self.typename, self.element_size)
         else:
@@ -412,8 +470,12 @@ class Max(walkers.Walker):
     require_input = True
     tags = ['general']
 
-    def __init__(self, args, *_):
-        self.cmd = args
+    def __init__(self, cmd):
+        self.cmd = cmd
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(args)
 
     def iter_def(self, inpipe):
         try:
@@ -449,8 +511,12 @@ class Min(walkers.Walker):
     require_input = True
     tags = ['general']
 
-    def __init__(self, args, *_):
-        self.cmd = args
+    def __init__(self, cmd):
+        self.cmd = cmd
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(args)
 
     def iter_def(self, inpipe):
         try:
@@ -485,8 +551,12 @@ class Sort(walkers.Walker):
     require_input = True
     tags = ['general']
 
-    def __init__(self, args, *_):
-        self.cmd = args
+    def __init__(self, cmd):
+        self.cmd = cmd
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(args)
 
     def iter_def(self, inpipe):
         retlist = sorted(
@@ -511,8 +581,12 @@ class Dedup(walkers.Walker):
     require_input = True
     tags = ['general']
 
-    def __init__(self, args, *_):
-        self.cmd = args
+    def __init__(self, cmd):
+        self.cmd = cmd
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(args)
 
     def iter_def(self, inpipe):
         prev_value = None
@@ -536,8 +610,12 @@ class Until(walkers.Walker):
     require_input = True
     tags = ['general']
 
-    def __init__(self, args, *_):
-        self.cmd = args
+    def __init__(self, cmd):
+        self.cmd = cmd
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(args)
 
     def iter_def(self, inpipe):
         for element in inpipe:
@@ -559,8 +637,12 @@ class Since(walkers.Walker):
     require_input = True
     tags = ['general']
 
-    def __init__(self, args, *_):
-        self.cmd = args
+    def __init__(self, cmd):
+        self.cmd = cmd
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(args)
 
     def iter_def(self, inpipe):
         for element in inpipe:
@@ -592,18 +674,25 @@ class Terminated(walkers.Walker):
     name = 'follow-until'
     tags = ['data']
 
-    def __init__(self, args, first, _):
+    def __init__(self, start, test_expr, follow_expr):
+        self.start = start
+        self.test_expr = test_expr
+        self.follow_expr = follow_expr
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
         if first:
-            start, self.test, self.follow = self.parse_args(args, [3, 3], ';')
-            self.start = self.calc(start)
+            start_expr, test_expr, follow_expr = cls.parse_args(args, [3, 3], ';')
+            start = cls.calc(start_expr)
         else:
-            self.test, self.follow = self.parse_args(args, [2, 2], ';')
-            self.start = None
+            test_expr, follow_expr = cls.parse_args(args, [2, 2], ';')
+            start = None
+        return cls(start, test_expr, follow_expr)
 
     def follow_to_termination(self, start):
-        while eval_uint(self.format_command(start, self.test)) == 0:
+        while eval_uint(self.format_command(start, self.test_expr)) == 0:
             yield start
-            start = self.eval_command(start, self.follow)
+            start = self.eval_command(start, self.follow_expr)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start, inpipe, self.follow_to_termination)
@@ -625,22 +714,27 @@ class LinkedList(walkers.Walker):
     name = 'linked-list'
     tags = ['data']
 
-    def __init__(self, args, first, _):
+    def __init__(self, start, list_type, next_member):
+        self.start = start
+        self.list_type = list_type
+        self.next_member = next_member
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
         if first:
-            start, self.list_type, self.next_member = self.parse_args(args, [3, 3], ';')
-            self.start = self.calc(start)
+            start_expr, list_type, next_member = cls.parse_args(args, [3, 3], ';')
+            start = cls.calc(start_expr)
         else:
-            self.list_type, self.next_member = self.parse_args(args, [2, 2], ';')
-            self.start = None
-        self.list_type += '*'
+            list_type, next_member = cls.parse_args(args, [2, 2], ';')
+            start = None
+        list_type += '*'
+        return cls(start, list_type, next_member)
 
     def __iter_helper(self, element):
-        walker_text = ''.join([
-            'follow-until {};'.format(self.Ele(self.list_type, element.v)),
-            ' {} == 0; {}',
-            '->{}'.format(self.next_member)
-        ])
-        yield from walkers.create_pipeline(walker_text)
+        yield from Terminated.single_iter(
+            start=self.calc(str(self.Ele(self.list_type, element.v))),
+            test_expr='{} == 0',
+            follow_expr='{{}}->{}'.format(self.next_member))
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start, inpipe, self.__iter_helper)
@@ -656,6 +750,10 @@ class Devnull(walkers.Walker):
     name = 'devnull'
     require_input = True
     tags = ['general']
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls()
 
     def iter_def(self, inpipe):
         for _ in inpipe:
@@ -676,6 +774,10 @@ class Reverse(walkers.Walker):
     require_input = True
     tags = ['general']
 
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls()
+
     def iter_def(self, inpipe):
         all_elements = list(inpipe)
         all_elements.reverse()
@@ -689,7 +791,7 @@ class CalledFunctions(walkers.Walker):
     Given a function name/address, walk over all functions this function calls,
     and all functions called by those etc up to maxdepth.
 
-    It skips all functions defined in a file that doesn't match file-regex.
+    It skips all functions defined in a file that doesn't match file-regexp.
     This part is very important as it avoids searching all functions in
     used libraries.
 
@@ -710,7 +812,7 @@ class CalledFunctions(walkers.Walker):
         up.
 
     Usage:
-        called-functions [funcname | funcaddr]; [file-regex]; [maxdepth]
+        called-functions [funcname | funcaddr]; [file-regexp]; [maxdepth]
 
     '''
     name = 'called-functions'
@@ -720,24 +822,30 @@ class CalledFunctions(walkers.Walker):
     # hypothetical-call-stack walker can find it.
     hypothetical_stack = []
 
-    # TODO
-    #   Allow default arguments?
-    def __init__(self, args, first, _):
-        self.cmd_parts = self.parse_args(args, [3,3] if first else [2,2], ';')
-        self.maxdepth = eval_uint(self.cmd_parts[-1])
-        self.file_regex = self.cmd_parts[-2].strip()
-        # User asked for specific files, wo only know the filename if there is
+    def __init__(self, maxdepth, file_regexp, start_expr):
+        self.func_stack = []
+        self.arch = gdb.current_arch()
+        self.maxdepth = maxdepth
+        self.file_regexp = file_regexp
+        # User asked for specific files, we only know the filename if there is
         # debugging information, hence ignore all functions that don't have
         # debugging info.
-        self.dont_fallback = re.match(self.file_regex, '') is not None
+        self.dont_fallback = re.match(self.file_regexp, '') is not None
 
-        self.func_stack = []
         # hypothetical_stack checks for recursion, but also allows the
         # hypothetical-call-stack walker to see what the current stack is.
         type(self).hypothetical_stack = []
-        if first:
-            self.__add_addr(eval_uint(self.cmd_parts[0]), 0)
-        self.arch = gdb.current_arch()
+        if start_expr:
+            self.__add_addr(eval_uint(start_expr), 0)
+
+    # TODO
+    #   Allow default arguments?
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        cmd_parts = cls.parse_args(args, [3,3] if first else [2,2], ';')
+        return cls(eval_uint(cmd_parts[-1]),
+                   cmd_parts[-2].strip(),
+                   cmd_parts[0] if first else None)
 
     def __add_addr(self, addr, depth):
         # Use reverse stack because recursion is more likely a short-term
@@ -784,7 +892,7 @@ class CalledFunctions(walkers.Walker):
             # without debugging info) -- hence ignore this.
             func_dis, _, fname = function_disassembly(func_addr, self.arch,
                                                       self.dont_fallback)
-            if not func_dis or not re.match(self.file_regex,
+            if not func_dis or not re.match(self.file_regexp,
                                             '' if not fname else fname):
                 continue
 
@@ -847,10 +955,14 @@ class HypotheticalStack(walkers.Walker):
     name = 'hypothetical-call-stack'
     tags = ['data']
 
-    def __init__(self, args, *_):
+    def __init__(self):
+        self.called_funcs_class = walkers.walkers['called-functions']
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
         if args and args.split() != []:
             raise ValueError('hypothetical-call-stack takes no arguments')
-        self.called_funcs_class = walkers.walkers['called-functions']
+        return cls()
 
     def iter_def(self, inpipe):
         if not inpipe:
@@ -881,10 +993,14 @@ class File(walkers.Walker):
     name = 'file'
     tags = ['general']
 
-    def __init__(self, args, first, _):
+    def __init__(self, filenames):
+        self.filenames = filenames
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
         if not first:
             raise ValueError('`file` walker cannot take input')
-        self.filenames = gdb.string_to_argv(args)
+        return cls(gdb.string_to_argv(args))
 
     # NOTE, name unused argument `inpipe` so that connect_pipe() can pass the
     # argument via keyword.
@@ -911,7 +1027,7 @@ class DefinedFunctions(walkers.Walker):
     'include-dynlibs' after the file and function regexps.
 
     Usage:
-        pipe defined-functions file-regex:function-regex [include-dynlibs]
+        pipe defined-functions file-regexp:function-regexp [include-dynlibs]
 
     Example:
         // Print those functions in tree.c that use the 'insert_entry' function
@@ -928,21 +1044,27 @@ class DefinedFunctions(walkers.Walker):
     name = 'defined-functions'
     tags = ['data']
 
-    def __init__(self, args, first, _):
+    def __init__(self, include_dynlibs, file_regexp, func_regexp):
+        self.include_dynlibs = include_dynlibs
+        self.file_regexp = file_regexp
+        self.func_regexp = func_regexp
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
         if not first:
             raise ValueError('defined-functions must be the first walker')
         argv = gdb.string_to_argv(args)
         if len(argv) > 2:
             raise ValueError('defined-functions takes a max of two arguments')
         if len(argv) == 2:
-            self.include_dynlibs = bool(argv[1])
+            include_dynlibs = bool(argv[1])
         else:
-            self.include_dynlibs = False
-        self.file_regex, self.func_regex = file_func_split(argv[0])
+            include_dynlibs = False
+        return cls(include_dynlibs, *file_func_split(argv[0]))
 
     # NOTE, name unused argument `inpipe` so that connect_pipe() can pass the
     # argument via keyword.
     def iter_def(self, inpipe):
-        for symbol in search_symbols(self.func_regex, self.file_regex,
+        for symbol in search_symbols(self.func_regexp, self.file_regexp,
                                      self.include_dynlibs):
             yield self.Ele('void *', int(as_uintptr(symbol.value())))

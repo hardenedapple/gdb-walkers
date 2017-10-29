@@ -32,16 +32,25 @@ def register_walker(walker_class):
 
     # Just ensure the protocol is followed.
     iter_func = walker_class.iter_def
+    from_userstring = walker_class.from_userstring
     if (len(walker_class.__abstractmethods__) != 0
         or not isinstance(walker_class.name, str)
         or not inspect.isfunction(iter_func)
-        or not inspect.getfullargspec(iter_func).args == ['self', 'inpipe']):
+        or not inspect.getfullargspec(iter_func).args == ['self', 'inpipe']
+        or not inspect.ismethod(from_userstring)
+        or not inspect.getfullargspec(from_userstring).args == [
+            'cls', 'args', 'first', 'last']):
         raise ValueError('Failure registering "{}"\n'
                          'All registered walkers must fully implement'
                          ' the Walker interface.\n'
-                         'This consists of a `name` string attribute and an'
-                         ' `iter_def` method that takes an iterator'
-                         'named "inpipe"'.format(walker_class.__name__))
+                         'This consists of a `name` string attribute, a'
+                         ' `from_userstring` classmethod\nthat returns an'
+                         ' initialised object from the arguments "args",'
+                         ' "first",\nand "last" determined by the command line the user'
+                         ' typed to invoke a pipeline,\n'
+                         'and an `iter_def` method that takes an'
+                         ' iterator named "inpipe"'
+                         ''.format(walker_class.__name__))
 
     if walkers.setdefault(walker_class.name, walker_class) != walker_class:
         raise KeyError('A walker with the name "{}" already exits!'.format(
@@ -106,11 +115,19 @@ class Walker(metaclass=WalkerMetaclass):
     # when writing a walker.
     Ele = PipeElement
 
-    def __init__(self, args, first, last):
+    # n.b. we can't specify the __init__() arguments here, as they can
+    # reasonably be different for each walker.
+    # The specified abstract interface is through the from_userstring() static
+    # method.
+    def __init__(self):
         pass
 
     @abc.abstractmethod
     def iter_def(self, inpipe):
+        pass
+
+    @abc.abstractclassmethod
+    def from_userstring(cls, args, first, last):
         pass
 
     @staticmethod
@@ -134,6 +151,10 @@ class Walker(metaclass=WalkerMetaclass):
                   ' to void * as are not sure we can handle it')
             string_type = 'void *'
         return PipeElement(string_type, int(helpers.as_uintptr(main_val)))
+
+    @classmethod
+    def single_iter(cls, *args, **kwargs):
+        return cls(*args, **kwargs).iter_def(inpipe=[])
 
     @classmethod
     def parse_args(cls, args, nargs=None, split_string=None,
@@ -193,7 +214,7 @@ class Walker(metaclass=WalkerMetaclass):
         self.cmd by keeping doubling the number of times `element` is in the
         format() argument list until we no longer have an IndexError.
 
-        Otherwise uses `cmd_parts` instead of `self.cmd`
+        Otherwise uses `args` instead of `self.cmd`
 
          '''
         args = args if args else self.cmd
@@ -240,7 +261,7 @@ def create_walker(walker_def, first=False, last=False):
                          'is not given to it.'.format(walker_name))
     # May raise ValueError if the walker doesn't like the arguments it's
     # been given.
-    return walker(args if args else None, first, last)
+    return walker.from_userstring(args if args else None, first, last)
 
 
 def connect_pipe(segments):
@@ -272,12 +293,12 @@ def create_pipeline(arg):
     # Create the first walker with an argument that tells it it's going to
     # be the first.
     only_one = len(args) == 1
-    first_val = [create_walker(args[0], first=True, last=only_one)]
-    first_val.extend([create_walker(val) for val in args[1:-1] if val])
+    walker_list = [create_walker(args[0], first=True, last=only_one)]
+    walker_list.extend([create_walker(val) for val in args[1:-1] if val])
     if not only_one:
-        first_val.append(create_walker(args[-1], first=False, last=True))
+        walker_list.append(create_walker(args[-1], first=False, last=True))
 
-    return connect_pipe(first_val)
+    return connect_pipe(walker_list)
 
 
 class Pipeline(gdb.Command):

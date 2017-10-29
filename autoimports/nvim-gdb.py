@@ -34,9 +34,14 @@ class NvimFold(walkers.Walker):
     '''
     name = 'nvim-folds'
 
-    def __init__(self, args, first, _):
-        self.nested_offset = offsetof('fold_T', 'fd_nested')
-        self.start_addr = self.calc(args) if first else None
+    def __init__(self, nested_offset, start):
+        self.nested_offset = nested_offset
+        self.start = start
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(offsetof('fold_T', 'fd_nested'),
+                   cls.calc(args) if first else None)
 
     def iter_folds(self, init_addr):
         gar_ptr = self.Ele('garray_T *', init_addr.v)
@@ -47,7 +52,7 @@ class NvimFold(walkers.Walker):
                 self.Ele(fold.t, fold.v + self.nested_offset))
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_addr, inpipe, self.iter_folds)
+        yield from self.call_with(self.start, inpipe, self.iter_folds)
 
 
 class NvimUndoTree(walkers.Walker):
@@ -63,8 +68,12 @@ class NvimUndoTree(walkers.Walker):
     '''
     name = 'nvim-undohist'
 
-    def __init__(self, args, first, _):
-        self.start_addr = eval_uint(args) if first else None
+    def __init__(self, start):
+        self.start = start
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(eval_uint(args) if first else None)
 
     def walk_alts(self, init_addr):
         # First walk over all in the 'alt_next' direction
@@ -94,7 +103,7 @@ class NvimUndoTree(walkers.Walker):
         yield from self.walk_hist(ele)
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_addr, inpipe, self.__iter_helper)
+        yield from self.call_with(self.start, inpipe, self.__iter_helper)
 
 
 class NvimBuffers(walkers.Walker):
@@ -116,6 +125,11 @@ class NvimBuffers(walkers.Walker):
 
     '''
     name = 'nvim-buffers'
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls()
+
     def iter_def(self, inpipe):
         wlkr_text = 'follow-until firstbuf; {} == 0; {}->b_next'
         yield from walkers.create_pipeline(wlkr_text)
@@ -138,6 +152,11 @@ class NvimTabs(walkers.Walker):
 
     '''
     name = 'nvim-tabs'
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls()
+
     def iter_def(self, inpipe):
         wlkr_text = 'follow-until first_tabpage; {} == 0; {}->tp_next'
         yield from walkers.create_pipeline(wlkr_text)
@@ -172,8 +191,12 @@ class NvimWindows(walkers.Walker):
     '''
     name = 'nvim-windows'
 
-    def __init__(self, args, *_):
-        self.startptr = args if args else None
+    def __init__(self, startptr):
+        self.startptr = startptr
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(args if args else None)
 
     def __make_wlkr_text(self, element):
         # So the user can put '{}' in their tabpage definition.
@@ -230,17 +253,23 @@ class NvimMultiQueues(walkers.Walker):
 
     '''
     name = 'nvim-mqueue'
-    def __init__(self, args, first, _):
+    def __init__(self, expr, deref, first):
         # Calculate a bunch of offsets and types for future use.
         self.mqi_q_offset = offsetof('MultiQueueItem', 'node')
         self.mq_headtail_offset = offsetof('MultiQueue', 'headtail')
         self.mqi_ptr = gdb.lookup_type('MultiQueueItem').pointer()
         self.queue_ptr = gdb.lookup_type('QUEUE').pointer()
+        self.expr = expr
+        self.deref = deref
+        self.start = eval_uint(expr) if first else None
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
         # Parse arguments
-        arg_list = self.parse_args(args, [1, 2], ';')
-        self.deref = len(arg_list) == 2
-        self.expr = arg_list[0]
-        self.start = eval_uint(self.expr) if first else None
+        arg_list = cls.parse_args(args, [1, 2], ';')
+        expr = arg_list[0]
+        deref = len(arg_list) == 2
+        return cls(expr, deref, first)
 
     def __ptr_to_type(self, pointer, ptype):
         return gdb.Value(pointer).cast(ptype).dereference()
@@ -299,8 +328,12 @@ class NvimCharBuffer(walkers.Walker):
 
     '''
     name = 'nvim-buffblocks'
-    def __init__(self, args, first, _):
-        self.start_addr = eval_uint(args) if first else None
+    def __init__(self, start):
+        self.start = start
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(eval_uint(args) if first else None)
 
     def iter_helper(self, addr):
         buff_list = ''.join(['linked-list &(((buffheader_T *){})->bh_first);'.format(addr),
@@ -309,7 +342,7 @@ class NvimCharBuffer(walkers.Walker):
             yield buffblock
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_addr, inpipe, self.iter_helper)
+        yield from self.call_with(self.start, inpipe, self.iter_helper)
 
 
 class NvimMapBlock(walkers.Walker):
@@ -325,8 +358,12 @@ class NvimMapBlock(walkers.Walker):
 
     '''
     name = 'nvim-mapblock'
-    def __init__(self, args, first, _):
-        self.start_addr = eval_uint(args) if first else None
+    def __init__(self, start):
+        self.start = start
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(eval_uint(args) if first else None)
 
     def iter_helper(self, addr):
         map_list = 'linked-list {}; mapblock_T; m_next'.format(addr)
@@ -334,7 +371,7 @@ class NvimMapBlock(walkers.Walker):
             yield mapping
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_addr, inpipe, self.iter_helper)
+        yield from self.call_with(self.start, inpipe, self.iter_helper)
 
 
 class NvimMappings(walkers.Walker):
@@ -362,10 +399,16 @@ class NvimMappings(walkers.Walker):
     '''
     name = 'nvim-maps'
     __conversion_pipe = ' | eval *{} | if {} != 0 | nvim-mapblock'
-    def __init__(self, args, first, _):
+    def __init__(self, first, use_global, start_buf):
         self.first = first
-        self.use_global = first and not args
-        self.start_buf = None if not args else self.Ele('buf_T *', eval_uint(args))
+        self.use_global = use_global
+        self.start_buf = start_buf
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(first,
+                   first and not args,
+                   None if not args else cls.Ele('buf_T *', eval_uint(args)))
 
     def __iter_helper(self, arg):
         map_array = 'maphash + 0' if self.use_global else '((buf_T *){})->b_maphash'.format(arg)
@@ -394,10 +437,15 @@ class NvimGarray(walkers.Walker):
     '''
     name = 'nvim-garray'
 
-    def __init__(self, args, first, _):
-        cmd_parts = self.parse_args(args, [2, 2] if first else [1, 1], ';')
-        self.t = cmd_parts[-1]
-        self.start_address = eval_uint(cmd_parts[0]) if first else None
+    def __init__(self, t, start):
+        self.t = t
+        self.start = start
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        cmd_parts = cls.parse_args(args, [2, 2] if first else [1, 1], ';')
+        return cls(cmd_parts[-1],
+                   eval_uint(cmd_parts[0]) if first else None)
 
     def iter_helper(self, arg):
         gar_ptr = '((garray_T *){})'.format(arg)
@@ -405,4 +453,4 @@ class NvimGarray(walkers.Walker):
         yield from walkers.create_pipeline(equiv_str)
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_address, inpipe, self.iter_helper)
+        yield from self.call_with(self.start, inpipe, self.iter_helper)

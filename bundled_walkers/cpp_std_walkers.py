@@ -33,8 +33,12 @@ class StdList(walkers.Walker):
     name = 'std-list'
     tags = ['data']
 
-    def __init__(self, args, first, _):
-        self.start = self.calc(args.strip()) if first else None
+    def __init__(self, start):
+        self.start = start
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(cls.calc(args.strip()) if first else None)
 
     def __iter_helper(self, element):
         # Observations of the implementation of std::list<int>
@@ -83,8 +87,12 @@ class StdVector(walkers.Walker):
     name = 'std-vector'
     tags = ['data']
 
-    def __init__(self, args, first, _):
-        self.start = self.calc(args.strip()) if first else None
+    def __init__(self, start):
+        self.start = start
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(cls.calc(args.strip()) if first else None)
 
     def __iter_helper(self, element):
         walker_text = ('follow-until {0}._M_impl._M_start; '

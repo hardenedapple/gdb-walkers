@@ -24,8 +24,12 @@ class TreeElements(walkers.Walker):
     name = 'tree-elements'
     tags = ['tree-demo']
 
-    def __init__(self, args, first, _):
-        self.start_addr = self.Ele('node_t *', eval_uint(args)) if first else None
+    def __init__(self, start_addr):
+        self.start_addr = start_addr
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(cls.Ele('node_t *', eval_uint(args)) if first else None)
 
     def iter_elements(self, init_addr):
         if init_addr.v == 0:
