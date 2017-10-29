@@ -84,8 +84,8 @@ class Eval(walkers.Walker):
     name = 'eval'
     tags = ['general', 'interface']
 
-    def __init__(self, args, first):
-        self.cmd = args
+    def __init__(self, cmd, first):
+        self.cmd = cmd
         self.first = first
 
     @classmethod
@@ -714,7 +714,7 @@ class LinkedList(walkers.Walker):
 
     def __init__(self, start_ele, list_type, next_member):
         self.start_ele = start_ele
-        self.list_type = list_type
+        self.list_type = list_type + '*'
         self.next_member = next_member
 
     @classmethod
@@ -725,12 +725,11 @@ class LinkedList(walkers.Walker):
         else:
             list_type, next_member = cls.parse_args(args, [2, 2], ';')
             start_ele = None
-        list_type += '*'
         return cls(start_ele, list_type, next_member)
 
     def __iter_helper(self, element):
         yield from Terminated.single_iter(
-            start_ele=self.calc(str(self.Ele(self.list_type, element.v))),
+            start_ele=self.Ele(self.list_type, element.v),
             test_expr='{} == 0',
             follow_expr='{{}}->{}'.format(self.next_member))
 
