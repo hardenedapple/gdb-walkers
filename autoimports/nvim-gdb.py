@@ -15,8 +15,9 @@ it.
 '''
 import itertools as itt
 import gdb
-from helpers import offsetof, eval_uint
+from helpers import offsetof, eval_uint, uintptr_size
 import walkers
+import walker_defs
 
 
 class NvimFold(walkers.Walker):
@@ -34,14 +35,13 @@ class NvimFold(walkers.Walker):
     '''
     name = 'nvim-folds'
 
-    def __init__(self, nested_offset, start):
-        self.nested_offset = nested_offset
+    def __init__(self, start):
+        self.nested_offset = offsetof('fold_T', 'fd_nested')
         self.start = start
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        return cls(offsetof('fold_T', 'fd_nested'),
-                   cls.calc(args) if first else None)
+        return cls(cls.calc(args) if first else None)
 
     def iter_folds(self, init_addr):
         gar_ptr = self.Ele('garray_T *', init_addr.v)
@@ -77,22 +77,23 @@ class NvimUndoTree(walkers.Walker):
 
     def walk_alts(self, init_addr):
         # First walk over all in the 'alt_next' direction
-        next_text = ('follow-until ' +
-                     '{}->uh_alt_next.ptr;'.format(init_addr) +
-                     ' {} == 0; {}->uh_alt_next.ptr')
-        prev_text = ('follow-until ' +
-                     '{}->uh_alt_prev.ptr;'.format(init_addr) +
-                     ' {} == 0; {}->uh_alt_prev.ptr')
-        for uh in itt.chain(walkers.create_pipeline(next_text),
-                            walkers.create_pipeline(prev_text)):
+        next_iter = walker_defs.Terminated.single_iter(
+            start_ele=self.calc('{}->uh_alt_next.ptr'.format(init_addr)),
+            test_expr='{} == 0',
+            follow_expr='{}->uh_alt_next.ptr')
+        prev_iter = walker_defs.Terminated.single_iter(
+            start_ele=self.calc('{}->uh_alt_prev.ptr'.format(init_addr)),
+            test_expr='{} == 0',
+            follow_expr='{}->uh_alt_prev.ptr')
+        for uh in itt.chain(next_iter, prev_iter):
             yield uh
             yield from self.walk_hist(uh)
 
     def walk_hist(self, init_addr):
-        wlkr_text = ('follow-until ' +
-                     '{}->uh_prev.ptr;'.format(init_addr) +
-                     ' {} == 0; {}->uh_prev.ptr')
-        for uh in walkers.create_pipeline(wlkr_text):
+        for uh in walker_defs.Terminated.single_iter(
+                start_ele=self.calc('{}->uh_prev.ptr'.format(init_addr)),
+                test_expr='{} == 0',
+                follow_expr='{}->uh_prev.ptr'):
             yield uh
             yield from self.walk_alts(uh)
 
@@ -131,8 +132,10 @@ class NvimBuffers(walkers.Walker):
         return cls()
 
     def iter_def(self, inpipe):
-        wlkr_text = 'follow-until firstbuf; {} == 0; {}->b_next'
-        yield from walkers.create_pipeline(wlkr_text)
+        yield from walker_defs.Terminated.single_iter(
+            start_ele=self.calc('firstbuf'),
+            test_expr='{} == 0',
+            follow_expr='{}->b_next')
 
 
 class NvimTabs(walkers.Walker):
@@ -158,8 +161,10 @@ class NvimTabs(walkers.Walker):
         return cls()
 
     def iter_def(self, inpipe):
-        wlkr_text = 'follow-until first_tabpage; {} == 0; {}->tp_next'
-        yield from walkers.create_pipeline(wlkr_text)
+        yield from walker_defs.Terminated.single_iter(
+            start_ele=self.calc('first_tabpage'),
+            test_expr='{} == 0',
+            follow_expr='{}->tp_next')
 
 
 class NvimWindows(walkers.Walker):
@@ -198,27 +203,25 @@ class NvimWindows(walkers.Walker):
     def from_userstring(cls, args, first, last):
         return cls(args if args else None)
 
-    def __make_wlkr_text(self, element):
+    def __walker_start(self, element):
         # So the user can put '{}' in their tabpage definition.
         startptr = eval_uint(self.format_command(element, self.startptr)
                              if element is not None else self.startptr)
-        # The current tab doesn't have windows stored in it.
+        # The current tab doesn't have windows stored in it, hence if we're
+        # asked to walk over windows in the current tab we need to work
+        # differently.
         if startptr == eval_uint('curtab'):
-            # Doesn't really matter if startptr is evaluated or not before
-            # passing to follow-until (because follow-until evaluates the
-            # expression as an integer anyway).
-            # But we have to evaluate it to check if the tab pointer is to
-            # curtab.
             startstr = 'firstwin'
         else:
             startstr = '((tabpage_T *){})->tp_firstwin'.format(startptr)
-
-        ret = 'follow-until {};'.format(startstr)
-        return ret + '{} == 0; ((win_T *){})->w_next'
+        return self.calc(startstr)
 
     def __iter_helper(self, element):
         if self.startptr:
-            yield from walkers.create_pipeline(self.__make_wlkr_text(element))
+            yield from walker_defs.Terminated.single_iter(
+                start_ele=self.__walker_start(element),
+                test_expr='{} == 0',
+                follow_expr='((win_T *){})->w_next')
         else:
             yield from walkers.create_pipeline('nvim-tabs | nvim-windows {}')
 
@@ -336,10 +339,10 @@ class NvimCharBuffer(walkers.Walker):
         return cls(eval_uint(args) if first else None)
 
     def iter_helper(self, addr):
-        buff_list = ''.join(['linked-list &(((buffheader_T *){})->bh_first);'.format(addr),
-                               'buffblock_T; b_next'])
-        for buffblock in walkers.create_pipeline(buff_list):
-            yield buffblock
+        yield from walker_defs.LinkedList.single_iter(
+                start_ele=self.calc('&(((buffheader_T *){})->bh_first)'.format(addr)),
+                list_type='buffblock_T',
+                next_member='b_next')
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start, inpipe, self.iter_helper)
@@ -358,20 +361,21 @@ class NvimMapBlock(walkers.Walker):
 
     '''
     name = 'nvim-mapblock'
-    def __init__(self, start):
-        self.start = start
+    def __init__(self, start_addr):
+        self.start_addr = start_addr
 
     @classmethod
     def from_userstring(cls, args, first, last):
         return cls(eval_uint(args) if first else None)
 
     def iter_helper(self, addr):
-        map_list = 'linked-list {}; mapblock_T; m_next'.format(addr)
-        for mapping in walkers.create_pipeline(map_list):
-            yield mapping
+        yield from walker_defs.LinkedList.single_iter(
+                start_ele=self.Ele('mapblock_T', addr.v),
+                list_type='mapblock_T',
+                next_member='m_next')
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start, inpipe, self.iter_helper)
+        yield from self.call_with(self.start_addr, inpipe, self.iter_helper)
 
 
 class NvimMappings(walkers.Walker):
@@ -398,7 +402,6 @@ class NvimMappings(walkers.Walker):
 
     '''
     name = 'nvim-maps'
-    __conversion_pipe = ' | eval *{} | if {} != 0 | nvim-mapblock'
     def __init__(self, first, use_global, start_buf):
         self.first = first
         self.use_global = use_global
@@ -412,8 +415,17 @@ class NvimMappings(walkers.Walker):
 
     def __iter_helper(self, arg):
         map_array = 'maphash + 0' if self.use_global else '((buf_T *){})->b_maphash'.format(arg)
-        init_pipe = 'array mapblock_T *; {}; 256'.format(map_array)
-        yield from walkers.create_pipeline(init_pipe + self.__conversion_pipe)
+        start_ele = self.calc(map_array)
+        yield from walkers.connect_pipe([
+            walker_defs.Array(
+                first=True,
+                start=start_ele.v,
+                count=256,
+                typename=start_ele.t,
+                element_size=uintptr_size()),
+            walker_defs.Eval(cmd='*{}', first=False),
+            walker_defs.If(cmd='{} != 0'),
+            NvimMapBlock(start_addr=None)])
 
     def iter_def(self, inpipe):
         if not inpipe:
@@ -449,8 +461,12 @@ class NvimGarray(walkers.Walker):
 
     def iter_helper(self, arg):
         gar_ptr = '((garray_T *){})'.format(arg)
-        equiv_str = 'array {0}; {1}->ga_data; {1}->ga_len'.format(self.t, gar_ptr)
-        yield from walkers.create_pipeline(equiv_str)
+        yield from walker_defs.Array.single_iter(
+            first=True,
+            start=eval_uint('{}->ga_data'.format(gar_ptr)),
+            count=eval_uint('{}->ga_len'.format(gar_ptr)),
+            typename=self.t,
+            element_size=gdb.lookup_type(self.t).sizeof)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start, inpipe, self.iter_helper)
