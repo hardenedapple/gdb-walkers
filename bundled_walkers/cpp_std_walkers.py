@@ -7,6 +7,7 @@ without notice, the walkers in this file are inherently unstable.
 
 from helpers import eval_uint
 import walkers
+from walker_defs import Terminated
 
 class StdList(walkers.Walker):
     '''Walk over elements in a std::list<T> list.
@@ -33,8 +34,8 @@ class StdList(walkers.Walker):
     name = 'std-list'
     tags = ['data']
 
-    def __init__(self, start):
-        self.start = start
+    def __init__(self, start_ele):
+        self.start_ele = start_ele
 
     @classmethod
     def from_userstring(cls, args, first, last):
@@ -50,25 +51,16 @@ class StdList(walkers.Walker):
         # Hence we find our terminating value by fetching the 'prev' element
         # from the head.
         l_type = 'std::__detail::_List_node_base*'
-        kwargs = {
-            'type': l_type,
-            'init': element.v,
-            'next': '_M_next',
-            'prev': '_M_prev',
-            'cur': '{}'
-        }
-        length_node = '(({type}){init}).{prev}'.format(**kwargs)
-        kwargs['end'] = eval_uint(length_node)
-        walker_text = ('follow-until (({type}){init});'
-                       ' {cur} == {end};'
-                       ' (({type}){cur}).{next}').format(**kwargs)
+        start_ele = self.Ele(l_type, element.v)
+        test_expr = '{} == ' + str(eval_uint('({})._M_prev'.format(start_ele)))
 
         yield from (self.Ele(element.t, e.v)
                     for e in
-                    walkers.create_pipeline(walker_text))
+                    Terminated.single_iter(start_ele, test_expr,
+                                           follow_expr='({})._M_next'))
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start, inpipe, self.__iter_helper)
+        yield from self.call_with(self.start_ele, inpipe, self.__iter_helper)
 
 
 class StdVector(walkers.Walker):
@@ -87,18 +79,18 @@ class StdVector(walkers.Walker):
     name = 'std-vector'
     tags = ['data']
 
-    def __init__(self, start):
-        self.start = start
+    def __init__(self, start_ele):
+        self.start_ele = start_ele
 
     @classmethod
     def from_userstring(cls, args, first, last):
         return cls(cls.calc(args.strip()) if first else None)
 
     def __iter_helper(self, element):
-        walker_text = ('follow-until {0}._M_impl._M_start; '
-                       '{{}} >= {0}._M_impl._M_finish; '
-                       '{{}} + 1').format(element)
-        yield from walkers.create_pipeline(walker_text)
+        yield from Terminated.single_iter(
+            start_ele=self.calc('{0}._M_impl._M_start'.format(element)),
+            test_expr='{{}} >= {0}._M_impl._M_finish'.format(element),
+            follow_expr='{} + 1')
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start, inpipe, self.__iter_helper)
+        yield from self.call_with(self.start_ele, inpipe, self.__iter_helper)

@@ -158,9 +158,9 @@ class Instruction(walkers.Walker):
     name = 'instructions'
     tags = ['data']
 
-    def __init__(self, start_addr, end_addr, count):
+    def __init__(self, start_ele, end_addr, count):
         self.arch = gdb.current_arch()
-        self.start_addr = start_addr
+        self.start_ele = start_ele
         self.end_addr = end_addr
         self.count = count
 
@@ -168,38 +168,36 @@ class Instruction(walkers.Walker):
     def from_userstring(cls, args, first, last):
         cmd_parts = cls.parse_args(args, [2, 3] if first else [1, 2], ';')
 
-        start_addr = self.calc(cmd_parts.pop(0)) if first else None
+        start_ele = self.calc(cmd_parts.pop(0)) if first else None
         end = cmd_parts.pop(0)
         end_addr = None if end == 'NULL' else eval_uint(end)
         count = eval_uint(cmd_parts.pop(0)) if cmd_parts else None
 
-        return cls(start_addr, end_addr, count)
+        return cls(start_ele, end_addr, count)
 
-    def disass(self, start_address):
+    def disass(self, start_ele):
         '''
         Helper function.
         '''
         # TODO arch.disassemble default args.
-        start = start_address.v
-        if self.end_address and self.count:
-            return self.arch.disassemble(start,
-                                         self.end_address,
+        start_addr = start_ele.v
+        if self.end_addr and self.count:
+            return self.arch.disassemble(start_addr,
+                                         self.end_addr,
                                          self.count)
         elif self.count:
-            return self.arch.disassemble(start,
-                                         count=self.count)
-        elif self.end_address:
-            return self.arch.disassemble(start,
-                                         self.end_address)
+            return self.arch.disassemble(start_addr, count=self.count)
+        elif self.end_addr:
+            return self.arch.disassemble(start_addr, self.end_addr)
 
-        return self.arch.disassemble(start)
+        return self.arch.disassemble(start_addr)
 
-    def iter_helper(self, start_addr):
-        for instruction in self.disass(start_addr):
+    def iter_helper(self, start_ele):
+        for instruction in self.disass(start_ele):
             yield self.Ele('void *', instruction['addr'])
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_address, inpipe, self.iter_helper)
+        yield from self.call_with(self.start_ele, inpipe, self.iter_helper)
 
 
 class If(walkers.Walker):
@@ -358,7 +356,7 @@ class Array(walkers.Walker):
         self.typename = typename
         self.element_size = element_size
         if first:
-            self.start = start
+            self.start_addr = start
             self.count = count
         else:
             self.start_expr = start
@@ -384,8 +382,8 @@ class Array(walkers.Walker):
 
         def __first_auto(start_expr, count_expr, _):
             count, start_ele = __first(count_expr, start_expr)
-            start, typename = start_ele.v, start_ele.t
-            return (start, count, typename,
+            start_addr, typename = start_ele.v, start_ele.t
+            return (start_addr, count, typename,
                     gdb.parse_and_eval(start_expr).type.target().sizeof)
 
         def __nofirst_auto(start_expr, count_expr, _):
@@ -393,9 +391,9 @@ class Array(walkers.Walker):
 
         def __first_noauto(start_expr, count_expr, type_arg):
             count, start_ele = __first(count_expr, start_expr)
-            start = start_ele.v
+            start_addr = start_ele.v
             typename, element_size = __noauto(type_arg)
-            return (start, count, typename, element_size)
+            return (start_addr, count, typename, element_size)
 
         def __nofirst_noauto(start_expr, count_expr, type_arg):
             typename, element_size = __noauto(type_arg)
@@ -412,33 +410,33 @@ class Array(walkers.Walker):
                    *options_dict[first, type_arg == 'auto'](
                    start_expr, count_expr, type_arg))
 
-    def __iter_single(self, start, count, typename, element_size):
-        pos = start
+    def __iter_single(self, start_addr, count, typename, element_size):
+        pos = start_addr
         for _ in range(count):
             yield self.Ele(typename, pos)
             pos += element_size
 
     def __iter_known(self, element):
-        start = eval_uint(self.format_command(element, self.start_expr))
+        start_addr = eval_uint(self.format_command(element, self.start_expr))
         count = eval_uint(self.format_command(element, self.count_expr))
-        yield from self.__iter_single(start, count,
+        yield from self.__iter_single(start_addr, count,
                                       self.typename,
                                       self.element_size)
 
     def __iter_unknown(self, element):
         count = eval_uint(self.format_command(element, self.count_expr))
-        start = self.eval_command(element, self.start_expr)
+        start_ele = self.eval_command(element, self.start_expr)
         # Like in __init__() seems simpler to evaluate twice than go for
         # performance.
         element_size = gdb.parse_and_eval(
             self.format_command(element, self.start_expr)
         ).type.target().sizeof
-        yield from self.__iter_single(start.v, count, start.t, element_size)
+        yield from self.__iter_single(start_ele.v, count, start_ele.t, element_size)
 
     def iter_def(self, inpipe):
         if self.first:
             yield from self.__iter_single(
-                self.start, self.count, self.typename, self.element_size)
+                self.start_addr, self.count, self.typename, self.element_size)
         else:
             for iterobj in map(
                     self.__iter_known if self.typename else self.__iter_unknown,
@@ -674,8 +672,8 @@ class Terminated(walkers.Walker):
     name = 'follow-until'
     tags = ['data']
 
-    def __init__(self, start, test_expr, follow_expr):
-        self.start = start
+    def __init__(self, start_ele, test_expr, follow_expr):
+        self.start_ele = start_ele
         self.test_expr = test_expr
         self.follow_expr = follow_expr
 
@@ -683,19 +681,19 @@ class Terminated(walkers.Walker):
     def from_userstring(cls, args, first, last):
         if first:
             start_expr, test_expr, follow_expr = cls.parse_args(args, [3, 3], ';')
-            start = cls.calc(start_expr)
+            start_ele = cls.calc(start_expr)
         else:
             test_expr, follow_expr = cls.parse_args(args, [2, 2], ';')
-            start = None
-        return cls(start, test_expr, follow_expr)
+            start_ele = None
+        return cls(start_ele, test_expr, follow_expr)
 
-    def follow_to_termination(self, start):
-        while eval_uint(self.format_command(start, self.test_expr)) == 0:
-            yield start
-            start = self.eval_command(start, self.follow_expr)
+    def follow_to_termination(self, start_ele):
+        while eval_uint(self.format_command(start_ele, self.test_expr)) == 0:
+            yield start_ele
+            start_ele = self.eval_command(start_ele, self.follow_expr)
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start, inpipe, self.follow_to_termination)
+        yield from self.call_with(self.start_ele, inpipe, self.follow_to_termination)
 
 
 class LinkedList(walkers.Walker):
@@ -714,8 +712,8 @@ class LinkedList(walkers.Walker):
     name = 'linked-list'
     tags = ['data']
 
-    def __init__(self, start, list_type, next_member):
-        self.start = start
+    def __init__(self, start_ele, list_type, next_member):
+        self.start_ele = start_ele
         self.list_type = list_type
         self.next_member = next_member
 
@@ -723,21 +721,21 @@ class LinkedList(walkers.Walker):
     def from_userstring(cls, args, first, last):
         if first:
             start_expr, list_type, next_member = cls.parse_args(args, [3, 3], ';')
-            start = cls.calc(start_expr)
+            start_ele = cls.calc(start_expr)
         else:
             list_type, next_member = cls.parse_args(args, [2, 2], ';')
-            start = None
+            start_ele = None
         list_type += '*'
-        return cls(start, list_type, next_member)
+        return cls(start_ele, list_type, next_member)
 
     def __iter_helper(self, element):
         yield from Terminated.single_iter(
-            start=self.calc(str(self.Ele(self.list_type, element.v))),
+            start_ele=self.calc(str(self.Ele(self.list_type, element.v))),
             test_expr='{} == 0',
             follow_expr='{{}}->{}'.format(self.next_member))
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start, inpipe, self.__iter_helper)
+        yield from self.call_with(self.start_ele, inpipe, self.__iter_helper)
 
 
 class Devnull(walkers.Walker):
