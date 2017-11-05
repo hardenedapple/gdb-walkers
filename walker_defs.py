@@ -335,7 +335,12 @@ class Count(walkers.Walker):
 
 
 class Array(walkers.Walker):
-    '''Iterate over each element in an array.
+    '''Iterate over a pointer to each element in an array.
+
+    Note that the types can sometimes be confusing here, walking over an array
+    of `char *` means the walker produdces a stream of `char **` pointers.
+    Similarly, walking over an array of `int` means the walker produces a
+    stream of `int *` pointers.
 
     Usage:
         array type; start_address; count
