@@ -1048,7 +1048,9 @@ class DefinedFunctions(walkers.Walker):
 
     def __init__(self, include_dynlibs, file_regexp, func_regexp):
         self.include_dynlibs = include_dynlibs
-        self.file_regexp = file_regexp
+        # Specify '.+' as the default to tell search_symbols() to ignore files
+        # without debugging information.
+        self.file_regexp = file_regexp if file_regexp is not None else '.+'
         self.func_regexp = func_regexp
 
     @classmethod

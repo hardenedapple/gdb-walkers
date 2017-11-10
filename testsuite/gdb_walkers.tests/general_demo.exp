@@ -52,3 +52,4 @@ unset walk_args
 unset show_arg
 
 run_basic_test "walk functions" "pipe defined-functions tree.c:.* | show whereis {.v}\n" "create_tree demos/tree.c:62\r\nfree_tree demos/tree.c:53\r\ninsert_entry demos/tree.c:23\r\nmain demos/tree.c:85\r\ncreate_random_tree demos/tree.c:69\r\n(gdb)"
+run_basic_test "defined-functions unspecified file pattern" "pipe defined-functions .* | show whereis {.v}\n" "create_tree demos/tree.c:62\r\nfree_tree demos/tree.c:53\r\ninsert_entry demos/tree.c:23\r\nmain demos/tree.c:85\r\ncreate_random_tree demos/tree.c:69\r\n(gdb)"
