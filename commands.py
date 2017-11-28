@@ -559,7 +559,7 @@ class CallGraphNonDebug(gdb.Parameter):
 
 
 class CallGraphEnabled(gdb.Parameter):
-    '''Should `call-graph` be printing things out?
+    '''Should `call-graph` be active?
 
     Boolean: true => `call-graph` breakpoints are enabled.
              false => `call-graph` breakpoints are disabled.
@@ -643,10 +643,11 @@ class CallGraph(gdb.Command):
     If `file_regex` matches the empty string '', then non-debugging symbols are
     searched too.
 
-    If there is no colon in the pattern, then all files are used, and whether
-    non-debugging symbols are used or not depends on the value of
-    `call-graph-nondebug`.
-    This parameter may be set with `set call-graph-nondebug`.
+    If there is no colon in the pattern then the pattern is treated solely as a
+    function regex.
+    In this case all files are used, and whether non-debugging symbols are used
+    or not depends on the value of `call-graph-nondebug`.
+    The `call-graph-nondebug` parameter may be set with the gdb `set` command.
 
     You can disable and enable the call-graph tracing by setting the parameter
     `set call-graph-enabled [on|off]`.
@@ -872,6 +873,8 @@ class CallGraphClear(gdb.Command):
 class CallGraphInit(gdb.Command):
     '''Trace execution flow through functions matching REGEXP.
 
+    For the format of REGEXP, see `help call-graph`.
+
     This command is useful to view the flow of code as it is executed.
     Only one set of tracers may be active at one time.
 
@@ -892,6 +895,8 @@ class CallGraphInit(gdb.Command):
 
 class CallGraphUpdate(gdb.Command):
     '''Add or remove tracers matching REGEXP.
+
+    For the format of REGEXP, see `help call-graph`.
 
     This command is useful to incrementally update the functions currently
     traced. For example you might want to trace create_tree and free_tree but
