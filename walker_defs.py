@@ -206,7 +206,7 @@ class If(walkers.Walker):
     Replaces occurances of `{}` with the input address.
 
     Usage:
-        if [condition]
+        if <condition>
 
     Example:
         if $_streq("Hello", (char_u *){})
@@ -237,7 +237,7 @@ class Head(walkers.Walker):
     Can use `head -N` to take all but the last N elements.
 
     Usage:
-       head [N]
+       head <N>
 
     '''
     name = 'head'
@@ -272,7 +272,7 @@ class Tail(walkers.Walker):
     Can use `tail -N` to pass all but the N first elements.
 
     Usage:
-        tail [N]
+        tail <N>
 
     '''
     name = 'tail'
@@ -814,7 +814,8 @@ class CalledFunctions(walkers.Walker):
         up.
 
     Usage:
-        called-functions [funcname | funcaddr]; [file-regexp]; [maxdepth]; ['unique']
+        ... | called-functions <file-regexp>; <maxdepth>; [unique]
+        called-functions <funcname | funcaddr>; <file-regexp>; <maxdepth>; [unique]
 
     '''
     name = 'called-functions'
