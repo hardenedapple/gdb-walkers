@@ -814,7 +814,7 @@ class CalledFunctions(walkers.Walker):
         up.
 
     Usage:
-        called-functions [funcname | funcaddr]; [file-regexp]; [maxdepth]
+        called-functions [funcname | funcaddr]; [file-regexp]; [maxdepth]; ['unique']
 
     '''
     name = 'called-functions'
@@ -824,7 +824,7 @@ class CalledFunctions(walkers.Walker):
     # hypothetical-call-stack walker can find it.
     hypothetical_stack = []
 
-    def __init__(self, maxdepth, file_regexp, start_expr):
+    def __init__(self, maxdepth, file_regexp, start_expr, unique_funcs):
         self.func_stack = []
         self.arch = gdb.current_arch()
         self.maxdepth = maxdepth
@@ -833,6 +833,8 @@ class CalledFunctions(walkers.Walker):
         # debugging information, hence ignore all functions that don't have
         # debugging info.
         self.dont_fallback = re.match(self.file_regexp, '') is not None
+        self.unique_funcs = unique_funcs
+        self.all_seen = set()
 
         # hypothetical_stack checks for recursion, but also allows the
         # hypothetical-call-stack walker to see what the current stack is.
@@ -844,15 +846,29 @@ class CalledFunctions(walkers.Walker):
     #   Allow default arguments?
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [3,3] if first else [2,2], ';')
+        cmd_parts = cls.parse_args(args, [3,4] if first else [2,3], ';')
+        if cmd_parts[-1] == 'unique':
+            cmd_parts.pop()
+            unique = True
+        else:
+            unique = False
         return cls(eval_uint(cmd_parts[-1]),
                    cmd_parts[-2].strip(),
-                   cmd_parts[0] if first else None)
+                   cmd_parts[0] if first else None,
+                   unique)
 
     def __add_addr(self, addr, depth):
+        if not addr:
+            return
+        if addr in self.all_seen:
+            return
+        if self.unique_funcs:
+            if addr in self.all_seen:
+                return
+            self.all_seen.add(addr)
         # Use reverse stack because recursion is more likely a short-term
         # thing (have not checked whether this speeds anything up).
-        if addr and addr not in self.hypothetical_stack[::-1]:
+        if addr not in self.hypothetical_stack[::-1]:
             self.func_stack.append((addr, depth))
 
     @staticmethod

@@ -25,6 +25,30 @@ set debug_out [join $debug_out "\r\n"]
 run_basic_test "called-functions debug" "inferior $debug_inferior\n$commands\n" $debug_out
 run_basic_test "called-functions plain" "inferior $plain_inferior\n$commands\n" $plain_out
 
+# Test with the `unique` option.
+set commands ""
+lappend commands "pipe called-functions main; .*; -1 ; unique | show whereis {.v}"
+set commands [join $commands "\n"]
+
+set plain_out ""
+lappend plain_out "main 		Unknown"
+lappend plain_out "create_random_tree 		Unknown"
+lappend plain_out "create_tree 		Unknown"
+lappend plain_out "insert_entry 		Unknown"
+lappend plain_out "free_tree 		Unknown"
+set plain_out [join $plain_out "\r\n"]
+
+set debug_out ""
+lappend debug_out "main demos/tree.c:85"
+lappend debug_out "create_random_tree demos/tree.c:69"
+lappend debug_out "create_tree demos/tree.c:62"
+lappend debug_out "insert_entry demos/tree.c:23"
+lappend debug_out "free_tree demos/tree.c:53"
+set debug_out [join $debug_out "\r\n"]
+
+run_basic_test "called-functions unique debug" "inferior $debug_inferior\n$commands\n" $debug_out
+run_basic_test "called-functions unique plain" "inferior $plain_inferior\n$commands\n" $plain_out
+
 # Running called-functions with the hypothetical-stack command.
 
 set commands ""
