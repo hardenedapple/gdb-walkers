@@ -40,6 +40,25 @@ __uintptr_t = find_uintptr_t()
 def as_uintptr(x): return x.cast(__uintptr_t)
 def uintptr_size(): return __uintptr_t.sizeof
 
+def find_type_size(type_string):
+    '''Return the size of the type described by type_string.
+
+    This is different to simply using gdb.lookup_type().sizeof as it handles
+    pointer types by simply returning the size of an uintptr_t type.
+
+    The detection of whether the string is a pointer is very brittle: it simply
+    searches for the character '*' in the type string.
+
+    '''
+    # TODO This is hacky, and we don't handle char[], &char that users
+    # might like to use.
+    if type_string.find('*') != -1:
+        element_size = uintptr_size()
+    else:
+        element_size = gdb.lookup_type(type_string).sizeof
+    return element_size
+
+
 def eval_uint(gdb_expr):
     '''Return the python unsigned integer value of `gdb_expr` without it's type
 

@@ -15,7 +15,7 @@ it.
 '''
 import itertools as itt
 import gdb
-from helpers import offsetof, eval_uint, uintptr_size
+from helpers import offsetof, eval_uint, uintptr_size, find_type_size
 import walkers
 import walker_defs
 
@@ -466,7 +466,7 @@ class NvimGarray(walkers.Walker):
             start=eval_uint('{}->ga_data'.format(gar_ptr)),
             count=eval_uint('{}->ga_len'.format(gar_ptr)),
             typename=self.t,
-            element_size=gdb.lookup_type(self.t).sizeof)
+            element_size=find_type_size(self.t))
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start, inpipe, self.iter_helper)

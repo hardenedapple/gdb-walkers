@@ -566,6 +566,46 @@ free_tree demos/tree.c:53
 
 (gdb) 
 vshcmd: > inferior 3
+vshcmd: > pipe called-functions main; .*; -1; unique | show whereis {.v}
+main demos/tree.c:85
+create_random_tree demos/tree.c:69
+create_tree demos/tree.c:62
+insert_entry demos/tree.c:23
+free_tree demos/tree.c:53
+(gdb) 
+vshcmd: > pipe called-functions main; .*; -1; unique | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
+main demos/tree.c:85
+
+main demos/tree.c:85
+create_random_tree demos/tree.c:69
+
+main demos/tree.c:85
+free_tree demos/tree.c:53
+
+(gdb) 
+vshcmd: > inferior 2
+[Switching to inferior 2 [process 2736] (/home/matthew/.config/gdb/demos/tree)]
+[Switching to thread 2.1 (process 2736)]
+#0  0x0000555555554ae2 in main ()
+(gdb) 
+vshcmd: > pipe called-functions main; .*; -1; unique | show whereis {.v}
+main 		Unknown
+create_random_tree 		Unknown
+create_tree 		Unknown
+insert_entry 		Unknown
+free_tree 		Unknown
+(gdb) 
+vshcmd: > pipe called-functions main; .*; -1; unique | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
+main 		Unknown
+
+main 		Unknown
+create_random_tree 		Unknown
+
+main 		Unknown
+free_tree 		Unknown
+
+(gdb) 
+vshcmd: > inferior 3
 [Switching to inferior 3 [process 4092] (/home/matthew/share/repos/gdb-config/demos/tree_debug)]
 [Switching to thread 3.1 (process 4092)]
 #0  main (argc=2, argv=0x7fffffffe4c8) at demos/tree.c:86

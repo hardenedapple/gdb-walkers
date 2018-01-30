@@ -11,7 +11,7 @@ import re
 import operator
 import gdb
 from helpers import (eval_uint, function_disassembly, as_uintptr, uintptr_size,
-                     file_func_split, search_symbols)
+                     file_func_split, search_symbols, find_type_size)
 import walkers
 import itertools as itt
 
@@ -375,13 +375,7 @@ class Array(walkers.Walker):
             return eval_uint(count_expr), cls.calc(start_expr)
 
         def __noauto(type_arg):
-            # TODO This is hacky, and we don't handle char[], &char that users
-            # might like to use.
-            if type_arg.find('*') != -1:
-                element_size = uintptr_size()
-            else:
-                element_size = gdb.lookup_type(type_arg).sizeof
-            # We're iterating over pointers to the values in the array.
+            element_size = find_type_size(type_arg)
             typename = type_arg + '*'
             return typename, element_size
 
