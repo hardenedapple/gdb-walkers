@@ -9,7 +9,8 @@ The commands defined here are:
 
 '''
 import subprocess as sp
-from collections import namedtuple
+from collections import namedtuple, defaultdict
+import operator
 import re
 import gdb
 from helpers import (eval_uint, function_disassembly, func_and_offset,
@@ -594,11 +595,11 @@ class CallGraphEnabled(gdb.Parameter):
 
 class CallGraphOutput(gdb.Parameter):
     '''File call-graph should write to or 'stdout'.
-    
+
     When set, this value determines where call-graph writes its output to.
     i.e. `set call-graph-output trace.txt`
     means that future call-graph output will go into trace.txt.
-    
+
     Note: output will be appended to the file.
     If you want to truncate the file between uses, use the shell.
         `(gdb) !: > trace.txt`
@@ -620,7 +621,7 @@ class CallGraphOutput(gdb.Parameter):
 
         if old_file != sys.stdout:
             old_file.close()
-        
+
     def get_set_string(self):
         self.redirect_output()
         return 'call-graph trace output directed to {}'.format(self.value)
@@ -989,6 +990,123 @@ class CallGraphInfo(gdb.Command):
             print('\t', bp.desc)
 
 
+class Stack():
+    '''Representation of a gdb stack.
+
+    '''
+    def __init__(self, sym_list):
+        self.sym_list = sym_list
+
+    @classmethod
+    def from_current_stack(cls):
+        current_frame = gdb.selected_frame()
+        function_stack = []
+        while current_frame:
+            function_stack.append(current_frame.function())
+            current_frame = current_frame.older()
+        return cls(function_stack)
+
+    def _internal_hash(self):
+        # Hash based on addresses of the functions
+        # in the stack.
+        return tuple(
+            int(helpers.as_uintptr(symbol.value()))
+            for symbol in self.sym_list)
+
+    def __eq__(self, other):
+        # NOTE
+        #   We might be able to speed this function up by short-circuiting the
+        #   evaluation (i.e. iterate over each value in each objects sym_list,
+        #   checking if the address of each pair of symbols is equal, returning
+        #   False on the first that isn't).
+        return self._internal_hash() == other._internal_hash()
+
+    def __str__(self):
+        return '\n'.join(sym.name for sym in self.sym_list)
+
+    def __hash__(self):
+        return self._internal_hash().__hash__()
+
+
+class StackStats(gdb.Command):
+    '''Prefix command to do with counting stacks that have been seen.
+
+    The idea behind this function is to provide something similar to a dtrace
+    aggregation on stacks.
+
+    One can put a breapoint on a given function that records the calling stack
+    trace, then after a period of running the process view how many times that
+    function was called and where from.
+
+    '''
+    saved_stacks = defaultdict(int)
+
+    @classmethod
+    def add_stack(cls, stack):
+        cls.saved_stacks[stack] += 1
+
+    @classmethod
+    def clear_stacks(cls):
+        cls.saved_stacks = defaultdict(int)
+
+    def __init__(self):
+        super(StackStats, self).__init__('stack-stats', gdb.COMMAND_STACK,
+                                         gdb.COMPLETE_COMMAND, True)
+
+
+class StackStatsRecord(gdb.Command):
+    '''Add the current stack to the set of recorded stacks.
+
+    Example:
+        break some_function
+        command
+        if $_any_caller_matches('other_function')
+        stack-stats display
+        stack-stats clear
+        else
+        stack-stats record
+        end
+        end
+
+
+    '''
+    # TODO Maybe add an argument to add the stack from frame x to frame y?
+    def __init__(self):
+        super(StackStatsRecord, self).__init__('stack-stats record',
+                                               gdb.COMMAND_USER)
+
+    def invoke(self, *_):
+        self.dont_repeat()
+        StackStats.add_stack(Stack.from_current_stack())
+
+
+class StackStatsDisplay(gdb.Command):
+    '''Display the set of recorded stacks.'''
+    def __init__(self):
+        super(StackStatsDisplay, self).__init__('stack-stats display',
+                                                gdb.COMMAND_USER)
+
+    def invoke(self, *_):
+        self.dont_repeat()
+        for stack, count in sorted(StackStats.saved_stacks.items(),
+                                   key=operator.itemgetter(1),
+                                   reverse=True):
+            print('### Stack seen', count, 'times:')
+            print(stack)
+            print()
+
+
+class StackStatsClear(gdb.Command):
+    '''Clear the recorded set of stacks.'''
+    def __init__(self):
+        super(StackStatsClear, self).__init__('stack-stats clear',
+                                              gdb.COMMAND_USER)
+
+    def invoke(self, *_):
+        self.dont_repeat()
+        StackStats.clear_stacks()
+
+
 AttachMatching()
 ShellPipe()
 GlobalUsed()
@@ -1003,3 +1121,7 @@ CallGraphNonDebug()
 CallGraphDynlibs()
 CallGraphEnabled()
 CallGraphOutput()
+StackStats()
+StackStatsRecord()
+StackStatsDisplay()
+StackStatsClear()
