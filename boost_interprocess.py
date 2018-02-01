@@ -30,6 +30,36 @@ def raw_ptr_from_offsetptr(myvar):
     return addr_of_value + offset_value
 
 
+class Raw_ptr_from_Offsetptr(gdb.Function):
+    '''Return raw address represented by the given interprocess offset pointer.
+
+    Uses the observed behaviour that an interprocess offset vector points to
+    an address at a given offset from itself, and that said offset is stored in
+    the internal.m_offset member.
+
+    NOTE:
+        This function must be given an address pointer that exists in the
+        memory of the underlying process.
+        Hence an invokation like $_rawp_from_offsetp(ipvec.m_holder.m_start)
+        will work, but an invokation like
+            (gdb) set $start = ipvec.m_holder.m_start
+            (gdb) print $_rawp_from_offsetp($start)
+        will not.
+        This is because the $start variable will be in gdb's memory space
+        and not the memory space of the inferior.
+
+        One can use temporary gdb variables by doing something like
+            (gdb) set $start = &ipvec.m_holder.m_start
+            (gdb) print $_rawp_from_offsetp(*$start)
+
+    '''
+    def __init__(self):
+        super(Raw_ptr_from_Offsetptr, self).__init__('_rawp_from_offsetp')
+
+    def invoke(self, value):
+        return raw_ptr_from_offsetptr(value)
+
+
 class InterprocessVector(walkers.Walker):
     '''Walk over items in a boost interprocess vector.
 
@@ -69,3 +99,6 @@ class InterprocessVector(walkers.Walker):
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.__iter_helper)
+
+
+Raw_ptr_from_Offsetptr()
