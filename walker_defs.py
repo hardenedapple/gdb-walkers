@@ -358,7 +358,7 @@ class Array(walkers.Walker):
 
     def __init__(self, first, start, count, typename, element_size):
         self.first = first
-        self.typename = typename
+        self.typename = typename + '*'
         self.element_size = element_size
         if first:
             self.start_addr = start
@@ -376,12 +376,14 @@ class Array(walkers.Walker):
 
         def __noauto(type_arg):
             element_size = find_type_size(type_arg)
-            typename = type_arg + '*'
+            typename = type_arg
             return typename, element_size
 
         def __first_auto(start_expr, count_expr, _):
             count, start_ele = __first(count_expr, start_expr)
             start_addr, typename = start_ele.v, start_ele.t
+            typename = typename.rstrip()
+            typename = typename[:-1] if typename[-1] == '*' else typename
             return (start_addr, count, typename,
                     gdb.parse_and_eval(start_expr).type.target().sizeof)
 
