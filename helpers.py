@@ -269,6 +269,15 @@ def get_function_block(addr):
     return func_block
 
 
+def enumdesc_from_enumvalue(enumvalue):
+    enum_intval = int(enumvalue)
+    enum_type = enumvalue.type
+    for name, field in enum_type.iteritems():
+        if field.enumval == enum_intval:
+            return name
+    raise ValueError('Given value is not in the valid range of enum type {}'.format(test_val.type.name))
+
+
 def function_disassembly(func_addr, arch=None, use_fallback=True):
     '''Return the disassembly and filename of the function at `func_addr`.
 
