@@ -358,7 +358,7 @@ class Array(walkers.Walker):
 
     def __init__(self, first, start, count, typename, element_size):
         self.first = first
-        self.typename = typename + '*'
+        self.typename = typename + '*' if typename else None
         self.element_size = element_size
         if first:
             self.start_addr = start
