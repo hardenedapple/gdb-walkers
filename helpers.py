@@ -101,18 +101,23 @@ def offsetof(typename, field):
 gdb.events.new_objfile.connect(start_handler)
 
 if not hasattr(gdb, 'current_arch'):
-    def cur_arch():
-        '''
-        Get the current architecture.
+    if hasattr(gdb.selected_inferior(), 'architecture'):
+        def cur_arch():
+            '''Get the current architecture.'''
+            return gdb.selected_inferior().architecture()
+    else:
+        def cur_arch():
+            '''
+            Get the current architecture.
 
-        This only works if the program is currently running.
+            This only works if the program is currently running.
 
-        If the gdb.current_arch() function is defined, then it's much better
-        than this mock because it works even when the current process isn't
-        running.
+            If the gdb.current_arch() function is defined, then it's much better
+            than this mock because it works even when the current process isn't
+            running.
 
-        '''
-        return gdb.selected_frame().architecture()
+            '''
+            return gdb.selected_frame().architecture()
 
     gdb.current_arch = cur_arch
 
