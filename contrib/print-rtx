@@ -1,0 +1,18 @@
+#!/bin/bash
+
+passname=${1}
+functionname=${2}
+shift 2
+
+cat > ${HOME}/gdb-print-rtx << EOF
+break execute_pass_list if \$_caller_is("expand_all_functions", 2)
+run
+set print object on
+pipe gcc-passes pass | skip-until \$_streq({}->name, "*rest_of_compilation") | if \$_streq({}->name, "$passname") | eval (void *)&{}->execute | sort {} | dedup {} | show print-rtx $functionname {.v}
+disable 1
+cont
+quit
+EOF
+
+"$@" -wrapper gdb,-q,-x,${HOME}/gdb-print-rtx,--args
+rm ${HOME}/gdb-print-rtx

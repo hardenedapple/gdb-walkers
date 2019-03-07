@@ -46,3 +46,46 @@ class Passes(walkers.Walker):
     def iter_def(self, inpipe):
         yield from self.call_with(self.start, inpipe, self.iter_passes)
 
+
+## Stuff specifically for printing out RTX functions in the format ready for
+#  reading in as an __RTL testcase.
+class SetRTXFinishBreak(gdb.Command):
+    def __init__(self):
+        super(SetRTXFinishBreak, self).__init__(
+            'set-finish-rtx-print', gdb.COMMAND_USER)
+
+    def invoke(self, _, __):
+        fin_break = gdb.FinishBreakpoint(internal=True)
+        fin_break.commands = '\n'.join(['silent',
+                                        'call print_rtx_function(stderr, cfun, true)',
+                                        'cont'])
+
+class PrintRTX(gdb.Command):
+    '''Call `print_rtx_function(stderr, cfun, true)` just after a given pass.
+
+    This command prints the RTX of the function named by its first argument
+    just after the pass named by its second.
+    This is useful making starting points for RTL tests in GCC.
+
+    Usage:
+        print-rtx function_foo peephole2
+
+    '''
+    # TODO Figure out how to open a specific file in C and print to that file
+    # instead of to stderr.
+    # TODO Alternatively, redirect GCC's stderr to a given file (just before
+    # running the command?).
+    def __init__(self):
+        super(PrintRTX, self).__init__('print-rtx', gdb.COMMAND_USER)
+
+    def invoke(self, args, _):
+        function_name, pass_address = args.split(None, 1)
+        bp = gdb.Breakpoint('*{}'.format(pass_address))
+        bp.condition = r'$_streq(function_name(cfun), "{}")'.format(
+            function_name)
+        bp.commands = '\n'.join(['set-finish-rtx-print', 'cont'])
+
+
+SetRTXFinishBreak()
+PrintRTX()
+####
