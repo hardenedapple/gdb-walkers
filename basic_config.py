@@ -95,7 +95,7 @@ def importer(event):
     placed in autoload-directory/full/path/to/debug/program-gdb.extension .
 
     This function means that you just need to create a file
-    autoload-directory/program-gdb.py.
+    autoimports/program-gdb.py.
 
     NOTE: gdb can load the same objects more than once while open.
     The simplest example of this is calling `run` more than once on a binary.
@@ -104,6 +104,21 @@ def importer(event):
 
     '''
     progname = event.new_objfile.filename
+    do_autoimport(progname)
+
+
+def do_autoimport(progname):
+    '''Implements importing helpers from the autoimports/ directory.
+
+    This is a separate function so that it can easily be run from the gdb
+    command prompt.
+    One time when this might be necessary is if running under `rr` where the
+    above event is not triggered for the main program.
+
+    TODO Make this an actual user command rather than a python function.
+
+    '''
+
     # Would like to use the gdb.current_objfile() function, but since I can't
     # use autoloading (because I need the entire filename instead of just the
     # basename), I have to manually store the current program file somewhere.
@@ -132,7 +147,7 @@ def importer(event):
         autoimports.imported[basename] = load_name
         autoimports.index += 1
 
-    with suppress(ModuleNotFoundError):
+    with suppress(ImportError):
         importlib.import_module(load_name)
     walkers.objfile_name = None
 
