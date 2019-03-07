@@ -35,7 +35,9 @@ class ShellPipe(gdb.Command):
 
     def invoke(self, arg, _):
         # XXX allow escaped `!` chars to be used in the gdb command.
-        gdb_command, shell_command = arg.split('!', 1)
+        # Currently handling this by ensuring any `!` not meant for seperating
+        # commands is right next to another character.
+        gdb_command, shell_command = arg.split(' ! ', 1)
         gdb_command = gdb_command.strip()
         shell_command = shell_command.strip()
 
