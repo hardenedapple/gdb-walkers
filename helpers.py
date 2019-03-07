@@ -3,6 +3,7 @@
 '''
 import gdb
 import re
+import contextlib
 import collections
 
 def file_func_split(regexp):
@@ -427,3 +428,29 @@ def func_and_offset(addr):
 
     offset = addr - block.start
     return (block.function.name, offset)
+
+
+@contextlib.contextmanager
+def gdb_setting(name, setting):
+    '''Context manager to ensure using a specific parameter for a given code
+    block without affecting the users settings.
+    
+    NOTE: As yet only works on binary (on/off) parameters.
+    NOTE: Be careful using this around code that can use users expressions.
+          (A user may be surprised to find an expression behaving differently
+          when run at the prompt and used in another command if e.g. the `print
+          object` setting is changed).
+    
+    '''
+    original = gdb.parameter(name)
+    if original == True:
+        original = 'on'
+    elif original == False:
+        original = 'off'
+
+    # TODO Deal with other types in the future.
+    gdb.execute('set {} {}'.format(name, setting))
+    try:
+        yield
+    finally:
+        gdb.execute('set {} {}'.format(name, original))
