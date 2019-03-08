@@ -50,6 +50,14 @@ class Passes(walkers.Walker):
 ## Stuff specifically for printing out RTX functions in the format ready for
 #  reading in as an __RTL testcase.
 class SetRTXFinishBreak(gdb.Command):
+    '''Craate a finish breakpoint that calls `print_rtx_function`.
+
+    When called this command creates a breakpoint upon returning from the
+    current function (like the "finish" command), with the "commands"
+    silent
+    call `print_rtx_function(stderr, cfun, true)`
+    end
+    associated with that checkpoint.'''
     def __init__(self):
         super(SetRTXFinishBreak, self).__init__(
             'set-finish-rtx-print', gdb.COMMAND_USER)
