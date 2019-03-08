@@ -47,6 +47,49 @@ class Passes(walkers.Walker):
         yield from self.call_with(self.start, inpipe, self.iter_passes)
 
 
+class InsnChain(walkers.Walker):
+    '''Walk over all RTX insns in a chain.
+
+    Follows the next/previous insn pointer in a chain.
+    Is equivalent to
+        pipe linked-list <start_insn>; rtx_insn; u.fld[<1|0>].rt_rtx
+
+    Use:
+        pipe gcc-insns <start_insn>; [forwards|backwards]
+        pipe eval <equation> | gcc-insns [forwards|backwards]
+
+    Example:
+        pipe gcc-insns (x_rtl)->emit.seq->first | show call debug_rtx({})
+
+    '''
+    name = 'gcc-insns'
+
+    def __init__(self, start_ele, forwards=True):
+        self.start_ele = start_ele
+        self.forwards = forwards
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        cmd_parts = cls.parse_args(args, [1,2] if first else [0,1], ';')
+        if len(cmd_parts) == 1 + first:
+            assert cmd_parts[-1] in ['forwards', 'backwards'], 'Direction must be one of "forwards" or "backwards".'
+            forwards = True if cmd_parts[-1] == 'forwards' else False
+            expr = cls.calc(cmd_parts[0])
+        else:
+            forwards = True
+            expr = cls.calc(cmd_parts[0]) if first else None
+        return cls(expr, forwards)
+
+    def iter_insns(self, init_addr):
+        yield from walker_defs.LinkedList.single_iter(
+            start_ele=init_addr,
+            list_type='rtx_insn',
+            next_member='u.fld[{}].rt_rtx'.format(1 if self.forwards else 0))
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(self.start_ele, inpipe, self.iter_insns)
+
+
 ## Stuff specifically for printing out RTX functions in the format ready for
 #  reading in as an __RTL testcase.
 class SetRTXFinishBreak(gdb.Command):
