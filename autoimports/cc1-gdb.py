@@ -47,6 +47,17 @@ class Passes(walkers.Walker):
         yield from self.call_with(self.start, inpipe, self.iter_passes)
 
 
+def expr_direction_parse(cls, args, first, last):
+    cmd_parts = cls.parse_args(args, [1,2] if first else [0,1], ';')
+    if len(cmd_parts) == 1 + first:
+        assert cmd_parts[-1] in ['forwards', 'backwards'], 'Direction must be one of "forwards" or "backwards".'
+        forwards = True if cmd_parts[-1] == 'forwards' else False
+    else:
+        forwards = True
+    expr = cls.calc(cmd_parts[0]) if first else None
+    return cls(expr, forwards)
+
+
 class InsnChain(walkers.Walker):
     '''Walk over all RTX insns in a chain.
 
@@ -70,15 +81,7 @@ class InsnChain(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [1,2] if first else [0,1], ';')
-        if len(cmd_parts) == 1 + first:
-            assert cmd_parts[-1] in ['forwards', 'backwards'], 'Direction must be one of "forwards" or "backwards".'
-            forwards = True if cmd_parts[-1] == 'forwards' else False
-            expr = cls.calc(cmd_parts[0])
-        else:
-            forwards = True
-            expr = cls.calc(cmd_parts[0]) if first else None
-        return cls(expr, forwards)
+        return expr_direction_parse(cls, args, first, last)
 
     def iter_insns(self, init_addr):
         yield from walker_defs.LinkedList.single_iter(
@@ -88,6 +91,102 @@ class InsnChain(walkers.Walker):
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.iter_insns)
+
+
+# TODO Handle CFG information as well.
+# Currently don't know where this information is, but in the dumps we get
+# output around `goto` statements and `else` statements that we don't get
+# simply iterating through the gimple.
+
+class GimpleStatements(walkers.Walker):
+    '''Walk over gimple statements in a sequence.
+
+    Follows the next/prev pointer in a chain.
+    Forwards direction is equivalent to
+        pipe linked-list <start_stmt>; gimple; next
+
+    Backwards direction is equivalent to the below (except that it still
+    provides the first element)
+        pipe follow-until <start_stmt>; {} == <start_stmt>; {}->prev
+
+    Use:
+        pipe gcc-gimple <start_stmt>; [forwards|backwards]
+        pipe eval <equation> | gcc-gimple [forwards|backwards]
+
+    Example:
+        pipe gcc-gimple cfun->cfg->x_entry_block_ptr->next_bb->il.gimple.seq: \
+            forwards | show call debug({})
+    '''
+    name = 'gcc-gimple'
+
+    def __init__(self, start_ele, forwards=True):
+        self.start_ele = start_ele
+        self.forwards = forwards
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return expr_direction_parse(cls, args, first, last)
+
+    def iter_stmts(self, init_addr):
+        if self.forwards:
+            yield from walker_defs.LinkedList.single_iter(
+                start_ele=init_addr,
+                list_type='gimple',
+                next_member='next')
+        else:
+            # Check for NULL init_addr
+            if not init_addr.v:
+                return
+            yield init_addr
+            yield from walker_defs.Terminated.single_iter(
+                start_ele=self.calc('{}->prev'.format(init_addr)),
+                test_expr='{{}} == {}'.format(init_addr),
+                follow_expr='{}->prev')
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(self.start_ele, inpipe, self.iter_stmts)
+
+
+class GimpleBlocks(walkers.Walker):
+    '''Walk over basic blocks in a function.
+
+    Follows the next_bb/prev_bb pointers of basic_block_def statements.
+    Is equivalent to one of the below depending on direction.
+        pipe linked-list <start_stmt>; struct basic_block_def; next
+        pipe linked-list <start_stmt>; struct basic_block_def; prev
+
+    Use:
+        pipe gcc-bbs <start_stmt>; [forwards|backwards]
+        pipe eval <equation> | gcc-bbs [forwards|backwards]
+
+    Example:
+        pipe gcc-bbs cfun->cfg->x_entry_block_ptr->next_bb 
+            | eval {}->il.gimple.seq 
+            | gcc-gimple
+            | show call debug({})
+        pipe gcc-bbs cfun->cfg->x_exit_block_ptr->prev_bb 
+            | gcc-gimple
+            | show call debug({})
+        
+    '''
+    name = 'gcc-bbs'
+
+    def __init__(self, start_ele, forwards=True):
+        self.start_ele = start_ele
+        self.forwards = forwards
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return expr_direction_parse(cls, args, first, last)
+
+    def iter_bbs(self, init_addr):
+        yield from walker_defs.LinkedList.single_iter(
+            start_ele=init_addr,
+            list_type='struct basic_block_def',
+            next_member='next_bb' if self.forwards else 'prev_bb')
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(self.start_ele, inpipe, self.iter_bbs)
 
 
 ## Stuff specifically for printing out RTX functions in the format ready for
