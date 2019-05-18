@@ -434,13 +434,13 @@ def func_and_offset(addr):
 def gdb_setting(name, setting):
     '''Context manager to ensure using a specific parameter for a given code
     block without affecting the users settings.
-    
+
     NOTE: As yet only works on binary (on/off) parameters.
     NOTE: Be careful using this around code that can use users expressions.
           (A user may be surprised to find an expression behaving differently
           when run at the prompt and used in another command if e.g. the `print
           object` setting is changed).
-    
+
     '''
     original = gdb.parameter(name)
     if original == True:

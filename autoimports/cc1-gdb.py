@@ -160,14 +160,14 @@ class GimpleBlocks(walkers.Walker):
         pipe eval <equation> | gcc-bbs [forwards|backwards]
 
     Example:
-        pipe gcc-bbs cfun->cfg->x_entry_block_ptr->next_bb 
-            | eval {}->il.gimple.seq 
+        pipe gcc-bbs cfun->cfg->x_entry_block_ptr->next_bb
+            | eval {}->il.gimple.seq
             | gcc-gimple
             | show call debug({})
-        pipe gcc-bbs cfun->cfg->x_exit_block_ptr->prev_bb 
+        pipe gcc-bbs cfun->cfg->x_exit_block_ptr->prev_bb
             | gcc-gimple
             | show call debug({})
-        
+
     '''
     name = 'gcc-bbs'
 
