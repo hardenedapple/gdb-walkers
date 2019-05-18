@@ -231,6 +231,63 @@ class If(walkers.Walker):
                 yield element
 
 
+class IfNth(walkers.Walker):
+    '''Provides items where the Nth previous one satisfies a condition.
+
+    Replaces occurances of `{}` with the input address.
+
+    Usage:
+        if-nth <condition>; <offset>
+
+    Example:
+        if-nth $_streq("Hello", (char_u *){}); 1
+        if-nth ((sometype *){}).field == 10; -1
+
+    '''
+    name = 'if-nth'
+    require_input = True
+    tags = ['general']
+
+    def __init__(self, cmd, offset):
+        self.cmd = cmd
+        self.offset = offset
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        cmd_parts = cls.parse_args(args, [2, 2], ';')
+        return cls(cmd_parts[0], int(cmd_parts[1]))
+
+    def positive_offset_ifn(self, inpipe):
+        to_yield = []
+        for count, element in enumerate(inpipe):
+            if self.eval_command(element).v:
+                to_yield.append(count + self.offset)
+            if to_yield:
+                if to_yield[0] == count:
+                    yield element
+                # Should never be to_yield[0] < count, but may as well handle
+                # that case anyway.
+                if to_yield[0] <= count:
+                    to_yield.pop()
+
+    def negative_offset_ifn(self, inpipe):
+        previous = []
+        cur_yield = None
+        for element in inpipe:
+            if len(previous) == -self.offset:
+                cur_yield = previous.pop()
+            assert len(previous) < -self.offset, "Should be an invariant of this loop"
+            previous.append(element)
+            if self.eval_command(element).v and cur_yield:
+                yield cur_yield
+
+    def iter_def(self, inpipe):
+        if self.offset >= 0:
+            yield from self.positive_offset_ifn(inpipe)
+        else:
+            yield from self.negative_offset_ifn(inpipe)
+
+
 class Head(walkers.Walker):
     '''Only take first `N` items of the pipeline.
 
