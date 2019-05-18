@@ -4,7 +4,8 @@ passname=${1}
 functionname=${2}
 shift 2
 
-cat > ${HOME}/gdb-print-rtx << EOF
+gdb_script=$(mktemp -q)
+cat > ${gdb_script} << EOF
 break execute_pass_list if \$_caller_is("expand_all_functions", 2)
 run
 set print object on
@@ -14,5 +15,5 @@ cont
 quit
 EOF
 
-"$@" -wrapper gdb,-q,-x,${HOME}/gdb-print-rtx,--args
-rm ${HOME}/gdb-print-rtx
+"$@" -wrapper gdb,-q,-x,${gdb_script},--args
+rm ${gdb_script}
