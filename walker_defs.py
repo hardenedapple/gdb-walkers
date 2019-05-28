@@ -152,7 +152,9 @@ class Instruction(walkers.Walker):
         instructions main; main+10
         instructions main; NULL; 100
         // A pointless reimplementation of `disassemble`
-        pipe instructions main, NULL, 10 | show x/i {}
+        pipe instructions main; NULL; 10 \
+            | take-while $_output_contains("x/i {}", "main") \
+            | show x/i {}
 
     '''
     name = 'instructions'
