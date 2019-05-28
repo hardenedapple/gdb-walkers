@@ -168,7 +168,7 @@ class Instruction(walkers.Walker):
     def from_userstring(cls, args, first, last):
         cmd_parts = cls.parse_args(args, [2, 3] if first else [1, 2], ';')
 
-        start_ele = self.calc(cmd_parts.pop(0)) if first else None
+        start_ele = cls.calc(cmd_parts.pop(0)) if first else None
         end = cmd_parts.pop(0)
         end_addr = None if end == 'NULL' else eval_uint(end)
         count = eval_uint(cmd_parts.pop(0)) if cmd_parts else None
