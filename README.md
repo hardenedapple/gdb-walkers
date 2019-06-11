@@ -22,10 +22,12 @@ with `jmp` rather than `ret` (which are much more common in non-debug
 functions).
 Tracing non-debug symbols can be activated with `set call-graph-nondebug on`.
 
+## Installation
+
 To install, simply clone this repo to `~/.config/gdb/` and put the line
 `source ~/.config/gdb/gdbinit` in your `~/.gdbinit` file.
 
-### Examples
+## Examples
 There is a demo walker `tree-elements` walking over all elements in a tree
 structure defined in `demo_structure.py` (the tree structure is defined in
 `tree.c`).
