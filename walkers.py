@@ -373,8 +373,12 @@ class WalkerHelp(gdb.Command):
         }
 
     @staticmethod
+    def sorted_walkers():
+        return sorted(walkers.items(), key=lambda x: x[0])
+
+    @staticmethod
     def all_walkers(_):
-        for name, walker in walkers.items():
+        for name, walker in self.sorted_walkers():
             print(name, '--', walker.__doc__.split('\n', 1)[0])
 
     @staticmethod
@@ -389,7 +393,7 @@ class WalkerHelp(gdb.Command):
 
     @staticmethod
     def one_tag(tagname):
-        for name, walker in walkers.items():
+        for name, walker in self.sorted_walkers():
             if tagname in walker.tags:
                 print(name, '--', walker.__doc__.split('\n', 1)[0])
 
