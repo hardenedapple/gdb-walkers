@@ -376,9 +376,9 @@ class WalkerHelp(gdb.Command):
     def sorted_walkers():
         return sorted(walkers.items(), key=lambda x: x[0])
 
-    @staticmethod
-    def all_walkers(_):
-        for name, walker in self.sorted_walkers():
+    @classmethod
+    def all_walkers(cls, _):
+        for name, walker in cls.sorted_walkers():
             print(name, '--', walker.__doc__.split('\n', 1)[0])
 
     @staticmethod
@@ -391,9 +391,9 @@ class WalkerHelp(gdb.Command):
         for tag in sorted(list(all_tags)):
             print(tag)
 
-    @staticmethod
-    def one_tag(tagname):
-        for name, walker in self.sorted_walkers():
+    @classmethod
+    def one_tag(cls, tagname):
+        for name, walker in cls.sorted_walkers():
             if tagname in walker.tags:
                 print(name, '--', walker.__doc__.split('\n', 1)[0])
 
