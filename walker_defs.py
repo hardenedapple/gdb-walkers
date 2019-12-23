@@ -1144,3 +1144,76 @@ class DefinedFunctions(walkers.Walker):
         for symbol in search_symbols(self.func_regexp, self.file_regexp,
                                      self.include_dynlibs):
             yield self.Ele('void *', int(as_uintptr(symbol.value())))
+
+
+class PrettyPrinter(walkers.Walker):
+    '''Walk over this structures `children` as determined by a registered
+    pretty-printer.
+
+    The GDB pretty-printing API has an optional method called `children`, which
+    returns an iterator over GDB values containing each child in the given data
+    structure.  This walker takes one argument (the name of an inferior object)
+    and finds the pretty-printer for this object.  It then produces an iterator
+    over the addresses of each object returned by the pretty-printers
+    `children` method.
+
+    Note: some pretty-printers do not always work, which will mean that this
+    walker does not work either.  Howveer, this walker could be broken in how
+    it reads the pretty printer in the current element.
+
+    This walker can only be used at the start of a pipeline,
+
+    Usage:
+        pipe pretty-printers <container>
+
+    Example:
+        pipe pretty-printers my_cpp_int_vector | \
+                if *{} < 10 | show print *{}
+
+    '''
+    name = 'pretty-printers'
+    tags = ['data']
+
+    def __init__(self, container_desc):
+        self.desc = container_desc
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        return cls(args)
+
+    @staticmethod
+    def all_pretty_printers():
+        for obj in gdb.objfiles():
+            for pp in obj.pretty_printers:
+                yield pp
+
+    def find_pretty_printer(self, gdb_obj):
+        for pp in self.all_pretty_printers():
+            ret = pp(gdb_obj)
+            if ret:
+                return ret
+
+    def children_walker(self, pretty_printer):
+        if not hasattr(pretty_printer, 'children'):
+            print('Type {} has no children.'.format(pretty_printer.typename))
+            return []
+
+        for i in pretty_printer.children():
+            addr = i[1].address
+            yield walkers.PipeElement(str(addr.type), int(as_uintptr(addr)))
+
+    def iter_def(self, inpipe):
+        if not self.desc:
+            return []
+
+        if not inpipe:
+            yield from self.children_walker(
+                    self.find_pretty_printer(
+                        gdb.parse_and_eval(self.desc)))
+            return
+
+        for element in inpipe:
+            yield from self.children_walker(
+                    self.find_pretty_printer(
+                        gdb.parse_and_eval(
+                            self.format_command(element, self.desc))))
