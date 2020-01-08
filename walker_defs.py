@@ -72,12 +72,12 @@ class Eval(walkers.Walker):
     place.
 
     Use:
-        pipe eval  <gdb expression>
+        gdb-pipe eval  <gdb expression>
 
     Example:
-        pipe eval  {} + 8
-        pipe eval  {} != 0 && ((struct complex_type *){})->field
-        pipe eval  $saved_var->field
+        gdb-pipe eval  {} + 8
+        gdb-pipe eval  {} != 0 && ((struct complex_type *){})->field
+        gdb-pipe eval  $saved_var->field
 
     '''
 
@@ -152,7 +152,7 @@ class Instruction(walkers.Walker):
         instructions main; main+10
         instructions main; NULL; 100
         // A pointless reimplementation of `disassemble`
-        pipe instructions main; NULL; 10 \
+        gdb-pipe instructions main; NULL; 10 \
             | take-while $_output_contains("x/i {}", "main") \
             | show x/i {}
 
@@ -375,7 +375,7 @@ class Count(walkers.Walker):
         count
 
     Example:
-        pipe instructions main; main+100 | count
+        gdb-pipe instructions main; main+100 | count
 
     '''
     name = 'count'
@@ -516,11 +516,11 @@ class Max(walkers.Walker):
     returned.
 
     Use:
-        pipe ... | max {}
+        gdb-pipe ... | max {}
 
     Example:
         // Find argument that starts with the last letter in the alphabet.
-        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
+        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
             max (*(char *){})[0]
 
     '''
@@ -557,11 +557,11 @@ class Min(walkers.Walker):
     returned.
 
     Use:
-        pipe ... | min {}
+        gdb-pipe ... | min {}
 
     Example:
         // Find argument that starts with the last letter in the alphabet.
-        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
+        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
             min (*(char *){})[0]
 
     '''
@@ -597,11 +597,11 @@ class Sort(walkers.Walker):
     Reverse sorting is not supported: negate the expression as a workaround.
 
     Use:
-        pipe ... | sort {}
+        gdb-pipe ... | sort {}
 
     Example:
         // Sort arguments alphabetically
-        pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
+        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
             sort (*(char **){})[0]
 
     '''
@@ -632,7 +632,7 @@ class Dedup(walkers.Walker):
     repeat the same value as the one previous.
 
     Use:
-        pipe ... | dedup {}
+        gdb-pipe ... | dedup {}
 
     '''
     name = 'dedup'
@@ -661,7 +661,7 @@ class Until(walkers.Walker):
     Can't be the first walker.
 
     Usage:
-        pipe ... | take-while ((struct *){})->field != marker
+        gdb-pipe ... | take-while ((struct *){})->field != marker
 
     '''
     name = 'take-while'
@@ -688,7 +688,7 @@ class Since(walkers.Walker):
     Returns all items in a walker since a condition was satisfied.
 
     Usage:
-        pipe ... | skip-until ((struct *){})->field == $#marker#
+        gdb-pipe ... | skip-until ((struct *){})->field == $#marker#
 
     '''
     name = 'skip-until'
@@ -724,7 +724,7 @@ class Terminated(walkers.Walker):
 
     Example:
         follow-until argv; *{} == 0; {} + sizeof(char **)
-        pipe eval *(char **)argv \\
+        gdb-pipe eval *(char **)argv \\
             | follow-until *(char *){} == 0; {} + sizeof(char) \\
             | show x/c {}
 
@@ -801,7 +801,7 @@ class Devnull(walkers.Walker):
     '''Completely consume the previous walker, but yield nothing.
 
     Usage:
-        pipe ... | devnull
+        gdb-pipe ... | devnull
 
     '''
     name = 'devnull'
@@ -821,10 +821,10 @@ class Reverse(walkers.Walker):
     '''Reverse the iteration from the previous command.
 
     Usage:
-        pipe ... | reverse
+        gdb-pipe ... | reverse
 
     Examples:
-        pipe array char; 1; 10 | reverse
+        gdb-pipe array char; 1; 10 | reverse
 
     '''
     name = 'reverse'
@@ -1018,12 +1018,12 @@ class HypotheticalStack(walkers.Walker):
         `called-functions` walker.
 
     Usage:
-        pipe called-functions main; .*; -1 |
+        gdb-pipe called-functions main; .*; -1 |
             if $_output_contains("global-used {} curwin", "curwin") |
             hypothetical-call-stack
 
-        pipe called-functions main; .*; -1 | ...
-        pipe hypothetical-call-stack
+        gdb-pipe called-functions main; .*; -1 | ...
+        gdb-pipe hypothetical-call-stack
 
     '''
     name = 'hypothetical-call-stack'
@@ -1056,12 +1056,12 @@ class File(walkers.Walker):
     Addresses in the file sholud be hexadecimal strings.
 
     Often used to concatenate two walkers.
-        shellpipe pipe walker1 [args1 ..] ! cat > output.txt
-        shellpipe pipe walker2 [args2 ..] ! cat >> output.txt
-        pipe file output.txt | ...
+        shellpipe gdb-pipe walker1 [args1 ..] ! cat > output.txt
+        shellpipe gdb-pipe walker2 [args2 ..] ! cat >> output.txt
+        gdb-pipe file output.txt | ...
 
     Usage:
-        pipe file addresses.txt | ...
+        gdb-pipe file addresses.txt | ...
 
     '''
     name = 'file'
@@ -1101,17 +1101,17 @@ class DefinedFunctions(walkers.Walker):
     'include-dynlibs' after the file and function regexps.
 
     Usage:
-        pipe defined-functions file-regexp:function-regexp [include-dynlibs]
+        gdb-pipe defined-functions file-regexp:function-regexp [include-dynlibs]
 
     Example:
         // Print those functions in tree.c that use the 'insert_entry' function
-        pipe defined-functions tree.c:tree | \
+        gdb-pipe defined-functions tree.c:tree | \
             if $_output_contains("global-used {} insert_entry", "insert_entry") | \
             show whereis {}
 
         // Walk over all functions ending with 'tree' (including those in
         // dynamic libraries)
-        pipe defined-functions .*:.*tree$ True | \
+        gdb-pipe defined-functions .*:.*tree$ True | \
             show print-string $_function_of({}); "\\n"
 
     '''
@@ -1158,20 +1158,20 @@ class PrettyPrinter(walkers.Walker):
     `children` method.
 
     Note: some pretty-printers do not always work, which will mean that this
-    walker does not work either.  Howveer, this walker could be broken in how
+    walker does not work either.  However, this walker could be broken in how
     it reads the pretty printer in the current element.
 
     This walker can only be used at the start of a pipeline,
 
     Usage:
-        pipe pretty-printers <container>
+        gdb-pipe pretty-printer <container>
 
     Example:
-        pipe pretty-printers my_cpp_int_vector | \
+        gdb-pipe pretty-printer my_cpp_int_vector | \
                 if *{} < 10 | show print *{}
 
     '''
-    name = 'pretty-printers'
+    name = 'pretty-printer'
     tags = ['data']
 
     def __init__(self, container_desc):
@@ -1194,6 +1194,9 @@ class PrettyPrinter(walkers.Walker):
                 return ret
 
     def children_walker(self, pretty_printer):
+        if not pretty_printer:
+            print('No pretty printer found for {}.'.format(self.desc))
+            return []
         if not hasattr(pretty_printer, 'children'):
             print('Type {} has no children.'.format(pretty_printer.typename))
             return []

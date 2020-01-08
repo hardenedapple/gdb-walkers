@@ -13,14 +13,14 @@ class Passes(walkers.Walker):
     """Walk over all passes and subpasses from an `opt_pass *`.
 
     If there are no subpasses this would be the same as
-    pipe linked-list <head>; opt_pass; next
+    gdb-pipe linked-list <head>; opt_pass; next
 
     Use:
-        pipe gcc-passes <pass_array>
-        pipe eval <equation> | gcc-passes
+        gdb-pipe gcc-passes <pass_array>
+        gdb-pipe eval <equation> | gcc-passes
 
     Example:
-        pipe gcc-passes rest_of_compilation | show print {}->name
+        gdb-pipe gcc-passes rest_of_compilation | show print {}->name
 
     """
     name = 'gcc-passes'
@@ -63,14 +63,14 @@ class InsnChain(walkers.Walker):
 
     Follows the next/previous insn pointer in a chain.
     Is equivalent to
-        pipe linked-list <start_insn>; rtx_insn; u.fld[<1|0>].rt_rtx
+        gdb-pipe linked-list <start_insn>; rtx_insn; u.fld[<1|0>].rt_rtx
 
     Use:
-        pipe gcc-insns <start_insn>; [forwards|backwards]
-        pipe eval <equation> | gcc-insns [forwards|backwards]
+        gdb-pipe gcc-insns <start_insn>; [forwards|backwards]
+        gdb-pipe eval <equation> | gcc-insns [forwards|backwards]
 
     Example:
-        pipe gcc-insns (x_rtl)->emit.seq->first | show call debug_rtx({})
+        gdb-pipe gcc-insns (x_rtl)->emit.seq->first | show call debug_rtx({})
 
     '''
     name = 'gcc-insns'
@@ -103,18 +103,18 @@ class GimpleStatements(walkers.Walker):
 
     Follows the next/prev pointer in a chain.
     Forwards direction is equivalent to
-        pipe linked-list <start_stmt>; gimple; next
+        gdb-pipe linked-list <start_stmt>; gimple; next
 
     Backwards direction is equivalent to the below (except that it still
     provides the first element)
-        pipe follow-until <start_stmt>; {} == <start_stmt>; {}->prev
+        gdb-pipe follow-until <start_stmt>; {} == <start_stmt>; {}->prev
 
     Use:
-        pipe gcc-gimple <start_stmt>; [forwards|backwards]
-        pipe eval <equation> | gcc-gimple [forwards|backwards]
+        gdb-pipe gcc-gimple <start_stmt>; [forwards|backwards]
+        gdb-pipe eval <equation> | gcc-gimple [forwards|backwards]
 
     Example:
-        pipe gcc-gimple cfun->cfg->x_entry_block_ptr->next_bb->il.gimple.seq: \
+        gdb-pipe gcc-gimple cfun->cfg->x_entry_block_ptr->next_bb->il.gimple.seq: \
             forwards | show call debug({})
     '''
     name = 'gcc-gimple'
@@ -152,19 +152,19 @@ class GimpleBlocks(walkers.Walker):
 
     Follows the next_bb/prev_bb pointers of basic_block_def statements.
     Is equivalent to one of the below depending on direction.
-        pipe linked-list <start_stmt>; struct basic_block_def; next
-        pipe linked-list <start_stmt>; struct basic_block_def; prev
+        gdb-pipe linked-list <start_stmt>; struct basic_block_def; next
+        gdb-pipe linked-list <start_stmt>; struct basic_block_def; prev
 
     Use:
-        pipe gcc-bbs <start_stmt>; [forwards|backwards]
-        pipe eval <equation> | gcc-bbs [forwards|backwards]
+        gdb-pipe gcc-bbs <start_stmt>; [forwards|backwards]
+        gdb-pipe eval <equation> | gcc-bbs [forwards|backwards]
 
     Example:
-        pipe gcc-bbs cfun->cfg->x_entry_block_ptr->next_bb
+        gdb-pipe gcc-bbs cfun->cfg->x_entry_block_ptr->next_bb
             | eval {}->il.gimple.seq
             | gcc-gimple
             | show call debug({})
-        pipe gcc-bbs cfun->cfg->x_exit_block_ptr->prev_bb
+        gdb-pipe gcc-bbs cfun->cfg->x_exit_block_ptr->prev_bb
             | gcc-gimple
             | show call debug({})
 

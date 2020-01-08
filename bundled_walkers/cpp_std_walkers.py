@@ -3,6 +3,12 @@ Contains walkers for the C++ standard library.
 
 Since the implementation is not a part of the standard and subject to change
 without notice, the walkers in this file are inherently unstable.
+
+NOTE:
+    If you're interested in using these walkers you may be better served by
+    using the `pretty-printer` walker to use the pretty printers defined by the
+    libstdc++ community.
+
 '''
 
 import gdb
@@ -24,12 +30,12 @@ class StdList(walkers.Walker):
         type.
 
     Usage:
-        std-list &l | show print {}
-        eval &l | std-list
+        gdb-pipe std-list &l | show print {}
+        gdb-pipe eval &l | std-list
         # If the address is known but no special
-        eval ('std::__cxx11::list<int, std::allocator<int> >*')0x1111 | std-list
+        gdb-pipe eval ('std::__cxx11::list<int, std::allocator<int> >*')0x1111 | std-list
         # For the elements of that list.
-        std-list &l | show print {}->front()
+        gdb-pipe std-list &l | show print {}->front()
 
     '''
     name = 'std-list'
@@ -51,6 +57,11 @@ class StdList(walkers.Walker):
         #
         # Hence we find our terminating value by fetching the 'prev' element
         # from the head.
+        #
+        # XXX
+        # It seems this is not always the case.
+        # I have at least once seen the first element of the list being the
+        # node containing the number of elements in the list.
         l_type = 'std::__detail::_List_node_base*'
         start_ele = self.Ele(l_type, element.v)
         test_expr = '{} == ' + str(eval_uint('({})._M_prev'.format(start_ele)))
@@ -73,8 +84,8 @@ class StdVector(walkers.Walker):
         very well be problems.
 
     Usage:
-        std-vector &v | show print *{}
-        eval &v | std-vector | show print *{}
+        gdb-pipe std-vector &v | show print *{}
+        gdb-pipe eval &v | std-vector | show print *{}
 
     '''
     name = 'std-vector'
@@ -110,8 +121,8 @@ class StdMap(walkers.Walker):
         very well be problems.
 
     Usage:
-        std-map &m | show print *{}
-        eval &m | std-map | show print *{}
+        gdb-pipe std-map &m | show print *{}
+        gdb-pipe eval &m | std-map | show print *{}
 
 
     '''

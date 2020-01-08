@@ -32,7 +32,7 @@ There is a demo walker `tree-elements` walking over all elements in a tree
 structure defined in `demo_structure.py` (the tree structure is defined in
 `tree.c`).
 This can be sourced and tested with `source ~/.config/gdb/demos/tree_walker.py`
-and `pipe tree-elements tree_root` respectively.
+and `gdb-pipe tree-elements tree_root` respectively.
 ```
 (gdb) gdb demos/tree_debug
 Reading symbols from demos/tree_debug...done.
@@ -47,7 +47,7 @@ main (argc=2, argv=0x7fffffffe4c8) at demos/tree.c:93
 93	    free_tree(tree_root);
 (gdb) source demos/tree_walker.py
 (gdb) // Show all pure leaf elements in the tree.
-(gdb) pipe tree-elements tree_root | if {}->children[0] == 0 && {}->children[1] == 0 | show print *{}
+(gdb) gdb-pipe tree-elements tree_root | if {}->children[0] == 0 && {}->children[1] == 0 | show print *{}
 $1 = {children = {0x0, 0x0}, datum = 1753820418}
 $2 = {children = {0x0, 0x0}, datum = 1255532675}
 $3 = {children = {0x0, 0x0}, datum = 679162307}
@@ -91,21 +91,21 @@ much just a for loop).
 ## Many ways of counting to ten
 
 ```
-(gdb) pipe follow-until 1; {} > 10; {} + 1
-(gdb) pipe array char; 1; 10
-(gdb) pipe follow-until 1; {} > 100; {} + 1 | head 10
+(gdb) gdb-pipe follow-until 1; {} > 10; {} + 1
+(gdb) gdb-pipe array char; 1; 10
+(gdb) gdb-pipe follow-until 1; {} > 100; {} + 1 | head 10
 (gdb) set variable $count = 0
-(gdb) pipe follow-until 1; {} > 100; {} + 1 | if $count++ < 10
+(gdb) gdb-pipe follow-until 1; {} > 100; {} + 1 | if $count++ < 10
 (gdb) set variable $count = 0
 (gdb) // The below differs from the above because the iteration is cut short.
-(gdb) pipe follow-until 1; {} > 100; {} + 1 | take-while $count++ < 10
+(gdb) gdb-pipe follow-until 1; {} > 100; {} + 1 | take-while $count++ < 10
 (gdb) set variable $count = 0
-(gdb) pipe array char; 1; 100 | take-while (int){} % 2 == 0 || $count++ < 5
-(gdb) pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse
+(gdb) gdb-pipe array char; 1; 100 | take-while (int){} % 2 == 0 || $count++ < 5
+(gdb) gdb-pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse
 (gdb) // Combine the addresses of more than one walker.
-(gdb) shellpipe pipe array char; 1; 5 ! cat > addresses
-(gdb) shellpipe pipe array char; 6; 5 ! cat >> addresses
-(gdb) pipe file addresses
+(gdb) shellpipe gdb-pipe array char; 1; 5 ! cat > addresses
+(gdb) shellpipe gdb-pipe array char; 6; 5 ! cat >> addresses
+(gdb) gdb-pipe file addresses
 ```
 
 ## Other tricks
@@ -125,7 +125,7 @@ much just a for loop).
 I know ... that doesn't quite sound right does it?
 ```
 (gdb) set variable $sum = 0
-(gdb) pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {}, {} | devnull
+(gdb) gdb-pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {}, {} | devnull
 (gdb) print $sum
 $1 = 5050
 (gdb) 
@@ -135,7 +135,7 @@ $1 = 5050
 ```
 (gdb) start 20 100 Hello there this is a test
 (gdb) set variable $i = -1
-(gdb) pipe array char*; argv; argc  | if $i++, $_output_contains("print *{}", "t") | show print $i
+(gdb) gdb-pipe array char*; argv; argc  | if $i++, $_output_contains("print *{}", "t") | show print $i
 $103 = 0
 $108 = 4
 $110 = 5
@@ -151,7 +151,7 @@ $117 = 0x7fffffffe89d "this"
 probably a bad idea in anything but the smallest program and their source code
 file name and line number.
 ```
-(gdb) pipe called-functions main; .*; -1 | show printf "%18s\t%s\n", $_function_of({}), $_whereis({})
+(gdb) gdb-pipe called-functions main; .*; -1 | show printf "%18s\t%s\n", $_function_of({}), $_whereis({})
               main	demos/tree.c:85
          free_tree	demos/tree.c:53
 create_random_tree	demos/tree.c:69
@@ -164,9 +164,9 @@ create_random_tree	demos/tree.c:69
 in this case, use the global function `free_tree`, if you have a global
 variable this would work just as well.
 ```
-(gdb) pipe defined-functions tree.c:.* | if $_output_contains("global-used {.v} free_tree", "free_tree") | show whereis {.v}
+(gdb) gdb-pipe defined-functions tree.c:.* | if $_output_contains("global-used {.v} free_tree", "free_tree") | show whereis {.v}
 (gdb) // Walk over all functions ending with 'tree' (including those in dynamic libraries)
-(gdb) pipe defined-functions .*:.*tree$ True | show print-string $_function_of({}); "\n"
+(gdb) gdb-pipe defined-functions .*:.*tree$ True | show print-string $_function_of({}); "\n"
 (gdb) // NOTE, I use my own command `print-string` above to avoid
 (gdb) // `printf "%s\n", $_function_of({})` as `printf "%s", <somestring>`
 (gdb) // allocates the string in the inferior and provides no way of
@@ -175,7 +175,7 @@ variable this would work just as well.
 
 ### List hypothetical call stack of functions called by main that use a global
 ```
-(gdb) pipe called-functions main; .*; -1 | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
+(gdb) gdb-pipe called-functions main; .*; -1 | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
 main demos/tree.c:85
 
 main demos/tree.c:85

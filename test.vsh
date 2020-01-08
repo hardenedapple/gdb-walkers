@@ -1,63 +1,78 @@
+vshcmd: > quit
+vshcmd: > y
+A debugging session is active.
+
+	Inferior 5 [process 12634] will be killed.
+
+Quit anyway? (y or n) gdb [12:46:36] $ 
 vshcmd: > gdb
+vshcmd: > add-auto-load-scripts-directory /usr/share/gdb/auto-load
+vshcmd: > add-auto-load-safe-path /usr/share/gdb/auto-load
 vshcmd: > add-inferior -exec demos/tree
 vshcmd: > add-inferior -exec demos/tree_debug
 vshcmd: > add-inferior -exec demos/list
 vshcmd: > add-inferior -exec demos/cpp_structures
+vshcmd: > set pagination off
 vshcmd: > inferior 3
-(gdb) Added inferior 2
-Reading symbols from demos/tree...(no debugging symbols found)...done.
-(gdb) Added inferior 3
-Reading symbols from demos/tree_debug...done.
-(gdb) Added inferior 4
-Reading symbols from demos/list...done.
-(gdb) Added inferior 5
-Reading symbols from demos/cpp_structures...done.
-(gdb) [Switching to inferior 3 [<null>] (/home/matthew/.config/gdb/demos/tree_debug)]
+(gdb) (gdb) (gdb) [New inferior 2]
+Added inferior 2
+Reading symbols from demos/tree...
+(No debugging symbols found in demos/tree)
+(gdb) [New inferior 3]
+Added inferior 3
+Reading symbols from demos/tree_debug...
+(gdb) [New inferior 4]
+Added inferior 4
+Reading symbols from demos/list...
+(gdb) [New inferior 5]
+Added inferior 5
+Reading symbols from demos/cpp_structures...
+(gdb) (gdb) [Switching to inferior 3 [<null>] (/home/matmal01/.config/gdb/demos/tree_debug)]
 (gdb) 
 vshcmd: > # BELOW IS ORIGINAL
 vshcmd: > start 10
-Temporary breakpoint 1 at 0xaae: main. (4 locations)
-Starting program: /home/matthew/.config/gdb/demos/tree_debug 10
+Temporary breakpoint 1 at 0x400954: main. (4 locations)
+Starting program: /home/matmal01/.config/gdb/demos/tree_debug 10
 
-Temporary breakpoint 1, main (argc=2, argv=0x7fffffffe558) at demos/tree.c:86
+Temporary breakpoint 1, main (argc=2, argv=0x7fffffffdfd8) at demos/tree.c:86
 86	    if (argc != 2) {
 (gdb) 
 vshcmd: > call-graph init .*
 (gdb) 
 vshcmd: > info call-graph
 Functions currently traced by call-graph:
-	 create_tree
-	 free_tree
-	 insert_entry
 	 main
 	 create_random_tree
+	 free_tree
+	 create_tree
+	 insert_entry
 (gdb) 
 vshcmd: > info call-graph exact
 Functions currently traced by call-graph:
-	 0x555555554a25 	 create_tree
-	 0x5555555549e4 	 free_tree
-	 0x5555555548fa 	 insert_entry
-	 0x555555554ade 	 main
-	 0x555555554a53 	 create_random_tree
+	 0x400984 	 main
+	 0x4008fb 	 create_random_tree
+	 0x40088c 	 free_tree
+	 0x4008cd 	 create_tree
+	 0x4007a6 	 insert_entry
 (gdb) 
 vshcmd: > call-graph update - free_tree
 (gdb) 
 vshcmd: > info call-graph
 Functions currently traced by call-graph:
-	 create_tree
-	 insert_entry
 	 main
 	 create_random_tree
+	 create_tree
+	 insert_entry
 (gdb) 
 vshcmd: > call-graph update + free_tree
 (gdb) 
 vshcmd: > info call-graph
 Functions currently traced by call-graph:
-	 create_tree
-	 insert_entry
 	 main
 	 create_random_tree
 	 free_tree
+	 create_tree
+	 insert_entry
 (gdb) 
 vshcmd: > cont
 Continuing.
@@ -65,26 +80,26 @@ Continuing.
          --> create_tree
          <-- create_tree+45
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
-     <-- create_random_tree+138
+         <-- insert_entry+229
+     <-- create_random_tree+136
      --> free_tree
          --> free_tree
              --> free_tree
@@ -131,14 +146,14 @@ Continuing.
              <-- free_tree+64
          <-- free_tree+64
      <-- free_tree+64
- <-- main+119
-[Inferior 3 (process 24294) exited normally]
+ <-- main+117
+[Inferior 3 (process 5318) exited normally]
 (gdb) 
 vshcmd: > set call-graph-enabled off
 vshcmd: > run
 call-graph tracing is disabled
-(gdb) Starting program: /home/matthew/.config/gdb/demos/tree_debug 10
-[Inferior 3 (process 24305) exited normally]
+(gdb) Starting program: /home/matmal01/.config/gdb/demos/tree_debug 10
+[Inferior 3 (process 5331) exited normally]
 (gdb) 
 vshcmd: > set call-graph-enabled on
 call-graph tracing is enabled
@@ -147,127 +162,39 @@ vshcmd: > !rm test.txt
 vshcmd: > set call-graph-output test.txt
 vshcmd: > run
 (gdb) call-graph trace output directed to test.txt
-(gdb) Starting program: /home/matthew/.config/gdb/demos/tree_debug 10
-[Inferior 3 (process 24321) exited normally]
+(gdb) Starting program: /home/matmal01/.config/gdb/demos/tree_debug 10
+[Inferior 3 (process 5350) exited normally]
 (gdb) 
 vshcmd: > set call-graph-output stdout
 call-graph trace output directed to stdout
 (gdb) 
-vshcmd: > run
-Starting program: /home/matthew/.config/gdb/demos/tree_debug 10
- --> main
-     --> create_random_tree
-         --> create_tree
-         <-- create_tree+45
-         --> insert_entry
-         <-- insert_entry+233
-         --> insert_entry
-         <-- insert_entry+233
-         --> insert_entry
-         <-- insert_entry+233
-         --> insert_entry
-         <-- insert_entry+233
-         --> insert_entry
-         <-- insert_entry+233
-         --> insert_entry
-         <-- insert_entry+233
-         --> insert_entry
-         <-- insert_entry+233
-         --> insert_entry
-         <-- insert_entry+233
-         --> insert_entry
-         <-- insert_entry+233
-         --> insert_entry
-         <-- insert_entry+233
-     <-- create_random_tree+138
-     --> free_tree
-         --> free_tree
-             --> free_tree
-                 --> free_tree
-                 <-- free_tree+64
-                 --> free_tree
-                 <-- free_tree+64
-             <-- free_tree+64
-             --> free_tree
-                 --> free_tree
-                 <-- free_tree+64
-                 --> free_tree
-                 <-- free_tree+64
-             <-- free_tree+64
-         <-- free_tree+64
-         --> free_tree
-             --> free_tree
-             <-- free_tree+64
-             --> free_tree
-                 --> free_tree
-                     --> free_tree
-                         --> free_tree
-                         <-- free_tree+64
-                         --> free_tree
-                             --> free_tree
-                             <-- free_tree+64
-                             --> free_tree
-                             <-- free_tree+64
-                         <-- free_tree+64
-                     <-- free_tree+64
-                     --> free_tree
-                     <-- free_tree+64
-                 <-- free_tree+64
-                 --> free_tree
-                     --> free_tree
-                         --> free_tree
-                         <-- free_tree+64
-                         --> free_tree
-                         <-- free_tree+64
-                     <-- free_tree+64
-                     --> free_tree
-                     <-- free_tree+64
-                 <-- free_tree+64
-             <-- free_tree+64
-         <-- free_tree+64
-     <-- free_tree+64
- <-- main+119
-[Inferior 3 (process 24329) exited normally]
-(gdb) 
-vshcmd: > call-graph update + free_tree
-Traceback (most recent call last):
-  File "~/.config/gdb/commands.py", line 957, in invoke
-    trace_matching_functions(args[1])
-  File "~/.config/gdb/commands.py", line 750, in trace_matching_functions
-    arch = gdb.current_arch()
-  File "/home/matthew/.config/gdb/helpers.py", line 115, in cur_arch
-    return gdb.selected_frame().architecture()
-gdb.error: No frame is currently selected.
-Error occurred in Python command: No frame is currently selected.
-(gdb) 
 vshcmd: > !cat test.txt
 vshcmd: > !rm test.txt
-vshcmd: > call-graph clear
  --> main
      --> create_random_tree
          --> create_tree
          <-- create_tree+45
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
+         <-- insert_entry+229
          --> insert_entry
-         <-- insert_entry+233
-     <-- create_random_tree+138
+         <-- insert_entry+229
+     <-- create_random_tree+136
      --> free_tree
          --> free_tree
              --> free_tree
@@ -314,8 +241,13 @@ vshcmd: > call-graph clear
              <-- free_tree+64
          <-- free_tree+64
      <-- free_tree+64
- <-- main+119
-(gdb) (gdb) (gdb) 
+ <-- main+117
+(gdb) (gdb) 
+vshcmd: > call-graph clear
+vshcmd: > info call-graph
+(gdb) Functions currently traced by call-graph:
+(gdb) quit
+gdb [11:44:33] $ 
 vshcmd: > info call-graph
 Functions currently traced by call-graph:
 (gdb) 
@@ -510,7 +442,7 @@ Starting program: /home/matthew/.config/gdb/demos/tree 10
 
 Temporary breakpoint 3, 0x0000555555554ae2 in main ()
 (gdb) 
-vshcmd: > pipe called-functions main; .*; -1 | show whereis {.v}
+vshcmd: > gdb-pipe called-functions main; .*; -1 | show whereis {.v}
 main 		Unknown
 create_random_tree 		Unknown
 create_tree 		Unknown
@@ -518,7 +450,7 @@ insert_entry 		Unknown
 free_tree 		Unknown
 free_tree 		Unknown
 (gdb) 
-vshcmd: > pipe called-functions main; .*; -1 | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
+vshcmd: > gdb-pipe called-functions main; .*; -1 | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
 main 		Unknown
 
 main 		Unknown
@@ -542,7 +474,7 @@ Starting program: /home/matthew/.config/gdb/demos/tree_debug 10
 Thread 3.1 "tree_debug" hit Temporary breakpoint 4, main (argc=2, argv=0x7fffffffe558) at demos/tree.c:86
 86	    if (argc != 2) {
 (gdb) 
-vshcmd: > pipe called-functions main; .*; -1 | show whereis {.v}
+vshcmd: > gdb-pipe called-functions main; .*; -1 | show whereis {.v}
 main demos/tree.c:85
 create_random_tree demos/tree.c:69
 create_tree demos/tree.c:62
@@ -550,7 +482,7 @@ insert_entry demos/tree.c:23
 free_tree demos/tree.c:53
 free_tree demos/tree.c:53
 (gdb) 
-vshcmd: > pipe called-functions main; .*; -1 | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
+vshcmd: > gdb-pipe called-functions main; .*; -1 | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
 main demos/tree.c:85
 
 main demos/tree.c:85
@@ -565,7 +497,7 @@ free_tree demos/tree.c:53
 
 (gdb) 
 vshcmd: > inferior 3
-vshcmd: > pipe called-functions main; .*; -1; unique | show whereis {.v}
+vshcmd: > gdb-pipe called-functions main; .*; -1; unique | show whereis {.v}
 [Switching to inferior 3 [process 24373] (/home/matthew/.config/gdb/demos/tree_debug)]
 [Switching to thread 3.1 (process 24373)]
 #0  main (argc=2, argv=0x7fffffffe558) at demos/tree.c:86
@@ -576,7 +508,7 @@ create_tree demos/tree.c:62
 insert_entry demos/tree.c:23
 free_tree demos/tree.c:53
 (gdb) 
-vshcmd: > pipe called-functions main; .*; -1; unique | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
+vshcmd: > gdb-pipe called-functions main; .*; -1; unique | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
 main demos/tree.c:85
 
 main demos/tree.c:85
@@ -591,14 +523,14 @@ vshcmd: > inferior 2
 [Switching to thread 2.1 (process 24365)]
 #0  0x0000555555554ae2 in main ()
 (gdb) 
-vshcmd: > pipe called-functions main; .*; -1; unique | show whereis {.v}
+vshcmd: > gdb-pipe called-functions main; .*; -1; unique | show whereis {.v}
 main 		Unknown
 create_random_tree 		Unknown
 create_tree 		Unknown
 insert_entry 		Unknown
 free_tree 		Unknown
 (gdb) 
-vshcmd: > pipe called-functions main; .*; -1; unique | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
+vshcmd: > gdb-pipe called-functions main; .*; -1; unique | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
 main 		Unknown
 
 main 		Unknown
@@ -629,13 +561,13 @@ Starting program: /home/matthew/.config/gdb/demos/tree_debug 10
 Thread 3.1 "tree_debug" hit Temporary breakpoint 5, main (argc=2, argv=0x7fffffffe558) at demos/tree.c:93
 93	    free_tree(tree_root);
 (gdb) 
-vshcmd: > pipe tree-elements tree_root | if {}->children[0] == 0 && {}->children[1] == 0 | show printf "%d\n", {}->datum
+vshcmd: > gdb-pipe tree-elements tree_root | if {}->children[0] == 0 && {}->children[1] == 0 | show printf "%d\n", {}->datum
 1753820418
 1255532675
 679162307
 131589623
 (gdb) 
-vshcmd: > pipe follow-until 1; {} > 10; {} + 1
+vshcmd: > gdb-pipe follow-until 1; {} > 10; {} + 1
 0x1
 0x2
 0x3
@@ -647,7 +579,7 @@ vshcmd: > pipe follow-until 1; {} > 10; {} + 1
 0x9
 0xa
 (gdb) 
-vshcmd: > pipe array char; 1; 10
+vshcmd: > gdb-pipe array char; 1; 10
 0x1
 0x2
 0x3
@@ -659,7 +591,7 @@ vshcmd: > pipe array char; 1; 10
 0x9
 0xa
 (gdb) 
-vshcmd: > pipe eval 1 | array char; {}; 10
+vshcmd: > gdb-pipe eval 1 | array char; {}; 10
 0x1
 0x2
 0x3
@@ -671,7 +603,7 @@ vshcmd: > pipe eval 1 | array char; {}; 10
 0x9
 0xa
 (gdb) 
-vshcmd: > pipe follow-until 1; {} > 100; {} + 1 | head 10
+vshcmd: > gdb-pipe follow-until 1; {} > 100; {} + 1 | head 10
 0x1
 0x2
 0x3
@@ -684,7 +616,7 @@ vshcmd: > pipe follow-until 1; {} > 100; {} + 1 | head 10
 0xa
 (gdb) 
 vshcmd: > set variable $count = 0
-vshcmd: > pipe follow-until 1; {} > 100; {} + 1 | if $count++ < 10
+vshcmd: > gdb-pipe follow-until 1; {} > 100; {} + 1 | if $count++ < 10
 (gdb) 0x1
 0x2
 0x3
@@ -697,7 +629,7 @@ vshcmd: > pipe follow-until 1; {} > 100; {} + 1 | if $count++ < 10
 0xa
 (gdb) 
 vshcmd: > set variable $count = 0
-vshcmd: > pipe follow-until 1; {} > 100; {} + 1 | take-while $count++ < 10
+vshcmd: > gdb-pipe follow-until 1; {} > 100; {} + 1 | take-while $count++ < 10
 (gdb) 0x1
 0x2
 0x3
@@ -710,7 +642,7 @@ vshcmd: > pipe follow-until 1; {} > 100; {} + 1 | take-while $count++ < 10
 0xa
 (gdb) 
 vshcmd: > set variable $count = 0
-vshcmd: > pipe array char; 1; 100 | take-while {.v} % 2 == 0 || $count++ < 5
+vshcmd: > gdb-pipe array char; 1; 100 | take-while {.v} % 2 == 0 || $count++ < 5
 (gdb) 0x1
 0x2
 0x3
@@ -723,7 +655,7 @@ vshcmd: > pipe array char; 1; 100 | take-while {.v} % 2 == 0 || $count++ < 5
 0xa
 (gdb) 
 vshcmd: > set variable $count = 0
-vshcmd: > pipe array char; 1; 100 | take-while (int){} % 2 == 0 || $count++ < 5
+vshcmd: > gdb-pipe array char; 1; 100 | take-while (int){} % 2 == 0 || $count++ < 5
 (gdb) 0x1
 0x2
 0x3
@@ -735,7 +667,7 @@ vshcmd: > pipe array char; 1; 100 | take-while (int){} % 2 == 0 || $count++ < 5
 0x9
 0xa
 (gdb) 
-vshcmd: > pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse
+vshcmd: > gdb-pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse
 0x1
 0x2
 0x3
@@ -747,7 +679,7 @@ vshcmd: > pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse
 0x9
 0xa
 (gdb) 
-vshcmd: > pipe follow-until 20; {} <= 0; {} - 1 | tail -10 | reverse 
+vshcmd: > gdb-pipe follow-until 20; {} <= 0; {} - 1 | tail -10 | reverse 
 0x1
 0x2
 0x3
@@ -759,7 +691,7 @@ vshcmd: > pipe follow-until 20; {} <= 0; {} - 1 | tail -10 | reverse
 0x9
 0xa
 (gdb) 
-vshcmd: > pipe follow-until 100; {} <= 0; {} - 1 | skip-until {} == 10 | reverse
+vshcmd: > gdb-pipe follow-until 100; {} <= 0; {} - 1 | skip-until {} == 10 | reverse
 0x1
 0x2
 0x3
@@ -771,7 +703,7 @@ vshcmd: > pipe follow-until 100; {} <= 0; {} - 1 | skip-until {} == 10 | reverse
 0x9
 0xa
 (gdb) 
-vshcmd: > pipe follow-until 1; {} > 20; {} + 1 | head -10
+vshcmd: > gdb-pipe follow-until 1; {} > 20; {} + 1 | head -10
 0x1
 0x2
 0x3
@@ -783,9 +715,9 @@ vshcmd: > pipe follow-until 1; {} > 20; {} + 1 | head -10
 0x9
 0xa
 (gdb) 
-vshcmd: > shellpipe pipe array char; 1; 5 ! cat > addresses
-vshcmd: > shellpipe pipe array char; 6; 5 ! cat >> addresses
-vshcmd: > pipe file addresses
+vshcmd: > shellpipe gdb-pipe array char; 1; 5 ! cat > addresses
+vshcmd: > shellpipe gdb-pipe array char; 6; 5 ! cat >> addresses
+vshcmd: > gdb-pipe file addresses
 vshcmd: > !rm addresses
 (gdb) (gdb) 0x1
 0x2
@@ -799,24 +731,24 @@ vshcmd: > !rm addresses
 0xa
 (gdb) (gdb) 
 vshcmd: > set variable $count = 0
-vshcmd: > pipe follow-until 1; {} > 100; $count++, {} + 1 | head 0 | devnull
+vshcmd: > gdb-pipe follow-until 1; {} > 100; $count++, {} + 1 | head 0 | devnull
 vshcmd: > print $count
 (gdb) (gdb) $1 = 0
 (gdb) 
 vshcmd: > set variable $count = 0
-vshcmd: > pipe follow-until 1; {} > 100; $count++, {} + 1 | head 10 | devnull
+vshcmd: > gdb-pipe follow-until 1; {} > 100; $count++, {} + 1 | head 10 | devnull
 vshcmd: > print $count
 (gdb) (gdb) $2 = 9
 (gdb) 
 vshcmd: > set variable $sum = 0
-vshcmd: > pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {}, {} | devnull
+vshcmd: > gdb-pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {}, {} | devnull
 vshcmd: > print $sum
 (gdb) (gdb) $3 = 5050
 (gdb) 
-vshcmd: > pipe eval 1 | show printf "%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d\n", {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
+vshcmd: > gdb-pipe eval 1 | show printf "%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d\n", {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
 111111111111111111111
 (gdb) 
-vshcmd: > pipe follow-until 1; {} > 100 && {} != 99; {} + 1 | count
+vshcmd: > gdb-pipe follow-until 1; {} > 100 && {} != 99; {} + 1 | count
 0x64
 (gdb) 
 vshcmd: > inferior 4
@@ -830,7 +762,7 @@ Temporary breakpoint 6 at 0xb04: file demos/list.c, line 70.
 Thread 4.1 "list" hit Temporary breakpoint 6, main (argc=2, argv=0x7fffffffe578) at demos/list.c:70
 70	    free_list(list_head);
 (gdb) 
-vshcmd: > pipe linked-list list_head; list_t; next | show printf "%d\n", {}->datum
+vshcmd: > gdb-pipe linked-list list_head; list_t; next | show printf "%d\n", {}->datum
 679162307
 54404747
 906573271
@@ -856,13 +788,13 @@ Starting program: /home/matthew/.config/gdb/demos/tree_debug Hello there this is
 Temporary breakpoint 1, main (argc=9, argv=0x7fffffffe4f8) at demos/tree.c:86
 86	    if (argc != 2) {
 (gdb) 
-vshcmd: > pipe follow-until argv + 1; *{} == 0; {} + 1 | max (*(char **){})[0] | show printf "%s\n", *{}
+vshcmd: > gdb-pipe follow-until argv + 1; *{} == 0; {} + 1 | max (*(char **){})[0] | show printf "%s\n", *{}
 there
 (gdb) 
-vshcmd: > pipe follow-until argv + 1; *{} == 0; {} + 1 | min (*(char **){})[0] | show printf "%s\n", *{}
+vshcmd: > gdb-pipe follow-until argv + 1; *{} == 0; {} + 1 | min (*(char **){})[0] | show printf "%s\n", *{}
 Hello
 (gdb) 
-vshcmd: > pipe follow-until argv + 1; *{} == 0; {} + 1 | sort (*(char **){})[0] | show printf "%s\n", *{}
+vshcmd: > gdb-pipe follow-until argv + 1; *{} == 0; {} + 1 | sort (*(char **){})[0] | show printf "%s\n", *{}
 Hello
 a
 arguments
@@ -872,7 +804,7 @@ set
 there
 this
 (gdb) 
-vshcmd: > pipe follow-until argv + 1; *{} == 0; {} + 1 | sort (*(char **){})[0] | dedup (*(char **){})[0] | show printf "%s\n", *{}
+vshcmd: > gdb-pipe follow-until argv + 1; *{} == 0; {} + 1 | sort (*(char **){})[0] | dedup (*(char **){})[0] | show printf "%s\n", *{}
 Hello
 a
 is
@@ -880,21 +812,21 @@ of
 set
 there
 (gdb) 
-vshcmd: > pipe array auto; argv; argc | array auto; *{}; 3 | show printf "%c", *{}
+vshcmd: > gdb-pipe array auto; argv; argc | array auto; *{}; 3 | show printf "%c", *{}
 /hoHelthethiisassetofarg(gdb) 
 vshcmd: > cont
 Continuing.
 Usage: /home/matthew/.config/gdb/demos/tree_debug <seed>
 [Inferior 3 (process 24793) exited with code 01]
 (gdb) 
-vshcmd: > pipe defined-functions tree.c:.* | show whereis {.v}
+vshcmd: > gdb-pipe defined-functions tree.c:.* | show whereis {.v}
 create_tree demos/tree.c:62
 free_tree demos/tree.c:53
 insert_entry demos/tree.c:23
 main demos/tree.c:85
 create_random_tree demos/tree.c:69
 (gdb) 
-vshcmd: > pipe defined-functions .* | show whereis {.v}
+vshcmd: > gdb-pipe defined-functions .* | show whereis {.v}
 create_tree demos/tree.c:62
 free_tree demos/tree.c:53
 insert_entry demos/tree.c:23
@@ -913,7 +845,7 @@ Temporary breakpoint 2, main (argc=9, argv=0x7fffffffe508) at demos/tree.c:86
 (gdb) 
 vshcmd: > set variable $i = -1
 (gdb) 
-vshcmd: > pipe array char*; argv; argc  | if $i++, $_output_contains("print *{}", "t") | show output $i
+vshcmd: > gdb-pipe array char*; argv; argc  | if $i++, $_output_contains("print *{}", "t") | show output $i
 0458(gdb) 
 vshcmd: > cont
 Continuing.
@@ -934,7 +866,7 @@ Temporary breakpoint 3, 0x0000555555554ae2 in main ()
 (gdb) 
 vshcmd: > set variable $i = -1
 (gdb) 
-vshcmd: > pipe array char*; argv; argc  | if $i++, $_output_contains("print *{}", "t") | show output $i
+vshcmd: > gdb-pipe array char*; argv; argc  | if $i++, $_output_contains("print *{}", "t") | show output $i
 error parsing  argc  and casting to uintptr_t
 Traceback (most recent call last):
   File "/home/matthew/.config/gdb/walkers.py", line 332, in invoke
@@ -998,20 +930,10 @@ vshcmd: > inferior 5
 vshcmd: > start 10
 vshcmd: > break -function 'create_container<std::__cxx11::list<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >' -label after_defined
 vshcmd: > cont
-vshcmd: > pipe std-list &rand_container | show print-string {}->front(); "\n"
-[Switching to inferior 5 [<null>] (/home/matthew/.config/gdb/demos/cpp_structures)]
-(gdb) Temporary breakpoint 1 at 0xaae: main. (4 locations)
-Starting program: /home/matthew/.config/gdb/demos/cpp_structures 10
-
-Temporary breakpoint 1, main (argc=2, argv=0x7fffffffe558) at demos/cpp_structures.cpp:30
-warning: Source file is more recent than executable.
-30	{
-(gdb) Breakpoint 2 at 0x555555555dd0: file demos/cpp_structures.cpp, line 25.
-(gdb) Continuing.
-
-Breakpoint 2, create_container<std::__cxx11::list<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > > (start=1283169405, end=0) at demos/cpp_structures.cpp:24
-24	  container rand_container(start, end);
-(gdb) 1283169405
+vshcmd: > gdb-pipe std-list &rand_container | show print-string {}->_M_impl->_M_node->_M_data; "\n"
+10
+10
+1283169405
 89128932
 2124247567
 1902734705
@@ -1019,18 +941,17 @@ Breakpoint 2, create_container<std::__cxx11::list<int, std::allocator<int> >, __
 965494256
 108111773
 850673521
-1140597833
-726325504
 (gdb) 
 vshcmd: > break -function 'create_container<std::vector<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >' -label after_defined
 vshcmd: > cont
-vshcmd: > pipe std-vector &rand_container | show print-string *{}; "\n"
-Breakpoint 3 at 0x555555555e65: file demos/cpp_structures.cpp, line 25.
+vshcmd: > gdb-pipe std-vector &rand_container | show print-string *{}; "\n"
+Breakpoint 3 at 0x401399: file demos/cpp_structures.cpp, line 25.
 (gdb) Continuing.
 
-Breakpoint 3, create_container<std::vector<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > > (start=1283169405, end=0) at demos/cpp_structures.cpp:24
+Breakpoint 3, create_container<std::vector<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > > (start=10, end=33) at demos/cpp_structures.cpp:24
 24	  container rand_container(start, end);
-(gdb) 1283169405
+(gdb) 10
+1283169405
 89128932
 2124247567
 1902734705
@@ -1039,26 +960,49 @@ Breakpoint 3, create_container<std::vector<int, std::allocator<int> >, __gnu_cxx
 108111773
 850673521
 1140597833
-726325504
 (gdb) 
 vshcmd: > break -function 'create_container<std::map<int, int, std::less<int>, std::allocator<std::pair<int const, int> > >, __gnu_cxx::__normal_iterator<std::pair<int, int>*, std::vector<std::pair<int, int>, std::allocator<std::pair<int, int> > > > >' -label after_defined
 vshcmd: > cont
-vshcmd: > pipe std-map &rand_container | show print-string *{}; "\n"
-Breakpoint 4 at 0x5555555560c8: file demos/cpp_structures.cpp, line 25.
+vshcmd: > gdb-pipe std-map &rand_container | show print-string *{}; "\n"
+Breakpoint 4 at 0x4015aa: file demos/cpp_structures.cpp, line 25.
 (gdb) Continuing.
 
-Breakpoint 4, create_container<std::map<int, int, std::less<int>, std::allocator<std::pair<int const, int> > >, __gnu_cxx::__normal_iterator<std::pair<int, int>*, std::vector<std::pair<int, int>, std::allocator<std::pair<int, int> > > > > (start={first = 0, second = 1283169405}, end={first = 0, second = 0}) at demos/cpp_structures.cpp:24
+Breakpoint 4, create_container<std::map<int, int, std::less<int>, std::allocator<std::pair<int const, int> > >, __gnu_cxx::__normal_iterator<std::pair<int, int>*, std::vector<std::pair<int, int>, std::allocator<std::pair<int, int> > > > > (start=..., end=...) at demos/cpp_structures.cpp:24
 24	  container rand_container(start, end);
-(gdb) {first = 0, second = 1283169405}
-{first = 1, second = 89128932}
-{first = 2, second = 2124247567}
-{first = 3, second = 1902734705}
-{first = 4, second = 2141071321}
-{first = 5, second = 965494256}
-{first = 6, second = 108111773}
-{first = 7, second = 850673521}
-{first = 8, second = 1140597833}
-{first = 9, second = 726325504}
+(gdb) {first = 0, second = 10}
+{first = 1, second = 1283169405}
+{first = 2, second = 89128932}
+{first = 3, second = 2124247567}
+{first = 4, second = 1902734705}
+{first = 5, second = 2141071321}
+{first = 6, second = 965494256}
+{first = 7, second = 108111773}
+{first = 8, second = 850673521}
+{first = 9, second = 1140597833}
+(gdb) 
+vshcmd: > print rand_container
+$3 = std::map with 10 elements = {[0] = 10, [1] = 1283169405, [2] = 89128932, [3] = 2124247567, [4] = 1902734705, [5] = 2141071321, [6] = 965494256, [7] = 108111773, [8] = 850673521, [9] = 1140597833}
+(gdb) 
+vshcmd: > set $tempvar = 0;
+vshcmd: > gdb-pipe pretty-printers rand_container | show print-string *{}; "\n"
+0
+1283169405
+1
+89128932
+2
+2124247567
+3
+1902734705
+4
+2141071321
+5
+965494256
+6
+108111773
+7
+850673521
+8
+1140597833
 (gdb) 
 vshcmd: > quit
 A debugging session is active.
@@ -1067,4 +1011,3 @@ A debugging session is active.
 
 Quit anyway? (y or n) 
 vshcmd: > y
-gdb [20:50:49] $ 

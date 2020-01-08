@@ -26,11 +26,11 @@ class NvimFold(walkers.Walker):
     If it is the first walker it can take an argument of the garray of folds
 
     Use:
-        pipe nvim-folds <fold array>
-        pipe eval <equation> | nvim-folds
+        gdb-pipe nvim-folds <fold array>
+        gdb-pipe eval <equation> | nvim-folds
 
     Example:
-        pipe nvim-folds &curwin->w_folds
+        gdb-pipe nvim-folds &curwin->w_folds
 
     '''
     name = 'nvim-folds'
@@ -59,11 +59,11 @@ class NvimUndoTree(walkers.Walker):
     '''Walk over all undo headers in the undo tree.
 
     Use:
-        pipe nvim-undohist <undo header>
-        pipe eval <equation> | nvim-undohist
+        gdb-pipe nvim-undohist <undo header>
+        gdb-pipe eval <equation> | nvim-undohist
 
     Example:
-        pipe nvim-undohist curbuf->b_u_oldhead
+        gdb-pipe nvim-undohist curbuf->b_u_oldhead
 
     '''
     name = 'nvim-undohist'
@@ -111,15 +111,15 @@ class NvimBuffers(walkers.Walker):
     '''Walk over all buffers
 
     Convenience walker, is equivalent to
-        (gdb) pipe follow-until firstbuf; {} == 0; {}->b_next
+        (gdb) gdb-pipe follow-until firstbuf; {} == 0; {}->b_next
     i.e. it walks over all buffers in neovim.
 
     Use:
-        pipe nvim-buffers | ...
+        gdb-pipe nvim-buffers | ...
 
     Example:
         // Print all buffers viewing a file whose path contains 'runtime'
-        pipe nvim-buffers | \
+        gdb-pipe nvim-buffers | \
                 if {}->b_ffname | \
                 if $_regex({}->b_ffname, ".*runtime.*") | \
                 show print {}->b_ffname
@@ -142,14 +142,14 @@ class NvimTabs(walkers.Walker):
     '''Walk over all vim tabs
 
     Convenience walker, is equivalent to
-        (gdb) pipe follow-until first_tabpage; {} == 0; {}->tp_next
+        (gdb) gdb-pipe follow-until first_tabpage; {} == 0; {}->tp_next
     i.e. it walks over all tabs in the instance.
 
     Use:
-        pipe nvim-tabs | ...
+        gdb-pipe nvim-tabs | ...
 
     Example:
-        pipe nvim-tabs | \
+        gdb-pipe nvim-tabs | \
                 if {}->tp_localdir | \
                 show print {}->tp_localdir
 
@@ -171,27 +171,27 @@ class NvimWindows(walkers.Walker):
     '''Walk over all vim windows or windows in a given tab
 
     Convenience walker,
-        (gdb) pipe nvim-windows <tab_ptr>
+        (gdb) gdb-pipe nvim-windows <tab_ptr>
         (gdb) // Is almost equivalent to
         (gdb) if <tab_ptr> == curtab
-         > pipe follow-until firstwin; {} == 0; ((win_T *){})->w_next
+         > gdb-pipe follow-until firstwin; {} == 0; ((win_T *){})->w_next
          > else
-         > pipe follow-until <tab_ptr>->tp_firstwin; {} == 0; ((win_T *){})->w_next
+         > gdb-pipe follow-until <tab_ptr>->tp_firstwin; {} == 0; ((win_T *){})->w_next
          > end
     and
-        (gdb) pipe nvim-windows
+        (gdb) gdb-pipe nvim-windows
         (gdb) // Is equivalent to
-        (gdb) pipe nvim-tabs | nvim-windows {}
+        (gdb) gdb-pipe nvim-tabs | nvim-windows {}
 
     i.e. with a tab pounter it walks over all windows in that tab, without an
     argument it walks over all windows in the neovim instance.
 
     Use:
-        pipe nvim-windows [tab_ptr]
+        gdb-pipe nvim-windows [tab_ptr]
 
     Examples:
         // Print the buffers in each neovim window.
-        pipe nvim-windows | show print ((win_T *){})->w_buffer->b_ffname
+        gdb-pipe nvim-windows | show print ((win_T *){})->w_buffer->b_ffname
 
     '''
     name = 'nvim-windows'
@@ -245,14 +245,14 @@ class NvimMultiQueues(walkers.Walker):
     dereference links.
 
     Use:
-        pipe nvim-mqueue start-expression[; dereference] | ...
-        pipe eval start-expression | nvim-mqueue <expr containing {}>[; dereference] | ...
+        gdb-pipe nvim-mqueue start-expression[; dereference] | ...
+        gdb-pipe eval start-expression | nvim-mqueue <expr containing {}>[; dereference] | ...
 
     Example:
         // If always dereferencing, then every MultiQueueItem is an event (I think)
-        pipe nvim-mqueue main_loop.events; dereference | show print *(Event *){}
+        gdb-pipe nvim-mqueue main_loop.events; dereference | show print *(Event *){}
         // Print each MultiQueueItem in the main_loop.
-        pipe nvim-mqueue main_loop.events | show print *(MultiQueueItem *){}
+        gdb-pipe nvim-mqueue main_loop.events | show print *(MultiQueueItem *){}
 
     '''
     name = 'nvim-mqueue'
@@ -322,12 +322,12 @@ class NvimCharBuffer(walkers.Walker):
         linked-list &(<argument>->bh_first); buffblock_T; b_next
 
     Use:
-        pipe nvim-buffblocks <buffheader_T> | ...
-        pipe eval ... | nvim-buffblocks | ...
+        gdb-pipe nvim-buffblocks <buffheader_T> | ...
+        gdb-pipe eval ... | nvim-buffblocks | ...
 
     Examples:
-        pipe nvim-buffblocks &readbuf1 | show printf "%s\\n", {}->b_str
-        pipe eval &readbuf1 | nvim-buffblocks
+        gdb-pipe nvim-buffblocks &readbuf1 | show printf "%s\\n", {}->b_str
+        gdb-pipe eval &readbuf1 | nvim-buffblocks
 
     '''
     name = 'nvim-buffblocks'
@@ -356,8 +356,8 @@ class NvimMapBlock(walkers.Walker):
 
     Usage:
         // Print all global mappings.
-        pipe nvim-mapblock <mapblock_T *>
-        pipe eval ... | nvim-buffblocks
+        gdb-pipe nvim-mapblock <mapblock_T *>
+        gdb-pipe eval ... | nvim-buffblocks
 
     '''
     name = 'nvim-mapblock'
@@ -382,23 +382,23 @@ class NvimMappings(walkers.Walker):
     '''Walk over all mappings in a buffer, or all global mappings.
 
     Equivalent to
-        pipe array mapblock_T *; maphash; 256 | eval *{} | if {} != 0 | nvim-mapblock
+        gdb-pipe array mapblock_T *; maphash; 256 | eval *{} | if {} != 0 | nvim-mapblock
     or
-        pipe array mapblock_T *; <buffer>->b_maphash; 256 | eval *{} | if {} != 0 | nvim-mapblock
+        gdb-pipe array mapblock_T *; <buffer>->b_maphash; 256 | eval *{} | if {} != 0 | nvim-mapblock
 
     Usage:
-        pipe nvim-maps <buffer>
-        pipe nvim-maps
+        gdb-pipe nvim-maps <buffer>
+        gdb-pipe nvim-maps
 
     Example:
         // print-string and printf are different because printf prints
         // non-printable characters directly while print-string escapes them with
         // a backslash.
-        pipe nvim-maps | show print-string {}->m_keys; "  -->  "; {}->m_str; "\\n"
-        pipe nvim-maps | show printf "%s  -->  %s\\n", {}->m_keys, {}->m_str
+        gdb-pipe nvim-maps | show print-string {}->m_keys; "  -->  "; {}->m_str; "\\n"
+        gdb-pipe nvim-maps | show printf "%s  -->  %s\\n", {}->m_keys, {}->m_str
         // Or only maps of a given buffer
-        pipe nvim-maps curbuf | ...
-        pipe nvim-buffers | nvim-maps | ...
+        gdb-pipe nvim-maps curbuf | ...
+        gdb-pipe nvim-buffers | nvim-maps | ...
 
     '''
     name = 'nvim-maps'
@@ -439,13 +439,13 @@ class NvimGarray(walkers.Walker):
     '''Walk over all elements of a grow array in (Neo)Vim.
 
     Equivalent to
-        pipe array <argument2>; <argument1>->ga_data; <argument1>->ga_len
+        gdb-pipe array <argument2>; <argument1>->ga_data; <argument1>->ga_len
 
     Use:
-        pipe nvim-garray <growarray address>; <type>
+        gdb-pipe nvim-garray <growarray address>; <type>
 
     Example:
-        pipe nvim-garray &curwin->w_folds; fold_T
+        gdb-pipe nvim-garray &curwin->w_folds; fold_T
     '''
     name = 'nvim-garray'
 

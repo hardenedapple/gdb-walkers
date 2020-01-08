@@ -8,7 +8,7 @@ class OutputContains(gdb.Function):
 
     This function is most useful to force existing gdb commands into a
     pipeline. So that one can do
-        pipe ... |  if $_output_contains("info symbol {}", ".text") | ...
+        gdb-pipe ... |  if $_output_contains("info symbol {}", ".text") | ...
     to filter based on whether an address given is in the text segment.
 
     Note, double quotes are required so that gdb passes the strings across to

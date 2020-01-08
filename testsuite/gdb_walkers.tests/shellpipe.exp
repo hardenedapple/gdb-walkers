@@ -2,11 +2,11 @@
 # This does mean we have to access the correct scope with `upvar`
 # proc test_shellpipe {} {
 set known_calls ""
-lappend known_calls "   0x0000555555554b10 <+50>:	callq  0x555555554790 <fprintf@plt>"
-lappend known_calls "   0x0000555555554b1a <+60>:	callq  0x5555555547b0 <exit@plt>"
-lappend known_calls "   0x0000555555554b2d <+79>:	callq  0x5555555547a0 <atoi@plt>"
-lappend known_calls "   0x0000555555554b3a <+92>:	callq  0x555555554a53 <create_random_tree>"
-lappend known_calls "   0x0000555555554b4a <+108>:	callq  0x5555555549e4 <free_tree>"
+lappend known_calls "   0x\[0-9a-z\]+ <\\+\[0-9\]+>:	callq  0x\[0-9a-z\]+ <fprintf@plt>"
+lappend known_calls "   0x\[0-9a-z\]+ <\\+\[0-9\]+>:	callq  0x\[0-9a-z\]+ <exit@plt>"
+lappend known_calls "   0x\[0-9a-z\]+ <\\+\[0-9\]+>:	callq  0x\[0-9a-z\]+ <atoi@plt>"
+lappend known_calls "   0x\[0-9a-z\]+ <\\+\[0-9\]+>:	callq  0x\[0-9a-z\]+ <create_random_tree>"
+lappend known_calls "   0x\[0-9a-z\]+ <\\+\[0-9\]+>:	callq  0x\[0-9a-z\]+ <free_tree>"
 # # For some reason I don't know, each line is appended with a \r character, so
 # # we only add a \n character to each to match the output we're seeing.
 set known_calls [join $known_calls "\r\n"]

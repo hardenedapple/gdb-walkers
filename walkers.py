@@ -1,7 +1,7 @@
 '''
 Define the framework for creating walkers that can make a pipeline in gdb.
 
-This module adds 4 commands `pipe` `walker` `walker help` and `walker apropos`.
+This module adds 4 commands `gdb-pipe` `walker` `walker help` and `walker apropos`.
 
 It also adds the python functions walkers.register_walker() and
 walkers.create_pipeline() that add a walker into the gdb walker namespace and
@@ -92,7 +92,7 @@ class Walker(metaclass=WalkerMetaclass):
     '''
     Class for a walker type.
 
-    These walkers are automatically registered to be used with the `pipe`
+    These walkers are automatically registered to be used with the `gdb-pipe`
     command.
 
     Each walker class is instantiated with the arguments given to it as a
@@ -266,7 +266,7 @@ def create_walker(walker_def, first=False, last=False):
 
 def connect_pipe(segments):
     '''
-    Each walker in the pipe is called with the iterator returned by its
+    Each walker in the gdb-pipe is called with the iterator returned by its
     predecessor.
 
     Return the iterator that the last walker returns.
@@ -304,10 +304,10 @@ def create_pipeline(arg):
 class Pipeline(gdb.Command):
     '''Combine logical filters to work on many addresses in sequence.
 
-    `pipe` command to string multiple commands together.
+    `gdb-pipe` command to string multiple commands together.
 
     Usage:
-        pipe walker1 | walker2 | walker3 ...
+        gdb-pipe walker1 | walker2 | walker3 ...
 
     Use:
         (gdb) walker help walkers
@@ -319,13 +319,13 @@ class Pipeline(gdb.Command):
     '''
 
     def __init__(self):
-        super(Pipeline, self).__init__('pipe', gdb.COMMAND_DATA)
+        super(Pipeline, self).__init__('gdb-pipe', gdb.COMMAND_DATA)
 
     def invoke(self, arg, _):
         '''
         create the pipeline according to 'arg'.
 
-        Iterate over all elements coming out the end of the pipe, printing them
+        Iterate over all elements coming out the end of the gdb-pipe, printing them
         out as a hex value to screen.
 
         '''

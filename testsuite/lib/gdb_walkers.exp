@@ -11,10 +11,18 @@ expect {
     }
 }
 
+# Need this for more modern versions of GDB.
+# These now come with styling, and that means that `printf` now emits control
+# characters to clear styling whenever printing anything.
+# This messes up my testsuite, so I turn it off here.
+send "set style enabled off\n"
 send "add-inferior -exec demos/tree\n"
 send "add-inferior -exec demos/tree_debug\n"
 send "add-inferior -exec demos/list\n"
 send "add-inferior -exec demos/cpp_structures\n"
+send "add-auto-load-scripts-directory /usr/share/gdb/auto-load\n"
+send "add-auto-load-safe-path /usr/share/gdb/auto-load\n"
+send "set pagination off\n"
 # set timeout 5
 # TODO For now assume we can never have a different inferior number (I don't
 # see how we can), but later on I should parse the output of the command and
@@ -31,19 +39,27 @@ proc run_basic_test { test_name commands expect_string } {
     global expect_out
 
     if { $verbose > 1 } {
-        send_user "starting $command_line\n"
+        send_user "Starting\n$commands\n"
+        send_log "Matching\n$expect_string\n"
     }
 
     send $commands
     expect {
-        $expect_string {
+        -re $expect_string {
             pass "$test_name\n"
         }
         eof {
             fail "$test_name: EOF\n"
         }
         timeout {
-            unresolved "$test_name: timeout\n $expect_out(buffer)"
+	    expect {
+	       "*" {
+		 unresolved "$test_name: timeout\n\n\nSTARTOFOUTPUT\n\n\n\n $expect_out(buffer)\n\n\nENDOFOUTPUT\n"
+	       }
+	      -timeout 1 {
+		unresolved "$test_name: timeout without any output\n"
+	      }
+	    }
         }
     }
 }

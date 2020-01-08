@@ -12,7 +12,7 @@
 using namespace std;
 
 /*
-   vimcmd: let &makeprg="g++ -Wall -W -g % -o %:r"
+   vimcmd: let &makeprg="g++ -std=c++11 -O0 -Wall -W -g % -o %:r"
    Some functions to create a few STL containers.
    I should then be able to test my walkers on these containers.
  */
@@ -33,23 +33,21 @@ int main(int argc, char *argv[])
       exit(EXIT_FAILURE);
   }
 
-  random_device rd;
-  mt19937 gen(rd());
-  gen.seed(stoi(string(argv[1])));
-  uniform_int_distribution<> dis;
-
-  // We generate the random numbers first, then use them to create the
-  // containers we want later.
-  // This is because we want the same numbers each time (for testing purposes)
-  // and hence want to save the values rather than reseed and generate for each
-  // new container type.
-  vector<int> rand_elements;
-  generate_n(back_inserter(rand_elements),
-	     10,
-	     [&]() { return dis(gen); });
-
-  auto begin_it = rand_elements.begin();
-  auto end_it = rand_elements.end();
+  // Hard code the numbers that go into this vector.
+  // We want the same numbers each time for testing purposes.
+  vector<int> data_elements {
+      1283169405,
+      89128932,
+      2124247567,
+      1902734705,
+      2141071321,
+      965494256,
+      108111773,
+      850673521,
+      1140597833,
+  };
+  auto begin_it = data_elements.begin();
+  auto end_it = data_elements.end();
 
   create_container<list<int>>(begin_it, end_it);
   create_container<vector<int>>(begin_it, end_it);
@@ -59,8 +57,8 @@ int main(int argc, char *argv[])
   // random element at that index.
   // This means that the order should be preserved in things like std::map
   vector<pair<int, int>> rand_pairs;
-  for (size_t i = 0; i < rand_elements.size(); ++i)
-    rand_pairs.push_back(pair<int, int>(i, rand_elements[i]));
+  for (size_t i = 0; i < data_elements.size(); ++i)
+    rand_pairs.push_back(pair<int, int>(i, data_elements[i]));
 
   auto pair_begin_it = rand_pairs.begin();
   auto pair_end_it = rand_pairs.end();

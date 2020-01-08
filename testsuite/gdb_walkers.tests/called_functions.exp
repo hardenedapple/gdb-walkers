@@ -1,7 +1,7 @@
 set commands ""
 # Have to start because can't get disassembly without starting the subprocess.
 lappend commands "start"
-lappend commands "pipe called-functions main; .*; -1 | show whereis {.v}"
+lappend commands "gdb-pipe called-functions main; .*; -1 | show whereis {.v}"
 set commands [join $commands "\n"]
 
 set plain_out ""
@@ -27,7 +27,7 @@ run_basic_test "called-functions plain" "inferior $plain_inferior\n$commands\n" 
 
 # Test with the `unique` option.
 set commands ""
-lappend commands "pipe called-functions main; .*; -1 ; unique | show whereis {.v}"
+lappend commands "gdb-pipe called-functions main; .*; -1 ; unique | show whereis {.v}"
 set commands [join $commands "\n"]
 
 set plain_out ""
@@ -52,7 +52,7 @@ run_basic_test "called-functions unique plain" "inferior $plain_inferior\n$comma
 # Running called-functions with the hypothetical-stack command.
 
 set commands ""
-lappend commands "pipe called-functions main; .*; -1"
+lappend commands "gdb-pipe called-functions main; .*; -1"
 lappend commands "if \$_output_contains(\"global-used {.v} free_tree\", \"free_tree\")"
 lappend commands "show hypothetical-stack"
 set commands [join $commands " | "]

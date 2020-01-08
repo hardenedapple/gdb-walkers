@@ -13,12 +13,12 @@ class TreeElements(walkers.Walker):
     Only works for the tree defined in tree.c
 
     Use:
-        pipe tree-elements tree_root
+        gdb-pipe tree-elements tree_root
 
     Example:
         // All pure leaf elements in the tree.
-        pipe tree-elements tree_root | if {}->children[0] == 0 && {}->children[1] == 0
-        pipe eval tree_root | tree-elements | ...
+        gdb-pipe tree-elements tree_root | if {}->children[0] == 0 && {}->children[1] == 0
+        gdb-pipe eval tree_root | tree-elements | ...
 
     '''
     name = 'tree-elements'

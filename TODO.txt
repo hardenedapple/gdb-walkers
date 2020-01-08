@@ -13,7 +13,7 @@ Gdb problems:
 
     Abort when keyboard-interrupt running python code.
         Example I used
-pipe called-functions nvim_buf_set_lines; .+; 10 | if $_output_contains("global-used {} ml_get_buf", "ml_get") | show hypothetical-stack
+gdb-pipe called-functions nvim_buf_set_lines; .+; 10 | if $_output_contains("global-used {} ml_get_buf", "ml_get") | show hypothetical-stack
 
         Just keyboard interrupt in time.sleep() doesn't cause the error if run
         by either of

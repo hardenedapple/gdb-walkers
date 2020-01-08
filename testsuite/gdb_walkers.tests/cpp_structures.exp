@@ -10,20 +10,26 @@ lappend output "965494256"
 lappend output "108111773"
 lappend output "850673521"
 lappend output "1140597833"
-lappend output "726325504"
 
 lappend commands "inferior $cpp_inferior"
 lappend commands "start 10"
 lappend commands "break -function 'create_container<std::__cxx11::list<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >' -label after_defined"
 lappend commands "cont"
-lappend commands "pipe std-list &rand_container | show print-string {}->front(); \"\\n\""
+lappend commands "gdb-pipe std-list &rand_container | show print-string {}->_M_impl->_M_node->_M_data; \"\\n\""
 check_without_reset "Std List walker can print list elements" commands output
+
+# Doesn't seem to be a std-list c++11 pretty printer.
+# set commands {"gdb-pipe pretty-printer rand_container | show print-string {}->_M_impl->_M_node->_M_data; \"\\n\""}
+# check_without_reset "Pretty Printer for List can print list elements" commands output
 
 set commands ""
 lappend commands "break -function 'create_container<std::vector<int, std::allocator<int> >, __gnu_cxx::__normal_iterator<int*, std::vector<int, std::allocator<int> > > >' -label after_defined"
 lappend commands "cont"
-lappend commands "pipe std-vector &rand_container | show print-string *{}; \"\\n\""
+lappend commands "gdb-pipe std-vector &rand_container | show print-string *{}; \"\\n\""
 check_without_reset "Std Vector walker can print vector elements" commands output
+
+set commands {"gdb-pipe pretty-printer rand_container | show print-string *{}; \"\\n\""}
+check_without_reset "Pretty Printer for Vector can print list elements" commands output
 
 for {set i [expr [llength $output] - 1] } { $i >= 0} {incr i -1} {
   set output [lreplace  $output $i $i "{first = $i, second = [lindex $output $i]}"]
@@ -31,8 +37,31 @@ for {set i [expr [llength $output] - 1] } { $i >= 0} {incr i -1} {
 set commands ""
 lappend commands "break -function 'create_container<std::map<int, int, std::less<int>, std::allocator<std::pair<int const, int> > >, __gnu_cxx::__normal_iterator<std::pair<int, int>*, std::vector<std::pair<int, int>, std::allocator<std::pair<int, int> > > > >' -label after_defined"
 lappend commands "cont"
-lappend commands "pipe std-map &rand_container | show print-string *{}; \"\\n\""
+lappend commands "gdb-pipe std-map &rand_container | show print-string *{}; \"\\n\""
 check_without_reset "Std map walker can find map elements" commands output
+
+set output ""
+lappend output "0"
+lappend output "1283169405"
+lappend output "1"
+lappend output "89128932"
+lappend output "2"
+lappend output "2124247567"
+lappend output "3"
+lappend output "1902734705"
+lappend output "4"
+lappend output "2141071321"
+lappend output "5"
+lappend output "965494256"
+lappend output "6"
+lappend output "108111773"
+lappend output "7"
+lappend output "850673521"
+lappend output "8"
+lappend output "1140597833"
+set commands {"gdb-pipe pretty-printer rand_container | show print-string *{}; \"\\n\""}
+check_without_reset "Pretty Printer for map can print list elements" commands output
+
 ensure_finished "After cpp-structure walker tests"
 unset commands
 unset output
