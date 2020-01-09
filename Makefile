@@ -1,5 +1,5 @@
 .PHONY: test
-test: demos/tree_debug demos/tree demos/list
+test: demos/tree_debug demos/tree demos/list demos/cpp_structures
 	runtest --srcdir testsuite --tool gdb_walkers ${RUNTESTFLAGS}
 
 demos/tree_debug: demos/tree.c
