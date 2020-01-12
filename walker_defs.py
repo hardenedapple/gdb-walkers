@@ -65,8 +65,8 @@ class Eval(walkers.Walker):
     Evaluates the resulting gdb expression, and outputs the value to the next
     walker.
 
-    If `{}` does not appear in the argument string, takes no input and outputs
-    one value.
+    If `$cur` does not appear in the argument string, takes no input and
+    outputs one value.
 
     This is essentially a map command -- it modifies the stream of addresses in
     place.
@@ -75,8 +75,8 @@ class Eval(walkers.Walker):
         gdb-pipe eval  <gdb expression>
 
     Example:
-        gdb-pipe eval  {} + 8
-        gdb-pipe eval  {} != 0 && ((struct complex_type *){})->field
+        gdb-pipe eval  $cur + 8
+        gdb-pipe eval  $cur != 0 && ((struct complex_type *)$cur)->field
         gdb-pipe eval  $saved_var->field
 
     '''
@@ -109,10 +109,10 @@ class Show(walkers.Walker):
         show <gdb command>
 
     Example:
-        show output {}
-        show output (char *){}
-        show output ((struct complex_type *){.v})->field
-        show output {}->field
+        show output $cur
+        show output (char *)$cur
+        show output ((struct complex_type *)$cur)->field
+        show output $cur->field
 
     '''
     name = 'show'
@@ -153,12 +153,13 @@ class Instruction(walkers.Walker):
         instructions main; NULL; 100
         // A pointless reimplementation of `disassemble`
         gdb-pipe instructions main; NULL; 10 \
-            | take-while $_output_contains("x/i {}", "main") \
+            | take-while $_output_contains("x/i $cur", "main") \
             | show x/i {}
 
     '''
     name = 'instructions'
     tags = ['data']
+    __void_type = gdb.lookup_type('void').pointer()
 
     def __init__(self, start_ele, end_addr, count):
         self.arch = gdb.current_arch()
@@ -196,7 +197,8 @@ class Instruction(walkers.Walker):
 
     def iter_helper(self, start_ele):
         for instruction in self.disass(start_ele):
-            yield self.Ele('void *', instruction['addr'])
+            temp = gdb.Value(instruction['addr'])
+            yield temp.cast(__void_type)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.iter_helper)
@@ -205,14 +207,14 @@ class Instruction(walkers.Walker):
 class If(walkers.Walker):
     '''Reproduces items that satisfy a condition.
 
-    Replaces occurances of `{}` with the input address.
+    Replaces occurances of `$cur` with the input.
 
     Usage:
         if <condition>
 
     Example:
-        if $_streq("Hello", (char_u *){})
-        if ((complex_type *){}).field == 10
+        if $_streq("Hello", (char_u *)$cur)
+        if ((complex_type *)$cur).field == 10
         if $count++ < 10
 
     '''
@@ -229,21 +231,21 @@ class If(walkers.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if self.eval_command(element).v:
+            if self.eval_command(element):
                 yield element
 
 
 class IfNth(walkers.Walker):
     '''Provides items where the Nth previous one satisfies a condition.
 
-    Replaces occurances of `{}` with the input address.
+    Replaces occurances of `$cur` with the input.
 
     Usage:
         if-nth <condition>; <offset>
 
     Example:
-        if-nth $_streq("Hello", (char_u *){}); 1
-        if-nth ((sometype *){}).field == 10; -1
+        if-nth $_streq("Hello", (char_u *)$cur); 1
+        if-nth ((sometype *)$cur).field == 10; -1
 
     '''
     name = 'if-nth'
@@ -262,7 +264,7 @@ class IfNth(walkers.Walker):
     def positive_offset_ifn(self, inpipe):
         to_yield = []
         for count, element in enumerate(inpipe):
-            if self.eval_command(element).v:
+            if self.eval_command(element):
                 to_yield.append(count + self.offset)
             if to_yield:
                 if to_yield[0] == count:
@@ -280,7 +282,7 @@ class IfNth(walkers.Walker):
                 cur_yield = previous.pop()
             assert len(previous) < -self.offset, "Should be an invariant of this loop"
             previous.append(element)
-            if self.eval_command(element).v and cur_yield:
+            if self.eval_command(element) and cur_yield:
                 yield cur_yield
 
     def iter_def(self, inpipe):
@@ -390,7 +392,7 @@ class Count(walkers.Walker):
         i = None
         for i, _ in enumerate(inpipe):
             pass
-        yield self.Ele('int', i + 1 if i is not None else 0)
+        yield gdb.Value(i + 1 if i is not None else 0)
 
 
 class Array(walkers.Walker):
@@ -405,7 +407,7 @@ class Array(walkers.Walker):
         array type; start_address; count
 
         start_address and count are arbitrary expressions, if this walker is
-        not the first walker in the pipeline then {} is replaced by the
+        not the first walker in the pipeline then $cur is replaced by the
         incoming element.
 
     Example:
