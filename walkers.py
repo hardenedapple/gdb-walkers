@@ -153,7 +153,7 @@ class Walker(metaclass=WalkerMetaclass):
         # Don't let the pipe element get removed.
         if element is None:
             element = 0
-        gdb.set_convenience_variable('$cur', element)
+        gdb.set_convenience_variable('cur', element)
         return args
 
     def eval_command(self, element, args=None):
@@ -284,7 +284,8 @@ class Pipeline(gdb.Command):
             return
 
         for element in pipeline_end:
-            print('{.v:#x}'.format(element))
+            gdb.set_convenience_variable('cur', element)
+            gdb.execute('print $cur')
 
     def complete(self, _, word):
         return [key for key in walkers if key.startswith(word)]

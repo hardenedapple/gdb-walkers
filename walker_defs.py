@@ -183,7 +183,7 @@ class Instruction(walkers.Walker):
         Helper function.
         '''
         # TODO arch.disassemble default args.
-        start_addr = start_ele.v
+        start_addr = start_ele
         if self.end_addr and self.count:
             return self.arch.disassemble(start_addr,
                                          self.end_addr,
@@ -395,6 +395,8 @@ class Count(walkers.Walker):
         yield gdb.Value(i + 1 if i is not None else 0)
 
 
+# TODO
+# Make this a gdb.Value walker.
 class Array(walkers.Walker):
     '''Iterate over a pointer to each element in an array.
 
@@ -518,12 +520,12 @@ class Max(walkers.Walker):
     returned.
 
     Use:
-        gdb-pipe ... | max {}
+        gdb-pipe ... | max $cur
 
     Example:
         // Find argument that starts with the last letter in the alphabet.
-        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
-            max (*(char *){})[0]
+        gdb-pipe follow-until argv; *(char **)$cur == 0; ((char **)$cur) + 1 | \
+            max (*(char *)$cur)[0]
 
     '''
     name = 'max'
@@ -540,7 +542,7 @@ class Max(walkers.Walker):
     def iter_def(self, inpipe):
         try:
             _, retelement = max(
-                ((self.eval_command(element).v, element) for element in inpipe),
+                ((self.eval_command(element), element) for element in inpipe),
                 key=operator.itemgetter(0)
             )
             yield retelement
@@ -559,12 +561,12 @@ class Min(walkers.Walker):
     returned.
 
     Use:
-        gdb-pipe ... | min {}
+        gdb-pipe ... | min $cur
 
     Example:
         // Find argument that starts with the last letter in the alphabet.
-        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
-            min (*(char *){})[0]
+        gdb-pipe follow-until argv; *(char **)$cur == 0; ((char **)$cur) + 1 | \
+            min (*(char *)$cur)[0]
 
     '''
     name = 'min'
@@ -581,7 +583,7 @@ class Min(walkers.Walker):
     def iter_def(self, inpipe):
         try:
             _, retelement = min(
-                ((self.eval_command(element).v, element) for element in inpipe),
+                ((self.eval_command(element), element) for element in inpipe),
                 key=operator.itemgetter(0)
             )
             yield retelement
@@ -599,12 +601,12 @@ class Sort(walkers.Walker):
     Reverse sorting is not supported: negate the expression as a workaround.
 
     Use:
-        gdb-pipe ... | sort {}
+        gdb-pipe ... | sort $cur
 
     Example:
         // Sort arguments alphabetically
-        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
-            sort (*(char **){})[0]
+        gdb-pipe follow-until argv; *(char **)$cur == 0; ((char **)$cur) + 1 | \
+            sort (*(char **)$cur)[0]
 
     '''
     name = 'sort'
@@ -620,7 +622,7 @@ class Sort(walkers.Walker):
 
     def iter_def(self, inpipe):
         retlist = sorted(
-            ((self.eval_command(element).v, element) for element in inpipe),
+            ((self.eval_command(element), element) for element in inpipe),
             key=operator.itemgetter(0)
         )
         for _, element in retlist:
@@ -634,7 +636,7 @@ class Dedup(walkers.Walker):
     repeat the same value as the one previous.
 
     Use:
-        gdb-pipe ... | dedup {}
+        gdb-pipe ... | dedup $cur
 
     '''
     name = 'dedup'
@@ -650,7 +652,7 @@ class Dedup(walkers.Walker):
 
     def iter_def(self, inpipe):
         prev_value = None
-        for element, value in ((ele, self.eval_command(ele).v) for ele in inpipe):
+        for element, value in ((ele, self.eval_command(ele)) for ele in inpipe):
             if value == prev_value:
                 continue
             prev_value = value
@@ -663,7 +665,7 @@ class Until(walkers.Walker):
     Can't be the first walker.
 
     Usage:
-        gdb-pipe ... | take-while ((struct *){})->field != marker
+        gdb-pipe ... | take-while ((struct *)$cur)->field != marker
 
     '''
     name = 'take-while'
@@ -679,7 +681,7 @@ class Until(walkers.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if not self.eval_command(element).v:
+            if not self.eval_command(element):
                 break
             yield element
 
@@ -690,7 +692,7 @@ class Since(walkers.Walker):
     Returns all items in a walker since a condition was satisfied.
 
     Usage:
-        gdb-pipe ... | skip-until ((struct *){})->field == $#marker#
+        gdb-pipe ... | skip-until ((struct *)$cur)->field == $#marker#
 
     '''
     name = 'skip-until'
@@ -706,17 +708,18 @@ class Since(walkers.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if self.eval_command(element).v:
+            if self.eval_command(element):
                 yield element
                 break
         yield from inpipe
 
 
+# TODO gdb.Values from here down.
 class Terminated(walkers.Walker):
     '''Follow "next" expression until reach terminating condition.
 
-    Uses given expression to find the "next" pointer in a sequence, follows
-    this expression until a terminating value is reached.
+    Uses given expression to find the "next" value in a sequence, follows this
+    expression until a terminating value is reached.
     The terminating value is determined by checking if a `test-expression`
     returns true.
 
@@ -725,10 +728,10 @@ class Terminated(walkers.Walker):
         follow-until start-addr; <test-expression>; <follow-expression>
 
     Example:
-        follow-until argv; *{} == 0; {} + sizeof(char **)
+        follow-until argv; *$cur == 0; $cur + sizeof(char **)
         gdb-pipe eval *(char **)argv \\
-            | follow-until *(char *){} == 0; {} + sizeof(char) \\
-            | show x/c {}
+            | follow-until *(char *)$cur == 0; $cur + sizeof(char) \\
+            | show x/c $cur
 
     '''
     name = 'follow-until'
@@ -1204,8 +1207,7 @@ class PrettyPrinter(walkers.Walker):
             return []
 
         for i in pretty_printer.children():
-            addr = i[1].address
-            yield walkers.PipeElement(str(addr.type), int(as_uintptr(addr)))
+            yield i[1]
 
     def iter_def(self, inpipe):
         if not self.desc:
