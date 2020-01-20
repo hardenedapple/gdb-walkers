@@ -152,8 +152,8 @@ class Instruction(walkers.Walker):
         instructions main; main+10
         instructions main; NULL; 100
         // A pointless reimplementation of `disassemble`
-        gdb-pipe instructions main; NULL; 10 \
-            | take-while $_output_contains("x/i {}", "main") \
+        gdb-pipe instructions main; NULL; 10 \\
+            | take-while $_output_contains("x/i {}", "main") \\
             | show x/i {}
 
     '''
@@ -520,7 +520,7 @@ class Max(walkers.Walker):
 
     Example:
         // Find argument that starts with the last letter in the alphabet.
-        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
+        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \\
             max (*(char *){})[0]
 
     '''
@@ -561,7 +561,7 @@ class Min(walkers.Walker):
 
     Example:
         // Find argument that starts with the last letter in the alphabet.
-        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
+        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \\
             min (*(char *){})[0]
 
     '''
@@ -601,7 +601,7 @@ class Sort(walkers.Walker):
 
     Example:
         // Sort arguments alphabetically
-        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \
+        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \\
             sort (*(char **){})[0]
 
     '''
@@ -1105,13 +1105,13 @@ class DefinedFunctions(walkers.Walker):
 
     Example:
         // Print those functions in tree.c that use the 'insert_entry' function
-        gdb-pipe defined-functions tree.c:tree | \
-            if $_output_contains("global-used {} insert_entry", "insert_entry") | \
+        gdb-pipe defined-functions tree.c:tree | \\
+            if $_output_contains("global-used {} insert_entry", "insert_entry") | \\
             show whereis {}
 
         // Walk over all functions ending with 'tree' (including those in
         // dynamic libraries)
-        gdb-pipe defined-functions .*:.*tree$ True | \
+        gdb-pipe defined-functions .*:.*tree$ True | \\
             show print-string $_function_of({}); "\\n"
 
     '''
@@ -1167,8 +1167,8 @@ class PrettyPrinter(walkers.Walker):
         gdb-pipe pretty-printer <container>
 
     Example:
-        gdb-pipe pretty-printer my_cpp_int_vector | \
-                if *{} < 10 | show print *{}
+        gdb-pipe pretty-printer my_cpp_int_vector | \\
+            if *{} < 10 | show print *{}
 
     '''
     name = 'pretty-printer'
