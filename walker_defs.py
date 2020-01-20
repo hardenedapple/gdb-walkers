@@ -10,7 +10,7 @@ walkers.register_walker().
 import re
 import operator
 import gdb
-from helpers import (eval_uint, function_disassembly, as_uintptr, uintptr_size,
+from helpers import (eval_uint, function_disassembly, as_voidptr,
                      file_func_split, search_symbols, find_type_size)
 import walkers
 import itertools as itt
@@ -714,7 +714,6 @@ class Since(walkers.Walker):
         yield from inpipe
 
 
-# TODO gdb.Values from here down.
 class Terminated(walkers.Walker):
     '''Follow "next" expression until reach terminating condition.
 
@@ -753,9 +752,10 @@ class Terminated(walkers.Walker):
         return cls(start_ele, test_expr, follow_expr)
 
     def follow_to_termination(self, start_ele):
-        while eval_uint(self.format_command(start_ele, self.test_expr)) == 0:
-            yield start_ele
-            start_ele = self.eval_command(start_ele, self.follow_expr)
+        cur = start_ele
+        while not self.eval_command(cur, self.test_expr):
+            yield cur
+            cur = self.eval_command(cur, self.follow_expr)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.follow_to_termination)
@@ -765,38 +765,39 @@ class LinkedList(walkers.Walker):
     '''Convenience walker for a NULL terminated linked list.
 
     The following walker
-        linked-list list_head; list_T; list_next
+        linked-list list_head; list_next
     is the equivalent of
-        follow-until list_head; {} == 0; ((list_T *){})->list_next
+        follow-until list_head; $cur == 0; ((list_T *)$cur)->list_next
 
     Usage:
-        linked-list <list start>; <list type>; <next member>
-        linked-list <list type>; <next member>
+        linked-list <list start>; <next member>
+        linked-list <next member>
 
     '''
     name = 'linked-list'
     tags = ['data']
 
-    def __init__(self, start_ele, list_type, next_member):
+    def __init__(self, start_ele, next_member):
         self.start_ele = start_ele
-        self.list_type = list_type + '*'
         self.next_member = next_member
 
     @classmethod
     def from_userstring(cls, args, first, last):
         if first:
-            start_expr, list_type, next_member = cls.parse_args(args, [3, 3], ';')
+            start_expr, next_member = cls.parse_args(args, [2, 2], ';')
             start_ele = cls.calc(start_expr)
         else:
-            list_type, next_member = cls.parse_args(args, [2, 2], ';')
+            next_member = cls.parse_args(args, [1, 1], ';')
             start_ele = None
-        return cls(start_ele, list_type, next_member)
+        return cls(start_ele, next_member)
 
     def __iter_helper(self, element):
-        yield from Terminated.single_iter(
-            start_ele=self.Ele(self.list_type, element.v),
-            test_expr='{} == 0',
-            follow_expr='{{}}->{}'.format(self.next_member))
+        cur = element
+        while cur:
+            yield cur
+            cur = cur[self.next_member]
+            if not cur:
+                return
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.__iter_helper)
@@ -847,6 +848,7 @@ class Reverse(walkers.Walker):
             yield element
 
 
+# TODO  Ignoring this in terms of gdb.Values for now.
 class CalledFunctions(walkers.Walker):
     '''Walk through the call tree of all functions.
 
@@ -998,6 +1000,7 @@ class CalledFunctions(walkers.Walker):
             yield from self.__iter_helper()
 
 
+# TODO  Ignoring this in terms of gdb.Values for now.
 class HypotheticalStack(walkers.Walker):
     '''Print the hypothetical function stack called-functions has created.
 
@@ -1087,7 +1090,7 @@ class File(walkers.Walker):
         for filename in self.filenames:
             with open(filename, 'r') as infile:
                 for line in infile:
-                    yield self.Ele('void *', int(line, base=16))
+                    yield as_voidptr(gdb.Value(int(line, base=16)))
 
 
 class DefinedFunctions(walkers.Walker):
@@ -1101,7 +1104,7 @@ class DefinedFunctions(walkers.Walker):
     To ignore the file regexp, use the regular expression .*.
 
     By default the walker ignores all functions defined in dynamic libraries
-    (by checking the output of 'info symbol {}' matches the current progspace
+    (by checking the output of 'info symbol $cur' matches the current progspace
     filename). If you don't want to ignore these functions, give the argument
     'include-dynlibs' after the file and function regexps.
 
@@ -1111,13 +1114,13 @@ class DefinedFunctions(walkers.Walker):
     Example:
         // Print those functions in tree.c that use the 'insert_entry' function
         gdb-pipe defined-functions tree.c:tree | \
-            if $_output_contains("global-used {} insert_entry", "insert_entry") | \
-            show whereis {}
+            if $_output_contains("global-used $cur insert_entry", "insert_entry") | \
+            show whereis $cur
 
         // Walk over all functions ending with 'tree' (including those in
         // dynamic libraries)
         gdb-pipe defined-functions .*:.*tree$ True | \
-            show print-string $_function_of({}); "\\n"
+            show print-string $_function_of($cur); "\\n"
 
     '''
     name = 'defined-functions'
@@ -1148,7 +1151,7 @@ class DefinedFunctions(walkers.Walker):
     def iter_def(self, inpipe):
         for symbol in search_symbols(self.func_regexp, self.file_regexp,
                                      self.include_dynlibs):
-            yield self.Ele('void *', int(as_uintptr(symbol.value())))
+            yield symbol.value()
 
 
 class PrettyPrinter(walkers.Walker):

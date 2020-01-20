@@ -24,7 +24,7 @@ def file_func_split(regexp):
 
 def find_uintptr_t():
     '''Find a uintptr_t equivalent and store it in the global namespace.'''
-    voidptr_t = gdb.parse_and_eval('(char *)0').type
+    voidptr_t = gdb.lookup_type('void').pointer()
     size_and_types = {val.sizeof: val for val in
                       map(gdb.lookup_type, ['unsigned int', 'unsigned long',
                                             'unsigned long long'])}
@@ -40,6 +40,9 @@ def find_uintptr_t():
 __uintptr_t = find_uintptr_t()
 def as_uintptr(x): return x.cast(__uintptr_t)
 def uintptr_size(): return __uintptr_t.sizeof
+
+__void_ptr_t = gdb.lookup_type('void').pointer()
+def as_voidptr(x): return x.cast(__void_ptr_t)
 
 def find_type_size(type_string):
     '''Return the size of the type described by type_string.
@@ -80,6 +83,8 @@ def start_handler(_):
     '''Upon startup, find the pointer type for this program'''
     global __uintptr_t
     __uintptr_t = find_uintptr_t()
+    global __void_ptr_t
+    __void_ptr_t = gdb.lookup_type('void').pointer()
     # Remove us from the handler -- there is no reason to keep finding the same
     # pointer type.
     # NOTE:

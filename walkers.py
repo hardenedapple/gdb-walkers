@@ -285,7 +285,8 @@ class Pipeline(gdb.Command):
 
         for element in pipeline_end:
             gdb.set_convenience_variable('cur', element)
-            gdb.execute('print $cur')
+            gdb.execute('output $cur')
+            gdb.execute('echo \\n')
 
     def complete(self, _, word):
         return [key for key in walkers if key.startswith(word)]
