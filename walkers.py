@@ -110,6 +110,11 @@ class Walker(metaclass=WalkerMetaclass):
             return gdb.parse_and_eval(gdb_expr)
         except:
             print('Error parsing expression ', gdb_expr)
+            print('Current value of $addr = ',
+                  gdb.convenience_variable('addr'))
+            print('Current value of $cur = ',
+                  gdb.convenience_variable('cur'))
+            print('########################################################################\n\n')
             raise
 
     @classmethod
@@ -154,6 +159,7 @@ class Walker(metaclass=WalkerMetaclass):
         if element is None:
             element = 0
         gdb.set_convenience_variable('cur', element)
+        gdb.set_convenience_variable('addr', element.address)
         return args
 
     def eval_command(self, element, args=None):
@@ -285,6 +291,7 @@ class Pipeline(gdb.Command):
 
         for element in pipeline_end:
             gdb.set_convenience_variable('cur', element)
+            gdb.set_convenience_variable('addr', element.address)
             gdb.execute('output $cur')
             gdb.execute('echo \\n')
 

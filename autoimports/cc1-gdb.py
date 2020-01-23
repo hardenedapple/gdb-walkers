@@ -5,7 +5,7 @@ Define walkers over GCC data structures.
 
 import itertools as itt
 import gdb
-from helpers import offsetof, eval_uint, uintptr_size, find_type_size
+from helpers import as_int, offsetof, eval_uint, uintptr_size, find_type_size
 import walkers
 import walker_defs
 
@@ -15,12 +15,20 @@ class Passes(walkers.Walker):
     If there are no subpasses this would be the same as
     gdb-pipe linked-list <head>; opt_pass; next
 
+    NOTE:
+        When using $cur, this walker will give you the underlying `opt_pass`
+        object.  When using $addr then whether you access the `opt_pass` object
+        or the object of the child type is determined by `show print object`
+        (the GDB setting).
+
     Use:
         gdb-pipe gcc-passes <pass_array>
         gdb-pipe eval <equation> | gcc-passes
 
     Example:
-        gdb-pipe gcc-passes rest_of_compilation | show print {}->name
+        gdb-pipe gcc-passes rest_of_compilation | show print $cur.name
+        set print object on
+        gdb-pipe gcc-passes rest_of_compilation | show print $addr->execute
 
     """
     name = 'gcc-passes'
@@ -34,14 +42,13 @@ class Passes(walkers.Walker):
         return cls(cls.calc(args) if first else None)
 
     def iter_passes(self, init_addr):
-        pass_ptr = self.Ele('opt_pass *', init_addr.v)
-        list_walk = 'linked-list {0}; opt_pass; next'.format(pass_ptr)
+        gdb.set_convenience_variable('addr', init_addr)
+        list_walk = 'linked-list *$addr; next'
         for gcc_pass in walkers.create_pipeline(list_walk):
             yield gcc_pass
-            value = gdb.parse_and_eval(str(gcc_pass)).dereference()
-            sub_value = int(value['sub'])
+            sub_value = gcc_pass['sub']
             if sub_value:
-                yield from self.iter_passes(self.Ele(gcc_pass.t, sub_value))
+                yield from self.iter_passes(sub_value)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start, inpipe, self.iter_passes)
@@ -63,14 +70,14 @@ class InsnChain(walkers.Walker):
 
     Follows the next/previous insn pointer in a chain.
     Is equivalent to
-        gdb-pipe linked-list <start_insn>; rtx_insn; u.fld[<1|0>].rt_rtx
+        gdb-pipe linked-list <start_insn>; u.fld[<1|0>].rt_rtx
 
     Use:
         gdb-pipe gcc-insns <start_insn>; [forwards|backwards]
         gdb-pipe eval <equation> | gcc-insns [forwards|backwards]
 
     Example:
-        gdb-pipe gcc-insns (x_rtl)->emit.seq->first | show call debug_rtx({})
+        gdb-pipe gcc-insns *(x_rtl)->emit.seq->first | show call debug_rtx($addr)
 
     '''
     name = 'gcc-insns'
@@ -86,7 +93,6 @@ class InsnChain(walkers.Walker):
     def iter_insns(self, init_addr):
         yield from walker_defs.LinkedList.single_iter(
             start_ele=init_addr,
-            list_type='rtx_insn',
             next_member='u.fld[{}].rt_rtx'.format(1 if self.forwards else 0))
 
     def iter_def(self, inpipe):
@@ -127,21 +133,22 @@ class GimpleStatements(walkers.Walker):
     def from_userstring(cls, args, first, last):
         return expr_direction_parse(cls, args, first, last)
 
-    def iter_stmts(self, init_addr):
+    def iter_stmts(self, init):
         if self.forwards:
             yield from walker_defs.LinkedList.single_iter(
-                start_ele=init_addr,
-                list_type='gimple',
+                start_ele=init,
                 next_member='next')
         else:
-            # Check for NULL init_addr
-            if not init_addr.v:
+            # In the gimple structure, `prev` forms a loop.
+            # Check for NULL init
+            start_addr = as_int(init.address)
+            if not start_addr:
                 return
-            yield init_addr
+            yield init
             yield from walker_defs.Terminated.single_iter(
-                start_ele=self.calc('{}->prev'.format(init_addr)),
-                test_expr='{{}} == {}'.format(init_addr),
-                follow_expr='{}->prev')
+                start_ele=self.eval_command(init, '*$cur.prev'),
+                test_expr='$addr == {}'.format(start_addr),
+                follow_expr='*$cur.prev')
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.iter_stmts)
@@ -152,8 +159,8 @@ class GimpleBlocks(walkers.Walker):
 
     Follows the next_bb/prev_bb pointers of basic_block_def statements.
     Is equivalent to one of the below depending on direction.
-        gdb-pipe linked-list <start_stmt>; struct basic_block_def; next
-        gdb-pipe linked-list <start_stmt>; struct basic_block_def; prev
+        gdb-pipe linked-list <start_stmt>; next
+        gdb-pipe linked-list <start_stmt>; prev
 
     Use:
         gdb-pipe gcc-bbs <start_stmt>; [forwards|backwards]
@@ -161,12 +168,13 @@ class GimpleBlocks(walkers.Walker):
 
     Example:
         gdb-pipe gcc-bbs cfun->cfg->x_entry_block_ptr->next_bb
-            | eval {}->il.gimple.seq
+            | eval $addr->il.gimple.seq
             | gcc-gimple
-            | show call debug({})
-        gdb-pipe gcc-bbs cfun->cfg->x_exit_block_ptr->prev_bb
+            | show call debug($addr)
+        gdb-pipe gcc-bbs cfun->cfg->x_exit_block_ptr->prev_bb; backwards
+            | eval $addr->il.gimple.seq
             | gcc-gimple
-            | show call debug({})
+            | show call debug($addr)
 
     '''
     name = 'gcc-bbs'
@@ -182,7 +190,6 @@ class GimpleBlocks(walkers.Walker):
     def iter_bbs(self, init_addr):
         yield from walker_defs.LinkedList.single_iter(
             start_ele=init_addr,
-            list_type='struct basic_block_def',
             next_member='next_bb' if self.forwards else 'prev_bb')
 
     def iter_def(self, inpipe):

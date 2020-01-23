@@ -14,6 +14,7 @@ from helpers import (eval_uint, function_disassembly, as_voidptr,
                      file_func_split, search_symbols, find_type_size)
 import walkers
 import itertools as itt
+import sys
 
 # TODO
 #   I would like to use the python standard argparse library to parse
@@ -34,7 +35,7 @@ import itertools as itt
 #           `$_function_of()`
 #           `walker called-functions`
 #
-#   Error messages are stored in the class.
+#   Make error messages get stored in the class.
 #       (so that self.parse_args() gives useful error messages)
 #
 #   Why does gdb.lookup_global_symbol() not find global variables.
@@ -46,6 +47,7 @@ import itertools as itt
 #   without having to have started the program.
 #      This would mean Instruction could be called without starting the
 #      inferior process.
+#     NOTE This is the case in recent GDB's
 #
 #   Rename everything to match the functional paradigm? The question is really
 #   what names would be most helpful for me (or anyone else) when searching
@@ -55,6 +57,23 @@ import itertools as itt
 #      I could have double names for some -- I would just need to change
 #      register_walker so that it checks for 'name' and 'functional_name'
 #      items in the class.
+#
+#   Look for everywhere I use `eval_uint` and check whether it would be useful
+#   to allow using $cur and $addr.
+#       At the moment these variables are "left over" from the previous
+#       evaluation, which means anyone writing them in the expression may very
+#       well get confused.
+#       On the other hand, I don't want to always be setting these things.
+#
+#   Should `addr` and `cur` be replaced with `cur` and `val` respectively?
+#       Many things seem to work much better using addresses instead of values.
+#       I could leave the values available.
+#       Will this even help with the pretty_printer.children methods?
+#         (If I start using these methods then some may not give things with an
+#         address).
+#   Should I only allow `addr`?
+#       This would get rid of a bunch of confusing behaviour, while getting rid
+#       of the bad type parsing code.
 
 
 class Eval(walkers.Walker):
@@ -151,10 +170,10 @@ class Instruction(walkers.Walker):
     Example:
         instructions main; main+10
         instructions main; NULL; 100
-        // A pointless reimplementation of `disassemble`
+        // A pointless, buggy, reimplementation of `disassemble`
         gdb-pipe instructions main; NULL; 10 \
             | take-while $_output_contains("x/i $cur", "main") \
-            | show x/i {}
+            | show x/i $cur
 
     '''
     name = 'instructions'
@@ -183,7 +202,7 @@ class Instruction(walkers.Walker):
         Helper function.
         '''
         # TODO arch.disassemble default args.
-        start_addr = start_ele
+        start_addr = int(as_voidptr(start_ele))
         if self.end_addr and self.count:
             return self.arch.disassemble(start_addr,
                                          self.end_addr,
@@ -198,7 +217,7 @@ class Instruction(walkers.Walker):
     def iter_helper(self, start_ele):
         for instruction in self.disass(start_ele):
             temp = gdb.Value(instruction['addr'])
-            yield temp.cast(__void_type)
+            yield as_voidptr(temp)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.iter_helper)
@@ -312,6 +331,8 @@ class Head(walkers.Walker):
     def from_userstring(cls, args, first, last):
         # Don't use eval_uint as that means we can't use `-1`
         # eval_uint() is really there to eval anything that could be a pointer.
+        if args is None:
+            raise ValueError('`head` walker requires an argument')
         return cls(int(gdb.parse_and_eval(args)))
 
     def iter_def(self, inpipe):
@@ -347,6 +368,8 @@ class Tail(walkers.Walker):
     def from_userstring(cls, args, first, last):
         # Don't use eval_uint as that means we can't use `-1`
         # eval_uint() is really there to eval anything that could be a pointer.
+        if args is None:
+            raise ValueError('`head` walker requires an argument')
         return cls(int(gdb.parse_and_eval(args)))
 
     def iter_def(self, inpipe):
@@ -395,117 +418,112 @@ class Count(walkers.Walker):
         yield gdb.Value(i + 1 if i is not None else 0)
 
 
+class ArrayValues(walkers.Walker):
+    '''Iterate over the values of an array.
+
+    Is similar to the `array` walker, but instead of producing pointers to a
+    value this generates the values in an array itself.
+
+    Note:
+        This walker is much slower than the `array` walker, since it needs to
+        read values from the memory of the inferior rather than just generating
+        pointers.
+
+        This walker *requires* being called on an object in the memory of the
+        inferior, since it attempts to read the contents of that memory.
+
+    Usage:
+        array-values start; count
+
+        `start` and `count` are arbitrary expressions, if this walker is not
+        the first walker in the pipeline then $cur is replaced by the incoming
+        element.
+
+        `start` should be a pointer to the first element in the array.
+
+    Example:
+        array-values argv; argc
+
+    '''
+    name = 'array-values'
+    tags = ['data']
+
+    def __init__(self, first, start, count):
+        self.first = first
+        self.start_expr = start
+        self.count_expr = count
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        start, count = cls.parse_args(args, [2, 2], ';')
+        return cls(first, start, count)
+
+    def __iter_single(self, start, count):
+        cur_value = start
+        for _ in range(count):
+            yield cur_value
+            cur_value = (cur_value.address + 1).dereference()
+
+    def iter_def(self, inpipe):
+        if self.first:
+            yield from self.__iter_single(
+                self.calc(self.start_expr).dereference(),
+                self.calc(self.count_expr))
+        else:
+            for element in inpipe:
+                start = self.eval_command(element, self.start_expr
+                                          ).dereference()
+                count = self.eval_command(element, self.count_expr)
+                yield from self.__iter_single(start, count)
+
+
 # TODO
 # Make this a gdb.Value walker.
-class Array(walkers.Walker):
+# Make some `array-size` command that essentially does
+#    sizeof(array)/sizeof(array_element_type)
+# This would be generally useful, and also be something worth mentioning in
+# the helper of this array walker text.
+class Array(ArrayValues):
     '''Iterate over a pointer to each element in an array.
 
     Note that the types can sometimes be confusing here, walking over an array
-    of `char *` means the walker produdces a stream of `char **` pointers.
+    of `char *` means the walker produces a stream of `char **` pointers.
     Similarly, walking over an array of `int` means the walker produces a
     stream of `int *` pointers.
 
     Usage:
-        array type; start_address; count
+        array start; count
 
-        start_address and count are arbitrary expressions, if this walker is
-        not the first walker in the pipeline then $cur is replaced by the
-        incoming element.
+        `start` and `count` are arbitrary expressions, if this walker is not
+        the first walker in the pipeline then $cur is replaced by the incoming
+        element.
+
+        `start` should be a pointer to the first element in the array.
 
     Example:
-        array char *; argv; argc
+        array argv; argc
 
     '''
     name = 'array'
     tags = ['data']
 
-    def __init__(self, first, start, count, typename, element_size):
-        self.first = first
-        self.typename = typename + '*' if typename else None
-        self.element_size = element_size
-        if first:
-            self.start_addr = start
-            self.count = count
-        else:
-            self.start_expr = start
-            self.count_expr = count
-
-    @classmethod
-    def from_userstring(cls, args, first, last):
-        type_arg, start_expr, count_expr = cls.parse_args(args, [3, 3], ';')
-
-        def __first(count_expr, start_expr):
-            return eval_uint(count_expr), cls.calc(start_expr)
-
-        def __noauto(type_arg):
-            element_size = find_type_size(type_arg)
-            typename = type_arg
-            return typename, element_size
-
-        def __first_auto(start_expr, count_expr, _):
-            count, start_ele = __first(count_expr, start_expr)
-            start_addr, typename = start_ele.v, start_ele.t
-            typename = typename.rstrip()
-            typename = typename[:-1] if typename[-1] == '*' else typename
-            return (start_addr, count, typename,
-                    gdb.parse_and_eval(start_expr).type.target().sizeof)
-
-        def __nofirst_auto(start_expr, count_expr, _):
-            return (start_expr, count_expr, None, None)
-
-        def __first_noauto(start_expr, count_expr, type_arg):
-            count, start_ele = __first(count_expr, start_expr)
-            start_addr = start_ele.v
-            typename, element_size = __noauto(type_arg)
-            return (start_addr, count, typename, element_size)
-
-        def __nofirst_noauto(start_expr, count_expr, type_arg):
-            typename, element_size = __noauto(type_arg)
-            return (start_expr, count_expr, typename, element_size)
-
-        options_dict = {
-            (True, True): __first_auto,
-            (False, True): __nofirst_auto,
-            (True, False): __first_noauto,
-            (False, False): __nofirst_noauto,
-        }
-
-        return cls(first,
-                   *options_dict[first, type_arg == 'auto'](
-                   start_expr, count_expr, type_arg))
-
-    def __iter_single(self, start_addr, count, typename, element_size):
-        pos = start_addr
+    def __iter_single(self, start, count):
+        original_type = start.type
+        cur_value = start
         for _ in range(count):
-            yield self.Ele(typename, pos)
-            pos += element_size
-
-    def __iter_known(self, element):
-        start_addr = eval_uint(self.format_command(element, self.start_expr))
-        count = eval_uint(self.format_command(element, self.count_expr))
-        yield from self.__iter_single(start_addr, count,
-                                      self.typename,
-                                      self.element_size)
-
-    def __iter_unknown(self, element):
-        count = eval_uint(self.format_command(element, self.count_expr))
-        start_ele = self.eval_command(element, self.start_expr)
-        # Like in __init__() seems simpler to evaluate twice than go for
-        # performance.
-        element_size = gdb.parse_and_eval(
-            self.format_command(element, self.start_expr)
-        ).type.target().sizeof
-        yield from self.__iter_single(start_ele.v, count, start_ele.t, element_size)
+            yield cur_value
+            cur_value = (cur_value + 1).cast(original_type)
 
     def iter_def(self, inpipe):
         if self.first:
             yield from self.__iter_single(
-                self.start_addr, self.count, self.typename, self.element_size)
+                self.calc(self.start_expr),
+                self.calc(self.count_expr))
         else:
-            for iterobj in map(
-                    self.__iter_known if self.typename else self.__iter_unknown,
-                    inpipe):
-                yield from iterobj
+            for element in inpipe:
+                start = self.eval_command(element, self.start_expr)
+                count = self.eval_command(element, self.count_expr)
+                yield from self.__iter_single(start, count)
 
 
 # Probably should do something about the code duplication between Max and Min
@@ -636,7 +654,7 @@ class Dedup(walkers.Walker):
     repeat the same value as the one previous.
 
     Use:
-        gdb-pipe ... | dedup $cur
+        gdb-pipe ... | dedup $cur.x
 
     '''
     name = 'dedup'
@@ -761,16 +779,21 @@ class Terminated(walkers.Walker):
         yield from self.call_with(self.start_ele, inpipe, self.follow_to_termination)
 
 
+# TODO
+#   Need to figure out how to handle multiple levels of fetching.
+#   e.g. for gcc-insns, we use
+#      u.fld[0].rt_rtx
+#   This seems like it should be allowed, but it no longer is.
 class LinkedList(walkers.Walker):
     '''Convenience walker for a NULL terminated linked list.
 
     The following walker
         linked-list list_head; list_next
     is the equivalent of
-        follow-until list_head; $cur == 0; ((list_T *)$cur)->list_next
+        follow-until list_head; $cur == 0; *$addr->list_next
 
     Usage:
-        linked-list <list start>; <next member>
+        linked-list <list head>; <next member>
         linked-list <next member>
 
     '''
@@ -795,9 +818,37 @@ class LinkedList(walkers.Walker):
         cur = element
         while cur:
             yield cur
-            cur = cur[self.next_member]
+            # A few interesting things going on here.
+            # 1) We need to use the `eval_command` method rather than using the
+            #    gdb.Value attribute interface to allow the use of syntax such
+            #    as `linked-list list_head; direction.next` (i.e. more than one
+            #    level deep accesses).
+            # 2) If using $cur, then there's a problem with the common idiom of
+            #    using a structure member of x[1] but overallocating.
+            #    GDB knows the size of the type, and has it in an internal
+            #    variable rather than using it in memory.
+            #    Hence using x[3] doesn't make sense.
+            #    See e.g. `rtx_def` in GCC and the u.fld array.
+            # 3) If using $addr, then starting this walker with a standard
+            #    gdb.Value simply doesn't work -- there is no address for it.
+            #
+            # Hence, since there is no "best" way, we try both and if either
+            # works we let it go ahead.
+            #
+            # The problem with `$addr` only really happens on the first element
+            # (this walker will produce elements with an address, hence the
+            # $addr version should work for all resulting elements).
+            # Hence we try that first -- it should be the common case that this
+            # is successful.
+            try:
+                cur = self.eval_command(cur,
+                                        '$addr->{}'.format(self.next_member))
+            except gdb.error:
+                cur = self.eval_command(cur,
+                                        '$cur.{}'.format(self.next_member))
             if not cur:
                 return
+            cur = cur.dereference()
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.__iter_helper)
@@ -848,7 +899,6 @@ class Reverse(walkers.Walker):
             yield element
 
 
-# TODO  Ignoring this in terms of gdb.Values for now.
 class CalledFunctions(walkers.Walker):
     '''Walk through the call tree of all functions.
 
@@ -980,7 +1030,7 @@ class CalledFunctions(walkers.Walker):
             # Store the current value in the hypothetical_stack for someone
             # else to query - remember to set the class attribute.
             type(self).hypothetical_stack[depth:] = [func_addr]
-            yield self.Ele('void *', func_addr)
+            yield as_voidptr(gdb.Value(func_addr))
 
             # Go backwards through the list so that we pop off elements in the
             # order they will be called.
@@ -1000,7 +1050,6 @@ class CalledFunctions(walkers.Walker):
             yield from self.__iter_helper()
 
 
-# TODO  Ignoring this in terms of gdb.Values for now.
 class HypotheticalStack(walkers.Walker):
     '''Print the hypothetical function stack called-functions has created.
 
@@ -1048,12 +1097,12 @@ class HypotheticalStack(walkers.Walker):
 
     def iter_def(self, inpipe):
         if not inpipe:
-            yield from (self.Ele('void *', ele) for ele in
+            yield from (as_voidptr(gdb.Value(ele)) for ele in
                         self.called_funcs_class.hypothetical_stack)
             return
 
         for _ in inpipe:
-            yield from (self.Ele('void *', ele) for ele in
+            yield from (as_voidptr(gdb.Value(ele)) for ele in
                         self.called_funcs_class.hypothetical_stack)
 
 

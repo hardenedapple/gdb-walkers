@@ -43,6 +43,7 @@ def uintptr_size(): return __uintptr_t.sizeof
 
 __void_ptr_t = gdb.lookup_type('void').pointer()
 def as_voidptr(x): return x.cast(__void_ptr_t)
+def as_int(x): return int(as_uintptr(x))
 
 def find_type_size(type_string):
     '''Return the size of the type described by type_string.
