@@ -418,22 +418,22 @@ class Count(walkers.Walker):
         yield gdb.Value(i + 1 if i is not None else 0)
 
 
-class ArrayValues(walkers.Walker):
+class Array(walkers.Walker):
     '''Iterate over the values of an array.
 
-    Is similar to the `array` walker, but instead of producing pointers to a
-    value this generates the values in an array itself.
+    Is similar to the `array-addresses` walker, but instead of producing
+    pointers to a value this generates the values in an array itself.
 
     Note:
-        This walker is much slower than the `array` walker, since it needs to
-        read values from the memory of the inferior rather than just generating
-        pointers.
+        This walker is much slower than the `array-addresses` walker, since it
+        needs to read values from the memory of the inferior rather than just
+        generating pointers.
 
         This walker *requires* being called on an object in the memory of the
         inferior, since it attempts to read the contents of that memory.
 
     Usage:
-        array-values start; count
+        array start; count
 
         `start` and `count` are arbitrary expressions, if this walker is not
         the first walker in the pipeline then $cur is replaced by the incoming
@@ -442,10 +442,10 @@ class ArrayValues(walkers.Walker):
         `start` should be a pointer to the first element in the array.
 
     Example:
-        array-values argv; argc
+        array argv; argc
 
     '''
-    name = 'array-values'
+    name = 'array'
     tags = ['data']
 
     def __init__(self, first, start, count):
@@ -478,12 +478,11 @@ class ArrayValues(walkers.Walker):
 
 
 # TODO
-# Make this a gdb.Value walker.
 # Make some `array-size` command that essentially does
 #    sizeof(array)/sizeof(array_element_type)
 # This would be generally useful, and also be something worth mentioning in
 # the helper of this array walker text.
-class Array(ArrayValues):
+class ArrayAddresses(Array):
     '''Iterate over a pointer to each element in an array.
 
     Note that the types can sometimes be confusing here, walking over an array
@@ -492,7 +491,7 @@ class Array(ArrayValues):
     stream of `int *` pointers.
 
     Usage:
-        array start; count
+        array-addresses start; count
 
         `start` and `count` are arbitrary expressions, if this walker is not
         the first walker in the pipeline then $cur is replaced by the incoming
@@ -501,10 +500,10 @@ class Array(ArrayValues):
         `start` should be a pointer to the first element in the array.
 
     Example:
-        array argv; argc
+        array-addresses argv; argc
 
     '''
-    name = 'array'
+    name = 'array-addresses'
     tags = ['data']
 
     def __iter_single(self, start, count):
