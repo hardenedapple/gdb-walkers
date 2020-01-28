@@ -42,8 +42,8 @@ class Passes(walkers.Walker):
         return cls(cls.calc(args) if first else None)
 
     def iter_passes(self, init_addr):
-        gdb.set_convenience_variable('addr', init_addr)
-        list_walk = 'linked-list *$addr; next'
+        gdb.set_convenience_variable('cur', init_addr)
+        list_walk = 'linked-list $cur; next'
         for gcc_pass in walkers.create_pipeline(list_walk):
             yield gcc_pass
             sub_value = gcc_pass['sub']

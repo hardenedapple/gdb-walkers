@@ -159,7 +159,6 @@ class Walker(metaclass=WalkerMetaclass):
         if element is None:
             element = 0
         gdb.set_convenience_variable('cur', element)
-        gdb.set_convenience_variable('addr', element.address)
         return args
 
     def eval_command(self, element, args=None):
@@ -291,7 +290,6 @@ class Pipeline(gdb.Command):
 
         for element in pipeline_end:
             gdb.set_convenience_variable('cur', element)
-            gdb.set_convenience_variable('addr', element.address)
             gdb.execute('output $cur')
             gdb.execute('echo \\n')
 

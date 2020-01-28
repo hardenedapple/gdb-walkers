@@ -817,37 +817,11 @@ class LinkedList(walkers.Walker):
         cur = element
         while cur:
             yield cur
-            # A few interesting things going on here.
-            # 1) We need to use the `eval_command` method rather than using the
-            #    gdb.Value attribute interface to allow the use of syntax such
-            #    as `linked-list list_head; direction.next` (i.e. more than one
-            #    level deep accesses).
-            # 2) If using $cur, then there's a problem with the common idiom of
-            #    using a structure member of x[1] but overallocating.
-            #    GDB knows the size of the type, and has it in an internal
-            #    variable rather than using it in memory.
-            #    Hence using x[3] doesn't make sense.
-            #    See e.g. `rtx_def` in GCC and the u.fld array.
-            # 3) If using $addr, then starting this walker with a standard
-            #    gdb.Value simply doesn't work -- there is no address for it.
-            #
-            # Hence, since there is no "best" way, we try both and if either
-            # works we let it go ahead.
-            #
-            # The problem with `$addr` only really happens on the first element
-            # (this walker will produce elements with an address, hence the
-            # $addr version should work for all resulting elements).
-            # Hence we try that first -- it should be the common case that this
-            # is successful.
-            try:
-                cur = self.eval_command(cur,
-                                        '$addr->{}'.format(self.next_member))
-            except gdb.error:
-                cur = self.eval_command(cur,
-                                        '$cur.{}'.format(self.next_member))
-            if not cur:
-                return
-            cur = cur.dereference()
+            # We need to use the `eval_command` method rather than using the
+            # gdb.Value attribute interface to allow the use of syntax such as
+            # `linked-list list_head; direction.next` (i.e. more than one level
+            # deep accesses).
+            cur = self.eval_command(cur, '$cur->{}'.format(self.next_member))
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.__iter_helper)
@@ -1223,8 +1197,8 @@ class PrettyPrinter(walkers.Walker):
         gdb-pipe pretty-printer <container>
 
     Example:
-        gdb-pipe pretty-printer my_cpp_int_vector | \
-                if *{} < 10 | show print *{}
+        gdb-pipe pretty-printer my_cpp_int_vector | \\
+                if *$cur < 10 | show print *$cur
 
     '''
     name = 'pretty-printer'
@@ -1258,7 +1232,7 @@ class PrettyPrinter(walkers.Walker):
             return []
 
         for i in pretty_printer.children():
-            yield i[1]
+            yield i[1].address
 
     def iter_def(self, inpipe):
         if not self.desc:
