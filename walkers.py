@@ -110,10 +110,10 @@ class Walker(metaclass=WalkerMetaclass):
             return gdb.parse_and_eval(gdb_expr)
         except:
             print('Error parsing expression ', gdb_expr)
-            print('Current value of $addr = ',
-                  gdb.convenience_variable('addr'))
-            print('Current value of $cur = ',
-                  gdb.convenience_variable('cur'))
+            cur = gdb.convenience_variable('cur')
+            print('Current value of $cur = ', cur)
+            if (cur.type.code == gdb.TYPE_CODE_PTR):
+                print('Current value of *$cur = ', cur.dereference())
             print('########################################################################\n\n')
             raise
 
