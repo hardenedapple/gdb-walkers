@@ -418,19 +418,18 @@ class Count(walkers.Walker):
         yield gdb.Value(i + 1 if i is not None else 0)
 
 
+# TODO
+# Make some `array-size` command that essentially does
+#    sizeof(array)/sizeof(array_element_type)
+# This would be generally useful, and also be something worth mentioning in
+# the helper of this array walker text.
 class Array(walkers.Walker):
-    '''Iterate over the values of an array.
+    '''Iterate over a pointer to each element in an array.
 
-    Is similar to the `array-addresses` walker, but instead of producing
-    pointers to a value this generates the values in an array itself.
-
-    Note:
-        This walker is much slower than the `array-addresses` walker, since it
-        needs to read values from the memory of the inferior rather than just
-        generating pointers.
-
-        This walker *requires* being called on an object in the memory of the
-        inferior, since it attempts to read the contents of that memory.
+    Note that the types can sometimes be confusing here, walking over an array
+    of `char *` means the walker produces a stream of `char **` pointers.
+    Similarly, walking over an array of `int` means the walker produces a
+    stream of `int *` pointers.
 
     Usage:
         array start; count
@@ -457,54 +456,6 @@ class Array(walkers.Walker):
     def from_userstring(cls, args, first, last):
         start, count = cls.parse_args(args, [2, 2], ';')
         return cls(first, start, count)
-
-    def __iter_single(self, start, count):
-        cur_value = start
-        for _ in range(count):
-            yield cur_value
-            cur_value = (cur_value.address + 1).dereference()
-
-    def iter_def(self, inpipe):
-        if self.first:
-            yield from self.__iter_single(
-                self.calc(self.start_expr).dereference(),
-                self.calc(self.count_expr))
-        else:
-            for element in inpipe:
-                start = self.eval_command(element, self.start_expr
-                                          ).dereference()
-                count = self.eval_command(element, self.count_expr)
-                yield from self.__iter_single(start, count)
-
-
-# TODO
-# Make some `array-size` command that essentially does
-#    sizeof(array)/sizeof(array_element_type)
-# This would be generally useful, and also be something worth mentioning in
-# the helper of this array walker text.
-class ArrayAddresses(Array):
-    '''Iterate over a pointer to each element in an array.
-
-    Note that the types can sometimes be confusing here, walking over an array
-    of `char *` means the walker produces a stream of `char **` pointers.
-    Similarly, walking over an array of `int` means the walker produces a
-    stream of `int *` pointers.
-
-    Usage:
-        array-addresses start; count
-
-        `start` and `count` are arbitrary expressions, if this walker is not
-        the first walker in the pipeline then $cur is replaced by the incoming
-        element.
-
-        `start` should be a pointer to the first element in the array.
-
-    Example:
-        array-addresses argv; argc
-
-    '''
-    name = 'array-addresses'
-    tags = ['data']
 
     def __iter_single(self, start, count):
         original_type = start.type
@@ -1155,6 +1106,7 @@ class DefinedFunctions(walkers.Walker):
         self.file_regexp = file_regexp if file_regexp is not None else '.+'
         self.func_regexp = func_regexp
 
+
     @classmethod
     def from_userstring(cls, args, first, last):
         if not first:
@@ -1173,7 +1125,11 @@ class DefinedFunctions(walkers.Walker):
     def iter_def(self, inpipe):
         for symbol in search_symbols(self.func_regexp, self.file_regexp,
                                      self.include_dynlibs):
-            yield symbol.value()
+            # TODO For some very strange reason, assigning a symbol.value()
+            # this to a convenience variable ends up with the convenience
+            # variable set to NULL.
+            # Hence passing this across as a voidptr.
+            yield as_voidptr(symbol.value())
 
 
 class PrettyPrinter(walkers.Walker):
@@ -1197,19 +1153,22 @@ class PrettyPrinter(walkers.Walker):
         gdb-pipe pretty-printer <container>
 
     Example:
-        gdb-pipe pretty-printer my_cpp_int_vector | \\
+        gdb-pipe pretty-printer my_cpp_int_vector[; values] | \\
                 if *$cur < 10 | show print *$cur
 
     '''
     name = 'pretty-printer'
     tags = ['data']
 
-    def __init__(self, container_desc):
+    def __init__(self, container_desc, values):
         self.desc = container_desc
+        self.values = values
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        return cls(args)
+        cmd_parts = cls.parse_args(args, [1, 2], ';') if first else [args]
+        container_desc = cmd_parts.pop(0) if first else None
+        return cls(container_desc, cmd_parts and cmd_parts[0] == 'values')
 
     @staticmethod
     def all_pretty_printers():
@@ -1231,8 +1190,12 @@ class PrettyPrinter(walkers.Walker):
             print('Type {} has no children.'.format(pretty_printer.typename))
             return []
 
-        for i in pretty_printer.children():
-            yield i[1].address
+        if self.values:
+            for i in pretty_printer.children():
+                yield i[1]
+        else:
+            for i in pretty_printer.children():
+                yield i[1].address
 
     def iter_def(self, inpipe):
         if not self.desc:
