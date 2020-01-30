@@ -2,25 +2,18 @@
 
 Contains a few helper gdb functions and commands.
 Most notable are the addition of `walkers` (idea taken from `mdb`) over complex
-data structures, `call-graph` command (idea taken from `dtrace -F`), and
-`shellpipe` that pipes the output of a command to a shell process.
+data structures, and `shellpipe` that pipes the output of a command to a shell
+process.  GDB has acquired a new command `pipe` that pipes to a shell command,
+and if your version has this then it's better to use that.
 
-The information passed between each walker is a single integer and a type
-string. In many pipelines that represents a pointer. Many walkers can take a
-format marker of `{}` that marks where the string `((type)value)` is to be
-placed. In these walkers the marker can be replaced with `{.v}` or `{.t}` to
-use the value or type respectively.
-When passing this value to a gdb command that separates based on whitespace,
-sometimes the marker `{}` will work, but other times not. It depends on whether
-the type is `struct somestruct` or `int *`. To avoid surprises it's recommended
-to use `{.v}` when the type information is not needed.
-
-Note: In order to avoid surprises, `call-graph` by default doesn't work with
-non-debug functions. This is so that naive regular expressions don't end up
-tracing many many functions, and to avoid the problem of functions that return
-with `jmp` rather than `ret` (which are much more common in non-debug
-functions).
-Tracing non-debug symbols can be activated with `set call-graph-nondebug on`.
+The information passed between each walker is a gdb.Value describing a pointer
+in the inferior.  There is no actual enforcement on this, but producing
+a gdb.Value that is an object and not a pointer is like printing binary output
+on stdout for Unix commands (i.e. can work in many cases but doesn't play nice
+with expectations of some commands or of people using the plugin).
+Many walkers take the template of a GDB expression or command.  In these
+templates, the gdb internal variable `$cur` is set to the "current" value.
+This is usually the last value that has come down the pipeline.
 
 ## Installation
 
@@ -47,7 +40,7 @@ main (argc=2, argv=0x7fffffffe4c8) at demos/tree.c:93
 93	    free_tree(tree_root);
 (gdb) source demos/tree_walker.py
 (gdb) // Show all pure leaf elements in the tree.
-(gdb) gdb-pipe tree-elements tree_root | if {}->children[0] == 0 && {}->children[1] == 0 | show print *{}
+(gdb) gdb-pipe tree-elements tree_root | if $cur->children[0] == 0 && $cur->children[1] == 0 | show print *$cur
 $1 = {children = {0x0, 0x0}, datum = 1753820418}
 $2 = {children = {0x0, 0x0}, datum = 1255532675}
 $3 = {children = {0x0, 0x0}, datum = 679162307}
@@ -55,16 +48,22 @@ $4 = {children = {0x0, 0x0}, datum = 131589623}
 (gdb)
 ```
 
-This repo also contains some walkers over vim structures in
-`neovim_walkers.py`, and these are automatically loaded when debugging a
-program called `nvim`.
+This repo also contains some walkers over gcc structures in
+`autoimports/cc1-gdb.py`, and these are automatically loaded when debugging a
+program called `cc1` (the compiler part of GCC).
 
 Writing your own walker should be easy -- define a class inheriting from
-`walkers.Walker`, `__init__()` takes three arguments, the string the walker was
+`walkers.Walker` and defining three functions `__init__()`,
+`from_userstring()`, and `iter_def()`.
+If your walker is called from the command line it is initialised using
+`from_userstring()`.  This function takes three arguments, the string the walker was
 initialised with, whether the walker is first in the pipeline, and whether it
-is last. Then the `iter_def()` method is called with an iterator over elements
-from the preceding element in the pipe, and should return an iterator over
-integers.
+is last. `__init__()` is to provide a nice programmatic interface for any
+walkers that want to build upon yours.  Sometime after initialisation
+`iter_def()` is called with an iterator over elements from the preceding
+pipeline (which will be empty if your walker is the first).  This method should
+return an iterable over those values your walker provides to the rest of the
+pipeline.
 
 To automatically load your walkers when a given object file is loaded in gdb
 put the python source file in the autoimports/ directory under the name
@@ -83,29 +82,29 @@ should give you enough information to see what's going on.
 
 # Tips & Tricks
 
-Use `$count += 3, true` as one expression in `follow-until` or the like to get
-useful side-affects.
+Use `$count += 3, true` as one expression in `follow-until` (or `eval`, or
+`show` ...) to get useful side-affects.
 This is why it splits on the semi-colon (that, and to emphasise how it's pretty
 much just a for loop).
 
 ## Many ways of counting to ten
 
 ```
-(gdb) gdb-pipe follow-until 1; {} > 10; {} + 1
-(gdb) gdb-pipe array char; 1; 10
-(gdb) gdb-pipe follow-until 1; {} > 100; {} + 1 | head 10
+(gdb) gdb-pipe follow-until 1; $cur > 10; $cur + 1
+(gdb) gdb-pipe array 1; 10
+(gdb) gdb-pipe follow-until 1; $cur > 100; $cur + 1 | head 10
 (gdb) set variable $count = 0
-(gdb) gdb-pipe follow-until 1; {} > 100; {} + 1 | if $count++ < 10
+(gdb) gdb-pipe follow-until 1; $cur > 100; $cur + 1 | if $count++ < 10
 (gdb) set variable $count = 0
 (gdb) // The below differs from the above because the iteration is cut short.
-(gdb) gdb-pipe follow-until 1; {} > 100; {} + 1 | take-while $count++ < 10
+(gdb) gdb-pipe follow-until 1; $cur > 100; $cur + 1 | take-while $count++ < 10
 (gdb) set variable $count = 0
-(gdb) gdb-pipe array char; 1; 100 | take-while (int){} % 2 == 0 || $count++ < 5
-(gdb) gdb-pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse
+(gdb) gdb-pipe array 1; 100 | take-while (int)$cur % 2 == 0 || $count++ < 5
+(gdb) gdb-pipe follow-until 100; $cur <= 0; $cur - 1 | tail 10 | reverse
 (gdb) // Combine the addresses of more than one walker.
-(gdb) shellpipe gdb-pipe array char; 1; 5 ! cat > addresses
-(gdb) shellpipe gdb-pipe array char; 6; 5 ! cat >> addresses
-(gdb) gdb-pipe file addresses
+(gdb) shellpipe gdb-pipe array 1; 5 | show printf "%x\n", $cur ! cat > addresses
+(gdb) shellpipe gdb-pipe array 6; 5 | show printf "%x\n", $cur ! cat >> addresses
+(gdb) gdb-pipe file addresses | eval (int)$cur
 ```
 
 ## Other tricks
@@ -125,7 +124,7 @@ much just a for loop).
 I know ... that doesn't quite sound right does it?
 ```
 (gdb) set variable $sum = 0
-(gdb) gdb-pipe follow-until 1; {} > 100; {} + 1 | eval $sum += {}, {} | devnull
+(gdb) gdb-pipe follow-until 1; $cur > 100; $cur + 1 | eval $sum += $cur, $cur | devnull
 (gdb) print $sum
 $1 = 5050
 (gdb) 
@@ -135,7 +134,7 @@ $1 = 5050
 ```
 (gdb) start 20 100 Hello there this is a test
 (gdb) set variable $i = -1
-(gdb) gdb-pipe array char*; argv; argc  | if $i++, $_output_contains("print *{}", "t") | show print $i
+(gdb) gdb-pipe array argv; argc  | if $i++, $_output_contains("print *$cur", "t") | show print $i
 $103 = 0
 $108 = 4
 $110 = 5
@@ -151,7 +150,7 @@ $117 = 0x7fffffffe89d "this"
 probably a bad idea in anything but the smallest program and their source code
 file name and line number.
 ```
-(gdb) gdb-pipe called-functions main; .*; -1 | show printf "%18s\t%s\n", $_function_of({}), $_whereis({})
+(gdb) gdb-pipe called-functions main; .*; -1 | show printf "%18s\t%s\n", $_function_of($cur), $_whereis($cur)
               main	demos/tree.c:85
          free_tree	demos/tree.c:53
 create_random_tree	demos/tree.c:69
@@ -164,18 +163,18 @@ create_random_tree	demos/tree.c:69
 in this case, use the global function `free_tree`, if you have a global
 variable this would work just as well.
 ```
-(gdb) gdb-pipe defined-functions tree.c:.* | if $_output_contains("global-used {.v} free_tree", "free_tree") | show whereis {.v}
+(gdb) gdb-pipe defined-functions tree.c:.* | if $_output_contains("global-used $cur free_tree", "free_tree") | show whereis $cur
 (gdb) // Walk over all functions ending with 'tree' (including those in dynamic libraries)
-(gdb) gdb-pipe defined-functions .*:.*tree$ True | show print-string $_function_of({}); "\n"
+(gdb) gdb-pipe defined-functions .*:.*tree$ True | show print-string $_function_of($cur); "\n"
 (gdb) // NOTE, I use my own command `print-string` above to avoid
-(gdb) // `printf "%s\n", $_function_of({})` as `printf "%s", <somestring>`
+(gdb) // `printf "%s\n", $_function_of($cur)` as `printf "%s", <somestring>`
 (gdb) // allocates the string in the inferior and provides no way of
 (gdb) // `free()`ing it.
 ```
 
 ### List hypothetical call stack of functions called by main that use a global
 ```
-(gdb) gdb-pipe called-functions main; .*; -1 | if $_output_contains("global-used {.v} free_tree", "free_tree") | show hypothetical-stack
+(gdb) gdb-pipe called-functions main; .*; -1 | if $_output_contains("global-used $cur free_tree", "free_tree") | show hypothetical-stack
 main demos/tree.c:85
 
 main demos/tree.c:85
@@ -294,3 +293,12 @@ There is a known bug in gdb that breaks the test for
 `"if on output_countains failure"`.
 Tests for `call_graph` and `shellpipe` both rely on known memory addresses,
 that can easily be different on other machines.
+
+## NOTES / Warnings
+Note: In order to avoid surprises, `call-graph` by default doesn't work with
+non-debug functions. This is so that naive regular expressions don't end up
+tracing many many functions, and to avoid the problem of functions that return
+with `jmp` rather than `ret` (which are much more common in non-debug
+functions).
+Tracing non-debug symbols can be activated with `set call-graph-nondebug on`.
+
