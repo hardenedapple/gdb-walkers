@@ -280,7 +280,7 @@ class PrintHypotheticalStack(gdb.Command):
     def invoke(self, arg, _):
         if arg and arg.split() != []:
             raise ValueError('hypothetical-stack takes no arguments')
-        gdb.execute('gdb-pipe hypothetical-call-stack | show whereis {.v} | devnull')
+        gdb.execute('gdb-pipe hypothetical-call-stack | show whereis $cur | devnull')
         print()
 
 
