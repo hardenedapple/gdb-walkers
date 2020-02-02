@@ -721,7 +721,7 @@ vshcmd: > !rm addresses
 7
 8
 9
-16
+10
 (gdb) (gdb) 
 vshcmd: > set variable $count = 0
 vshcmd: > gdb-pipe follow-until 1; $cur > 100; $count++, $cur + 1 | head 0 | devnull
