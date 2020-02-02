@@ -1,32 +1,31 @@
 # First off, check the simple calculations.
 
-set ten_count "0x1\r\n0x2\r\n0x3\r\n0x4\r\n0x5\r\n0x6\r\n0x7\r\n0x8\r\n0x9\r\n0xa" 
-run_basic_test "follow-until basic" "gdb-pipe follow-until 1; {} > 10; {} + 1\n" $ten_count
-run_basic_test "array basic" "gdb-pipe array char; 1; 10\n" $ten_count
-run_basic_test "eval beginning" "gdb-pipe eval 1 | array char; {}; 10\n" $ten_count
-run_basic_test "head" "gdb-pipe follow-until 1; {} > 100; {} + 1 | head 10\n" $ten_count
-run_basic_test "if basic" "set variable \$count = 0\ngdb-pipe follow-until 1; {} > 100; {} + 1 | if \$count++ < 10\n" $ten_count
-run_basic_test "takewhile basic" "set variable \$count = 0\ngdb-pipe follow-until 1; {} > 100; {} + 1 | take-while \$count++ < 10\n" $ten_count
-run_basic_test "takewhile complex" "set variable \$count = 0\ngdb-pipe array char; 1; 100 | take-while {.v} % 2 == 0 || \$count++ < 5\n" $ten_count
-run_basic_test "takewhile complex2" "set variable \$count = 0\ngdb-pipe array char; 1; 100 | take-while (int){} % 2 == 0 || \$count++ < 5\n" $ten_count
-run_basic_test "reverse tail" "gdb-pipe follow-until 100; {} <= 0; {} - 1 | tail 10 | reverse\n" $ten_count
-run_basic_test "reverse tail negative" "gdb-pipe follow-until 20; {} <= 0; {} - 1 | tail -10 | reverse \n" $ten_count
-run_basic_test "reverse since" "gdb-pipe follow-until 100; {} <= 0; {} - 1 | skip-until {} == 10 | reverse\n" $ten_count
-run_basic_test "head with negative arg" "gdb-pipe follow-until 1; {} > 20; {} + 1 | head -10\n" $ten_count
-run_basic_test "file pipe" "shellpipe gdb-pipe array char; 1; 5 ! cat > addresses\nshellpipe gdb-pipe array char; 6; 5 ! cat >> addresses\ngdb-pipe file addresses\n!rm addresses\n" $ten_count
+set ten_count "1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\n10" 
+run_basic_test "follow-until basic" "gdb-pipe follow-until 1; \$cur > 10; \$cur + 1\n" $ten_count
+run_basic_test "array basic" "gdb-pipe array 1; 10\n" $ten_count
+run_basic_test "eval beginning" "gdb-pipe eval 1 | array \$cur; 10\n" $ten_count
+run_basic_test "head" "gdb-pipe follow-until 1; \$cur > 100; \$cur + 1 | head 10\n" $ten_count
+run_basic_test "if basic" "set variable \$count = 0\ngdb-pipe follow-until 1; \$cur > 100; \$cur + 1 | if \$count++ < 10\n" $ten_count
+run_basic_test "takewhile basic" "set variable \$count = 0\ngdb-pipe follow-until 1; \$cur > 100; \$cur + 1 | take-while \$count++ < 10\n" $ten_count
+run_basic_test "takewhile complex" "set variable \$count = 0\ngdb-pipe array 1; 100 | take-while (int)\$cur % 2 == 0 || \$count++ < 5\n" $ten_count
+run_basic_test "takewhile complex2" "set variable \$count = 0\ngdb-pipe array 1; 100 | take-while (int)\$cur % 2 == 0 || \$count++ < 5\n" $ten_count
+run_basic_test "reverse tail" "gdb-pipe follow-until 100; \$cur <= 0; \$cur - 1 | tail 10 | reverse\n" $ten_count
+run_basic_test "reverse tail negative" "gdb-pipe follow-until 20; \$cur <= 0; \$cur - 1 | tail -10 | reverse \n" $ten_count
+run_basic_test "reverse since" "gdb-pipe follow-until 100; \$cur <= 0; \$cur - 1 | skip-until \$cur == 10 | reverse\n" $ten_count
+run_basic_test "head with negative arg" "gdb-pipe follow-until 1; \$cur > 20; \$cur + 1 | head -10\n" $ten_count
+run_basic_test "file pipe" "shellpipe gdb-pipe array 1; 5 | show printf \"%x\\n\", \$cur ! cat > addresses\nshellpipe gdb-pipe array 6; 5 | show printf \"%x\\n\", \$cur ! cat >> addresses\ngdb-pipe file addresses | eval (int)\$cur\n!rm addresses\n" $ten_count
 unset ten_count
 
-run_basic_test "head of 0 pulls nothing" "set variable \$count = 0\ngdb-pipe follow-until 1; {} > 100; \$count++, {} + 1 | head 0 | devnull\nprint \$count\n" "0"
-run_basic_test "head truncates early" "set variable \$count = 0\ngdb-pipe follow-until 1; {} > 100; \$count++, {} + 1 | head 10 | devnull\nprint \$count\n" "9"
-run_basic_test "foldl" "set variable \$sum = 0\ngdb-pipe follow-until 1; {} > 100; {} + 1 | eval \$sum += {}, {} | devnull\nprint \$sum\n" "5050"
-run_basic_test "can use {} for more than 20 times at once" "gdb-pipe eval 1 | show printf \"\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\%d\\n\", {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}\n" "111111111111111111111"
-run_basic_test "can use {} more than once in follow-until" "gdb-pipe follow-until 1; {} > 100 && {} != 99; {} + 1 | count\n" "99"
+run_basic_test "head of 0 pulls nothing" "set variable \$count = 0\ngdb-pipe follow-until 1; \$cur > 100; \$count++, \$cur + 1 | head 0 | devnull\nprint \$count\n" "0"
+run_basic_test "head truncates early" "set variable \$count = 0\ngdb-pipe follow-until 1; \$cur > 100; \$count++, \$cur + 1 | head 10 | devnull\nprint \$count\n" "9"
+run_basic_test "foldl" "set variable \$sum = 0\ngdb-pipe follow-until 1; \$cur > 100; \$cur + 1 | eval \$sum += \$cur, \$cur | devnull\nprint \$sum\n" "5050"
+run_basic_test "can use \$cur more than once in follow-until" "gdb-pipe follow-until 1; \$cur > 100 && \$cur != 99; \$cur + 1 | count\n" "99"
 
 send "inferior $list_inferior\n"
 ensure_finished "Before walk list"
 send "tbreak list.c:70\nrun 10\n"
-set walk_args "gdb-pipe linked-list list_head; list_t; next"
-set show_arg "show printf \"\%d\\n\", {}->datum"
+set walk_args "gdb-pipe linked-list list_head; next"
+set show_arg "show printf \"\%d\\n\", \$cur->datum"
 run_basic_test "list" "$walk_args | $show_arg\n" "679162307\r\n54404747\r\n906573271\r\n1255532675\r\n394002377\r\n1753820418\r\n385788725\r\n1086128678\r\n1311962008\r\n1215069295\r\n\\(gdb\\)"
 wait_for_exit "Finish after list print"
 unset walk_args
@@ -35,21 +34,21 @@ unset show_arg
 send "inferior $debug_inferior\n"
 ensure_finished "Before max min sort and dedup"
 send "start Hello there this is a set of arguments\n"
-set walk_args "gdb-pipe follow-until argv + 1; *{} == 0; {} + 1"
-set show_arg  "show printf \"\%s\\n\", *{}\n"
-set first_char "(*(char **){})\[0\]"
+set walk_args "gdb-pipe follow-until argv + 1; *\$cur == 0; \$cur + 1"
+set show_arg  "show printf \"\%s\\n\", *\$cur\n"
+set first_char "(*(char **)\$cur)\[0\]"
 run_basic_test "max" "$walk_args | max $first_char | $show_arg\n" "there"
 run_basic_test "min" "$walk_args | min $first_char | $show_arg" "Hello"
 run_basic_test "sort" "$walk_args | sort $first_char | $show_arg" "Hello\r\na\r\narguments\r\nis\r\nof\r\nset\r\nthere\r\nthis"
 run_basic_test "dedup" "$walk_args | sort $first_char | dedup $first_char | $show_arg" "Hello\r\na\r\nis\r\nof\r\nset\r\nthere\r\n"
 
-set walk_args "gdb-pipe array auto; argv; argc"
-set inner_walk "array auto; *{}; 3"
-run_basic_test "array auto" "$walk_args | $inner_walk | show printf \"\%c\", *{}\n" "/hoHelthethiisassetofarg"
+set walk_args "gdb-pipe array argv; argc"
+set inner_walk "array *\$cur; 3"
+run_basic_test "array auto" "$walk_args | $inner_walk | show printf \"\%c\", *\$cur\n" "/hoHelthethiisassetofarg"
 
 wait_for_exit "Finish after arguments"
 unset walk_args
 unset show_arg
 
-run_basic_test "walk functions" "gdb-pipe defined-functions tree.c:.* | show whereis {.v}\n" "insert_entry demos/tree.c:23\r\nfree_tree demos/tree.c:53\r\ncreate_tree demos/tree.c:62\r\ncreate_random_tree demos/tree.c:69\r\nmain demos/tree.c:85\r\n\\(gdb\\)"
-run_basic_test "defined-functions unspecified file pattern" "gdb-pipe defined-functions .* | show whereis {.v}\n" "insert_entry demos/tree.c:23\r\nfree_tree demos/tree.c:53\r\ncreate_tree demos/tree.c:62\r\ncreate_random_tree demos/tree.c:69\r\nmain demos/tree.c:85\r\n"
+run_basic_test "walk functions" "gdb-pipe defined-functions tree.c:.* | show whereis \$cur\n" "insert_entry demos/tree.c:23\r\nfree_tree demos/tree.c:53\r\ncreate_tree demos/tree.c:62\r\ncreate_random_tree demos/tree.c:69\r\nmain demos/tree.c:85\r\n\\(gdb\\)"
+run_basic_test "defined-functions unspecified file pattern" "gdb-pipe defined-functions .* | show whereis \$cur\n" "insert_entry demos/tree.c:23\r\nfree_tree demos/tree.c:53\r\ncreate_tree demos/tree.c:62\r\ncreate_random_tree demos/tree.c:69\r\nmain demos/tree.c:85\r\n"

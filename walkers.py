@@ -57,29 +57,6 @@ def register_walker(walker_class):
             walker_class.name))
 
 
-class PipeElement():
-    '''
-    A type to pass between walkers.
-
-    Consists of `t`a a string describing the type of the value in the inferior,
-    and `v`: an integer storing the actual value.
-
-    Only integer values may be passed between walkers, these can be pointers or
-    integers, but NOT complex types.
-
-    '''
-    # Use t and v mainly because I don't want to shadow the `type` builtin
-    def __init__(self, t, v):
-        self.t = t
-        self.v = v
-
-    def __str__(self):
-        return '(({}){:#x})'.format(self.t, self.v)
-
-    def __int__(self):
-        return self.v
-
-
 class WalkerMetaclass(abc.ABCMeta):
     '''Automatically register walkers once defined.'''
     def __init__(cls, *args, **kwargs):
@@ -111,9 +88,6 @@ class Walker(metaclass=WalkerMetaclass):
     require_input = False
     require_output = False
     tags = []
-    # Store the `PipeElement` value in the class as it's almost always needed
-    # when writing a walker.
-    Ele = PipeElement
 
     # n.b. we can't specify the __init__() arguments here, as they can
     # reasonably be different for each walker.
@@ -133,24 +107,15 @@ class Walker(metaclass=WalkerMetaclass):
     @staticmethod
     def calc(gdb_expr):
         try:
-            main_val = gdb.parse_and_eval(gdb_expr)
+            return gdb.parse_and_eval(gdb_expr)
         except:
             print('Error parsing expression ', gdb_expr)
+            cur = gdb.convenience_variable('cur')
+            print('Current value of $cur = ', cur)
+            if (cur.type.code == gdb.TYPE_CODE_PTR):
+                print('Current value of *$cur = ', cur.dereference())
+            print('########################################################################\n\n')
             raise
-        string_type = str(main_val.type)
-        # *really* don't want to start bothering with function types etc.
-        if '[' in string_type:
-            print('Get type', string_type, 'when evaluating', gdb_expr)
-            array_offset = string_type.find('[')
-            string_type = string_type[:array_offset] + '*'
-            print('Converting to', string_type, 'for pointer arithmetic to work')
-            print('If this is incorrect please modify your command.')
-            print('To avoid this warning, use   array + 0  instead of  array')
-        if any(val in string_type for val in '()&'):
-            print('Converting type ', string_type,
-                  ' to void * as are not sure we can handle it')
-            string_type = 'void *'
-        return PipeElement(string_type, int(helpers.as_uintptr(main_val)))
 
     @classmethod
     def single_iter(cls, *args, **kwargs):
@@ -190,29 +155,17 @@ class Walker(metaclass=WalkerMetaclass):
 
     def format_command(self, element, args):
         '''Does args.format(element) but ensures can use {} instead of {0}.'''
-        try:
-            # Start off allowing 4 occurances of {} to cover most cases.
-            return args.format(element, element, element, element)
-        except IndexError:
-            pass
-
-        guess = 8
-        while True:
-            try:
-                gdb_cmd = args.format(*((element,)*guess))
-            except IndexError:
-                guess *= 2
-                continue
-            return gdb_cmd
+        # Don't let the pipe element get removed.
+        if element is None:
+            element = 0
+        gdb.set_convenience_variable('cur', element)
+        return args
 
     def eval_command(self, element, args=None):
         '''Helper method
 
         Without `args` argument this function does
-        return self.calc(self.cmd.format(element))
-        except that it makes sure the user doesn't have to have {0} in the
-        self.cmd by keeping doubling the number of times `element` is in the
-        format() argument list until we no longer have an IndexError.
+        return self.calc(self.format_command(element, self.cmd)).
 
         Otherwise uses `args` instead of `self.cmd`
 
@@ -336,7 +289,9 @@ class Pipeline(gdb.Command):
             return
 
         for element in pipeline_end:
-            print('{.v:#x}'.format(element))
+            gdb.set_convenience_variable('cur', element)
+            gdb.execute('output $cur')
+            gdb.execute('echo \\n')
 
     def complete(self, _, word):
         return [key for key in walkers if key.startswith(word)]

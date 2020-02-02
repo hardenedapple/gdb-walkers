@@ -17,7 +17,7 @@ class TreeElements(walkers.Walker):
 
     Example:
         // All pure leaf elements in the tree.
-        gdb-pipe tree-elements tree_root | if {}->children[0] == 0 && {}->children[1] == 0
+        gdb-pipe tree-elements tree_root | if $cur->children[0] == 0 && $cur->children[1] == 0
         gdb-pipe eval tree_root | tree-elements | ...
 
     '''
@@ -29,14 +29,15 @@ class TreeElements(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        return cls(cls.Ele('node_t *', eval_uint(args)) if first else None)
+        return cls(cls.calc(args) if first else None)
 
     def iter_elements(self, init_addr):
-        if init_addr.v == 0:
+        if not init_addr:
             return
 
-        left_child = self.eval_command(init_addr, '{}->children[0]')
-        right_child = self.eval_command(init_addr, '{}->children[1]')
+        children = init_addr.dereference()['children']
+        left_child = children[0]
+        right_child = children[1]
         yield from self.iter_elements(right_child)
         yield from self.iter_elements(left_child)
         yield init_addr

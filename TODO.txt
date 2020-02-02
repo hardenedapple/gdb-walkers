@@ -1,8 +1,51 @@
+How should I use gdb.Values?
+  I think I'm pretty much convinced that I should use gdb.Values in my plugin
+  instead of the custom Python Ele object.
+
+  The question is: How?
+
+  If I had the time and inclination, I could add some way into GDB to
+  "template" a command for interpolation with a gdb.Value.
+    In this world, I would pass "values" instead of their addresses around
+    Pros:
+    - Be able to use these values for assignment.
+    - Be able to use all pretty_printer.children() methods implemented.
+    - Only have one value that the user can interpolate.
+    Cons:
+    - ...
+
+  Without updating GDB, the options I have are:
+    Only pass pointers:
+      Pros:
+      - Only have one value that the user can interpolate.
+      - Able to use values for assignment.
+
+      Cons:
+      - Can not use all pretty_printer.children() methods.
+
+      Note: would have to update the following from my gdb-values branch:
+	linked-list, pretty-printer
+	gcc-passes, gcc-insns, gcc-gimple, gcc-bbs
+
+    Pass values, set addresses and values at same time.
+      Pros:
+      - Able to perform assignment.
+      - Can use all pretty_printer.children() methods.
+
+      Cons:
+      - Have two values for the user to use.
+
+      This is what I've done in the current gdb-values branch.
+      I can't really tell which I prefer.
+      The API of the pretty_printer.children() method is almost forcing my
+      hand if I want to use it, but I could make the bold decision and say I'm
+      not going to use it.
+
+
 Tidy up:
     Eval() walker
         Use self.call_with() ?
-    Make a PipeElement a numeric type
-        define __add__() etc
+
 Gdb problems:
     info functions
         Mises out numbers in the function names -- this may be on purpose.
@@ -162,12 +205,6 @@ Random Questions:
 
 
 Things I want:
-    gdb.current_arch() function
-        Would be nice if I could disassemble a function without having to start
-        the underlying process.
-        I've submitted a patch that uses the gdb get_current_arch() function to
-        do this, but it doesn't appear to be going anywhere.
-
     All source files in python gdb.sources()
         Currently I have to parse `info sources`
 
@@ -198,3 +235,5 @@ Things I want:
         I end up in foo().
 
         I want to say "continue until the end of the `next` command"
+        Could write a new command to disable all currently active breakpoints,
+	run next, then enable all currently active breakpoints.

@@ -1,7 +1,7 @@
 set commands ""
 # Have to start because can't get disassembly without starting the subprocess.
 lappend commands "start"
-lappend commands "gdb-pipe called-functions main; .*; -1 | show whereis {.v}"
+lappend commands "gdb-pipe called-functions main; .*; -1 | show whereis \$cur"
 set commands [join $commands "\n"]
 
 set plain_out ""

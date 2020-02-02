@@ -10,10 +10,11 @@ walkers.register_walker().
 import re
 import operator
 import gdb
-from helpers import (eval_uint, function_disassembly, as_uintptr, uintptr_size,
+from helpers import (eval_uint, function_disassembly, as_voidptr,
                      file_func_split, search_symbols, find_type_size)
 import walkers
 import itertools as itt
+import sys
 
 # TODO
 #   I would like to use the python standard argparse library to parse
@@ -34,7 +35,7 @@ import itertools as itt
 #           `$_function_of()`
 #           `walker called-functions`
 #
-#   Error messages are stored in the class.
+#   Make error messages get stored in the class.
 #       (so that self.parse_args() gives useful error messages)
 #
 #   Why does gdb.lookup_global_symbol() not find global variables.
@@ -46,6 +47,7 @@ import itertools as itt
 #   without having to have started the program.
 #      This would mean Instruction could be called without starting the
 #      inferior process.
+#     NOTE This is the case in recent GDB's
 #
 #   Rename everything to match the functional paradigm? The question is really
 #   what names would be most helpful for me (or anyone else) when searching
@@ -55,6 +57,23 @@ import itertools as itt
 #      I could have double names for some -- I would just need to change
 #      register_walker so that it checks for 'name' and 'functional_name'
 #      items in the class.
+#
+#   Look for everywhere I use `eval_uint` and check whether it would be useful
+#   to allow using $cur and $addr.
+#       At the moment these variables are "left over" from the previous
+#       evaluation, which means anyone writing them in the expression may very
+#       well get confused.
+#       On the other hand, I don't want to always be setting these things.
+#
+#   Should `addr` and `cur` be replaced with `cur` and `val` respectively?
+#       Many things seem to work much better using addresses instead of values.
+#       I could leave the values available.
+#       Will this even help with the pretty_printer.children methods?
+#         (If I start using these methods then some may not give things with an
+#         address).
+#   Should I only allow `addr`?
+#       This would get rid of a bunch of confusing behaviour, while getting rid
+#       of the bad type parsing code.
 
 
 class Eval(walkers.Walker):
@@ -65,8 +84,8 @@ class Eval(walkers.Walker):
     Evaluates the resulting gdb expression, and outputs the value to the next
     walker.
 
-    If `{}` does not appear in the argument string, takes no input and outputs
-    one value.
+    If `$cur` does not appear in the argument string, takes no input and
+    outputs one value.
 
     This is essentially a map command -- it modifies the stream of addresses in
     place.
@@ -75,8 +94,8 @@ class Eval(walkers.Walker):
         gdb-pipe eval  <gdb expression>
 
     Example:
-        gdb-pipe eval  {} + 8
-        gdb-pipe eval  {} != 0 && ((struct complex_type *){})->field
+        gdb-pipe eval  $cur + 8
+        gdb-pipe eval  $cur != 0 && ((struct complex_type *)$cur)->field
         gdb-pipe eval  $saved_var->field
 
     '''
@@ -109,10 +128,10 @@ class Show(walkers.Walker):
         show <gdb command>
 
     Example:
-        show output {}
-        show output (char *){}
-        show output ((struct complex_type *){.v})->field
-        show output {}->field
+        show output $cur
+        show output (char *)$cur
+        show output ((struct complex_type *)$cur)->field
+        show output $cur->field
 
     '''
     name = 'show'
@@ -151,14 +170,15 @@ class Instruction(walkers.Walker):
     Example:
         instructions main; main+10
         instructions main; NULL; 100
-        // A pointless reimplementation of `disassemble`
+        // A pointless, buggy, reimplementation of `disassemble`
         gdb-pipe instructions main; NULL; 10 \\
-            | take-while $_output_contains("x/i {}", "main") \\
-            | show x/i {}
+            | take-while $_output_contains("x/i $cur", "main") \\
+            | show x/i $cur
 
     '''
     name = 'instructions'
     tags = ['data']
+    __void_type = gdb.lookup_type('void').pointer()
 
     def __init__(self, start_ele, end_addr, count):
         self.arch = gdb.current_arch()
@@ -182,7 +202,7 @@ class Instruction(walkers.Walker):
         Helper function.
         '''
         # TODO arch.disassemble default args.
-        start_addr = start_ele.v
+        start_addr = int(as_voidptr(start_ele))
         if self.end_addr and self.count:
             return self.arch.disassemble(start_addr,
                                          self.end_addr,
@@ -196,7 +216,8 @@ class Instruction(walkers.Walker):
 
     def iter_helper(self, start_ele):
         for instruction in self.disass(start_ele):
-            yield self.Ele('void *', instruction['addr'])
+            temp = gdb.Value(instruction['addr'])
+            yield as_voidptr(temp)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.iter_helper)
@@ -205,14 +226,14 @@ class Instruction(walkers.Walker):
 class If(walkers.Walker):
     '''Reproduces items that satisfy a condition.
 
-    Replaces occurances of `{}` with the input address.
+    Replaces occurances of `$cur` with the input.
 
     Usage:
         if <condition>
 
     Example:
-        if $_streq("Hello", (char_u *){})
-        if ((complex_type *){}).field == 10
+        if $_streq("Hello", (char_u *)$cur)
+        if ((complex_type *)$cur).field == 10
         if $count++ < 10
 
     '''
@@ -229,21 +250,21 @@ class If(walkers.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if self.eval_command(element).v:
+            if self.eval_command(element):
                 yield element
 
 
 class IfNth(walkers.Walker):
     '''Provides items where the Nth previous one satisfies a condition.
 
-    Replaces occurances of `{}` with the input address.
+    Replaces occurances of `$cur` with the input.
 
     Usage:
         if-nth <condition>; <offset>
 
     Example:
-        if-nth $_streq("Hello", (char_u *){}); 1
-        if-nth ((sometype *){}).field == 10; -1
+        if-nth $_streq("Hello", (char_u *)$cur); 1
+        if-nth ((sometype *)$cur).field == 10; -1
 
     '''
     name = 'if-nth'
@@ -262,7 +283,7 @@ class IfNth(walkers.Walker):
     def positive_offset_ifn(self, inpipe):
         to_yield = []
         for count, element in enumerate(inpipe):
-            if self.eval_command(element).v:
+            if self.eval_command(element):
                 to_yield.append(count + self.offset)
             if to_yield:
                 if to_yield[0] == count:
@@ -280,7 +301,7 @@ class IfNth(walkers.Walker):
                 cur_yield = previous.pop()
             assert len(previous) < -self.offset, "Should be an invariant of this loop"
             previous.append(element)
-            if self.eval_command(element).v and cur_yield:
+            if self.eval_command(element) and cur_yield:
                 yield cur_yield
 
     def iter_def(self, inpipe):
@@ -310,6 +331,8 @@ class Head(walkers.Walker):
     def from_userstring(cls, args, first, last):
         # Don't use eval_uint as that means we can't use `-1`
         # eval_uint() is really there to eval anything that could be a pointer.
+        if args is None:
+            raise ValueError('`head` walker requires an argument')
         return cls(int(gdb.parse_and_eval(args)))
 
     def iter_def(self, inpipe):
@@ -345,6 +368,8 @@ class Tail(walkers.Walker):
     def from_userstring(cls, args, first, last):
         # Don't use eval_uint as that means we can't use `-1`
         # eval_uint() is really there to eval anything that could be a pointer.
+        if args is None:
+            raise ValueError('`head` walker requires an argument')
         return cls(int(gdb.parse_and_eval(args)))
 
     def iter_def(self, inpipe):
@@ -390,118 +415,65 @@ class Count(walkers.Walker):
         i = None
         for i, _ in enumerate(inpipe):
             pass
-        yield self.Ele('int', i + 1 if i is not None else 0)
+        yield gdb.Value(i + 1 if i is not None else 0)
 
 
+# TODO
+# Make some `array-size` command that essentially does
+#    sizeof(array)/sizeof(array_element_type)
+# This would be generally useful, and also be something worth mentioning in
+# the helper of this array walker text.
 class Array(walkers.Walker):
     '''Iterate over a pointer to each element in an array.
 
     Note that the types can sometimes be confusing here, walking over an array
-    of `char *` means the walker produdces a stream of `char **` pointers.
+    of `char *` means the walker produces a stream of `char **` pointers.
     Similarly, walking over an array of `int` means the walker produces a
     stream of `int *` pointers.
 
     Usage:
-        array type; start_address; count
+        array start; count
 
-        start_address and count are arbitrary expressions, if this walker is
-        not the first walker in the pipeline then {} is replaced by the
-        incoming element.
+        `start` and `count` are arbitrary expressions, if this walker is not
+        the first walker in the pipeline then $cur is replaced by the incoming
+        element.
+
+        `start` should be a pointer to the first element in the array.
 
     Example:
-        array char *; argv; argc
+        array argv; argc
 
     '''
     name = 'array'
     tags = ['data']
 
-    def __init__(self, first, start, count, typename, element_size):
+    def __init__(self, first, start, count):
         self.first = first
-        self.typename = typename + '*' if typename else None
-        self.element_size = element_size
-        if first:
-            self.start_addr = start
-            self.count = count
-        else:
-            self.start_expr = start
-            self.count_expr = count
+        self.start_expr = start
+        self.count_expr = count
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        type_arg, start_expr, count_expr = cls.parse_args(args, [3, 3], ';')
+        start, count = cls.parse_args(args, [2, 2], ';')
+        return cls(first, start, count)
 
-        def __first(count_expr, start_expr):
-            return eval_uint(count_expr), cls.calc(start_expr)
-
-        def __noauto(type_arg):
-            element_size = find_type_size(type_arg)
-            typename = type_arg
-            return typename, element_size
-
-        def __first_auto(start_expr, count_expr, _):
-            count, start_ele = __first(count_expr, start_expr)
-            start_addr, typename = start_ele.v, start_ele.t
-            typename = typename.rstrip()
-            typename = typename[:-1] if typename[-1] == '*' else typename
-            return (start_addr, count, typename,
-                    gdb.parse_and_eval(start_expr).type.target().sizeof)
-
-        def __nofirst_auto(start_expr, count_expr, _):
-            return (start_expr, count_expr, None, None)
-
-        def __first_noauto(start_expr, count_expr, type_arg):
-            count, start_ele = __first(count_expr, start_expr)
-            start_addr = start_ele.v
-            typename, element_size = __noauto(type_arg)
-            return (start_addr, count, typename, element_size)
-
-        def __nofirst_noauto(start_expr, count_expr, type_arg):
-            typename, element_size = __noauto(type_arg)
-            return (start_expr, count_expr, typename, element_size)
-
-        options_dict = {
-            (True, True): __first_auto,
-            (False, True): __nofirst_auto,
-            (True, False): __first_noauto,
-            (False, False): __nofirst_noauto,
-        }
-
-        return cls(first,
-                   *options_dict[first, type_arg == 'auto'](
-                   start_expr, count_expr, type_arg))
-
-    def __iter_single(self, start_addr, count, typename, element_size):
-        pos = start_addr
+    def __iter_single(self, start, count):
+        original_type = start.type
+        cur_value = start
         for _ in range(count):
-            yield self.Ele(typename, pos)
-            pos += element_size
-
-    def __iter_known(self, element):
-        start_addr = eval_uint(self.format_command(element, self.start_expr))
-        count = eval_uint(self.format_command(element, self.count_expr))
-        yield from self.__iter_single(start_addr, count,
-                                      self.typename,
-                                      self.element_size)
-
-    def __iter_unknown(self, element):
-        count = eval_uint(self.format_command(element, self.count_expr))
-        start_ele = self.eval_command(element, self.start_expr)
-        # Like in __init__() seems simpler to evaluate twice than go for
-        # performance.
-        element_size = gdb.parse_and_eval(
-            self.format_command(element, self.start_expr)
-        ).type.target().sizeof
-        yield from self.__iter_single(start_ele.v, count, start_ele.t, element_size)
+            yield cur_value
+            cur_value = (cur_value + 1).cast(original_type)
 
     def iter_def(self, inpipe):
         if self.first:
             yield from self.__iter_single(
-                self.start_addr, self.count, self.typename, self.element_size)
+                self.calc(self.start_expr),
+                self.calc(self.count_expr))
         else:
-            for iterobj in map(
-                    self.__iter_known if self.typename else self.__iter_unknown,
-                    inpipe):
-                yield from iterobj
+            for element in inpipe:
+                start = self.eval_command(element, self.start_expr)
+                count = self.eval_command(element, self.count_expr)
+                yield from self.__iter_single(start, count)
 
 
 # Probably should do something about the code duplication between Max and Min
@@ -516,12 +488,12 @@ class Max(walkers.Walker):
     returned.
 
     Use:
-        gdb-pipe ... | max {}
+        gdb-pipe ... | max $cur
 
     Example:
         // Find argument that starts with the last letter in the alphabet.
-        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \\
-            max (*(char *){})[0]
+        gdb-pipe follow-until argv; *(char **)$cur == 0; ((char **)$cur) + 1 | \\
+            max (*(char *)$cur)[0]
 
     '''
     name = 'max'
@@ -538,7 +510,7 @@ class Max(walkers.Walker):
     def iter_def(self, inpipe):
         try:
             _, retelement = max(
-                ((self.eval_command(element).v, element) for element in inpipe),
+                ((self.eval_command(element), element) for element in inpipe),
                 key=operator.itemgetter(0)
             )
             yield retelement
@@ -557,12 +529,12 @@ class Min(walkers.Walker):
     returned.
 
     Use:
-        gdb-pipe ... | min {}
+        gdb-pipe ... | min $cur
 
     Example:
         // Find argument that starts with the last letter in the alphabet.
-        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \\
-            min (*(char *){})[0]
+        gdb-pipe follow-until argv; *(char **)$cur == 0; ((char **)$cur) + 1 | \\
+            min (*(char *)$cur)[0]
 
     '''
     name = 'min'
@@ -579,7 +551,7 @@ class Min(walkers.Walker):
     def iter_def(self, inpipe):
         try:
             _, retelement = min(
-                ((self.eval_command(element).v, element) for element in inpipe),
+                ((self.eval_command(element), element) for element in inpipe),
                 key=operator.itemgetter(0)
             )
             yield retelement
@@ -597,12 +569,12 @@ class Sort(walkers.Walker):
     Reverse sorting is not supported: negate the expression as a workaround.
 
     Use:
-        gdb-pipe ... | sort {}
+        gdb-pipe ... | sort $cur
 
     Example:
         // Sort arguments alphabetically
-        gdb-pipe follow-until argv; *(char **){} == 0; ((char **){}) + 1 | \\
-            sort (*(char **){})[0]
+        gdb-pipe follow-until argv; *(char **)$cur == 0; ((char **)$cur) + 1 | \\
+            sort (*(char **)$cur)[0]
 
     '''
     name = 'sort'
@@ -618,7 +590,7 @@ class Sort(walkers.Walker):
 
     def iter_def(self, inpipe):
         retlist = sorted(
-            ((self.eval_command(element).v, element) for element in inpipe),
+            ((self.eval_command(element), element) for element in inpipe),
             key=operator.itemgetter(0)
         )
         for _, element in retlist:
@@ -632,7 +604,7 @@ class Dedup(walkers.Walker):
     repeat the same value as the one previous.
 
     Use:
-        gdb-pipe ... | dedup {}
+        gdb-pipe ... | dedup $cur.x
 
     '''
     name = 'dedup'
@@ -648,7 +620,7 @@ class Dedup(walkers.Walker):
 
     def iter_def(self, inpipe):
         prev_value = None
-        for element, value in ((ele, self.eval_command(ele).v) for ele in inpipe):
+        for element, value in ((ele, self.eval_command(ele)) for ele in inpipe):
             if value == prev_value:
                 continue
             prev_value = value
@@ -661,7 +633,7 @@ class Until(walkers.Walker):
     Can't be the first walker.
 
     Usage:
-        gdb-pipe ... | take-while ((struct *){})->field != marker
+        gdb-pipe ... | take-while ((struct *)$cur)->field != marker
 
     '''
     name = 'take-while'
@@ -677,7 +649,7 @@ class Until(walkers.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if not self.eval_command(element).v:
+            if not self.eval_command(element):
                 break
             yield element
 
@@ -688,7 +660,7 @@ class Since(walkers.Walker):
     Returns all items in a walker since a condition was satisfied.
 
     Usage:
-        gdb-pipe ... | skip-until ((struct *){})->field == $#marker#
+        gdb-pipe ... | skip-until ((struct *)$cur)->field == $#marker#
 
     '''
     name = 'skip-until'
@@ -704,7 +676,7 @@ class Since(walkers.Walker):
 
     def iter_def(self, inpipe):
         for element in inpipe:
-            if self.eval_command(element).v:
+            if self.eval_command(element):
                 yield element
                 break
         yield from inpipe
@@ -713,8 +685,8 @@ class Since(walkers.Walker):
 class Terminated(walkers.Walker):
     '''Follow "next" expression until reach terminating condition.
 
-    Uses given expression to find the "next" pointer in a sequence, follows
-    this expression until a terminating value is reached.
+    Uses given expression to find the "next" value in a sequence, follows this
+    expression until a terminating value is reached.
     The terminating value is determined by checking if a `test-expression`
     returns true.
 
@@ -723,10 +695,10 @@ class Terminated(walkers.Walker):
         follow-until start-addr; <test-expression>; <follow-expression>
 
     Example:
-        follow-until argv; *{} == 0; {} + sizeof(char **)
+        follow-until argv; *$cur == 0; $cur + sizeof(char **)
         gdb-pipe eval *(char **)argv \\
-            | follow-until *(char *){} == 0; {} + sizeof(char) \\
-            | show x/c {}
+            | follow-until *(char *)$cur == 0; $cur + sizeof(char) \\
+            | show x/c $cur
 
     '''
     name = 'follow-until'
@@ -748,50 +720,59 @@ class Terminated(walkers.Walker):
         return cls(start_ele, test_expr, follow_expr)
 
     def follow_to_termination(self, start_ele):
-        while eval_uint(self.format_command(start_ele, self.test_expr)) == 0:
-            yield start_ele
-            start_ele = self.eval_command(start_ele, self.follow_expr)
+        cur = start_ele
+        while not self.eval_command(cur, self.test_expr):
+            yield cur
+            cur = self.eval_command(cur, self.follow_expr)
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.follow_to_termination)
 
 
+# TODO
+#   Need to figure out how to handle multiple levels of fetching.
+#   e.g. for gcc-insns, we use
+#      u.fld[0].rt_rtx
+#   This seems like it should be allowed, but it no longer is.
 class LinkedList(walkers.Walker):
     '''Convenience walker for a NULL terminated linked list.
 
     The following walker
-        linked-list list_head; list_T; list_next
+        linked-list list_head; list_next
     is the equivalent of
-        follow-until list_head; {} == 0; ((list_T *){})->list_next
+        follow-until list_head; $cur == 0; *$addr->list_next
 
     Usage:
-        linked-list <list start>; <list type>; <next member>
-        linked-list <list type>; <next member>
+        linked-list <list head>; <next member>
+        linked-list <next member>
 
     '''
     name = 'linked-list'
     tags = ['data']
 
-    def __init__(self, start_ele, list_type, next_member):
+    def __init__(self, start_ele, next_member):
         self.start_ele = start_ele
-        self.list_type = list_type + '*'
         self.next_member = next_member
 
     @classmethod
     def from_userstring(cls, args, first, last):
         if first:
-            start_expr, list_type, next_member = cls.parse_args(args, [3, 3], ';')
+            start_expr, next_member = cls.parse_args(args, [2, 2], ';')
             start_ele = cls.calc(start_expr)
         else:
-            list_type, next_member = cls.parse_args(args, [2, 2], ';')
+            next_member = cls.parse_args(args, [1, 1], ';')
             start_ele = None
-        return cls(start_ele, list_type, next_member)
+        return cls(start_ele, next_member)
 
     def __iter_helper(self, element):
-        yield from Terminated.single_iter(
-            start_ele=self.Ele(self.list_type, element.v),
-            test_expr='{} == 0',
-            follow_expr='{{}}->{}'.format(self.next_member))
+        cur = element
+        while cur:
+            yield cur
+            # We need to use the `eval_command` method rather than using the
+            # gdb.Value attribute interface to allow the use of syntax such as
+            # `linked-list list_head; direction.next` (i.e. more than one level
+            # deep accesses).
+            cur = self.eval_command(cur, '$cur->{}'.format(self.next_member))
 
     def iter_def(self, inpipe):
         yield from self.call_with(self.start_ele, inpipe, self.__iter_helper)
@@ -973,7 +954,7 @@ class CalledFunctions(walkers.Walker):
             # Store the current value in the hypothetical_stack for someone
             # else to query - remember to set the class attribute.
             type(self).hypothetical_stack[depth:] = [func_addr]
-            yield self.Ele('void *', func_addr)
+            yield as_voidptr(gdb.Value(func_addr))
 
             # Go backwards through the list so that we pop off elements in the
             # order they will be called.
@@ -1040,12 +1021,12 @@ class HypotheticalStack(walkers.Walker):
 
     def iter_def(self, inpipe):
         if not inpipe:
-            yield from (self.Ele('void *', ele) for ele in
+            yield from (as_voidptr(gdb.Value(ele)) for ele in
                         self.called_funcs_class.hypothetical_stack)
             return
 
         for _ in inpipe:
-            yield from (self.Ele('void *', ele) for ele in
+            yield from (as_voidptr(gdb.Value(ele)) for ele in
                         self.called_funcs_class.hypothetical_stack)
 
 
@@ -1082,7 +1063,7 @@ class File(walkers.Walker):
         for filename in self.filenames:
             with open(filename, 'r') as infile:
                 for line in infile:
-                    yield self.Ele('void *', int(line, base=16))
+                    yield as_voidptr(gdb.Value(int(line, base=16)))
 
 
 class DefinedFunctions(walkers.Walker):
@@ -1096,7 +1077,7 @@ class DefinedFunctions(walkers.Walker):
     To ignore the file regexp, use the regular expression .*.
 
     By default the walker ignores all functions defined in dynamic libraries
-    (by checking the output of 'info symbol {}' matches the current progspace
+    (by checking the output of 'info symbol $cur' matches the current progspace
     filename). If you don't want to ignore these functions, give the argument
     'include-dynlibs' after the file and function regexps.
 
@@ -1106,13 +1087,13 @@ class DefinedFunctions(walkers.Walker):
     Example:
         // Print those functions in tree.c that use the 'insert_entry' function
         gdb-pipe defined-functions tree.c:tree | \\
-            if $_output_contains("global-used {} insert_entry", "insert_entry") | \\
-            show whereis {}
+            if $_output_contains("global-used $cur insert_entry", "insert_entry") | \\
+            show whereis $cur
 
         // Walk over all functions ending with 'tree' (including those in
         // dynamic libraries)
         gdb-pipe defined-functions .*:.*tree$ True | \\
-            show print-string $_function_of({}); "\\n"
+            show print-string $_function_of($cur); "\\n"
 
     '''
     name = 'defined-functions'
@@ -1124,6 +1105,7 @@ class DefinedFunctions(walkers.Walker):
         # without debugging information.
         self.file_regexp = file_regexp if file_regexp is not None else '.+'
         self.func_regexp = func_regexp
+
 
     @classmethod
     def from_userstring(cls, args, first, last):
@@ -1143,7 +1125,11 @@ class DefinedFunctions(walkers.Walker):
     def iter_def(self, inpipe):
         for symbol in search_symbols(self.func_regexp, self.file_regexp,
                                      self.include_dynlibs):
-            yield self.Ele('void *', int(as_uintptr(symbol.value())))
+            # TODO For some very strange reason, assigning a symbol.value()
+            # this to a convenience variable ends up with the convenience
+            # variable set to NULL.
+            # Hence passing this across as a voidptr.
+            yield as_voidptr(symbol.value())
 
 
 class PrettyPrinter(walkers.Walker):
@@ -1167,19 +1153,22 @@ class PrettyPrinter(walkers.Walker):
         gdb-pipe pretty-printer <container>
 
     Example:
-        gdb-pipe pretty-printer my_cpp_int_vector | \\
-            if *{} < 10 | show print *{}
+        gdb-pipe pretty-printer my_cpp_int_vector[; values] | \\
+                if *$cur < 10 | show print *$cur
 
     '''
     name = 'pretty-printer'
     tags = ['data']
 
-    def __init__(self, container_desc):
+    def __init__(self, container_desc, values):
         self.desc = container_desc
+        self.values = values
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        return cls(args)
+        cmd_parts = cls.parse_args(args, [1, 2], ';') if first else [args]
+        container_desc = cmd_parts.pop(0) if first else None
+        return cls(container_desc, cmd_parts and cmd_parts[0] == 'values')
 
     @staticmethod
     def all_pretty_printers():
@@ -1201,9 +1190,12 @@ class PrettyPrinter(walkers.Walker):
             print('Type {} has no children.'.format(pretty_printer.typename))
             return []
 
-        for i in pretty_printer.children():
-            addr = i[1].address
-            yield walkers.PipeElement(str(addr.type), int(as_uintptr(addr)))
+        if self.values:
+            for i in pretty_printer.children():
+                yield i[1]
+        else:
+            for i in pretty_printer.children():
+                yield i[1].address
 
     def iter_def(self, inpipe):
         if not self.desc:
