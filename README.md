@@ -86,6 +86,8 @@ Use `$count += 3, true` as one expression in `follow-until` (or `eval`, or
 `show` ...) to get useful side-affects.
 This is why it splits on the semi-colon (that, and to emphasise how it's pretty
 much just a for loop).
+NOTE: This does not work when the side-effect is use either side of a walker
+that buffers its inputs (see the section "NOTES / Warnings" below).
 
 ## Many ways of counting to ten
 
@@ -302,3 +304,19 @@ with `jmp` rather than `ret` (which are much more common in non-debug
 functions).
 Tracing non-debug symbols can be activated with `set call-graph-nondebug on`.
 
+
+NOTE:
+Some walkers buffer their input, while others don't.
+In general it's best to implement your walker as a generator, since that means
+things like `head` will terminate the pipeline just at the point where the
+number of elements required have been generated.
+
+This is not always possible, e.g. the `sort` walker needs to read all addresses
+in from the previous iterable before producing anything else (since otherwise
+it doesn't know for certain which element it should provide first).
+
+There are some tricks you can do around walkers that are implemented as
+generators that you can't do around walkers that buffer their input.
+Tricks like using a temporary variable `$count` to know how many previous
+elements you've gone through only work when used without an intervening
+"buffering" walker.
