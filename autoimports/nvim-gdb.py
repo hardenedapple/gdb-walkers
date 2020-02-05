@@ -1,16 +1,12 @@
 '''
 Define walkers over neovim data structures.
 
-So far all that's implemented is walking over fold arrays, and walking over
-undo trees.
+TODO Really need to update this for the new implementation (using $cur instead
+of {}).
 
 To have this file autoloaded when inspecting a newly built version of nvim, put
 a small file containing just the line `import neovim_walkers` in the file
 ~/.config/gdb/autoloads/<full/path/to/nvim/binary>-gdb.py
-
-If anyone knows of a way to tell gdb to just search for the basename so I can
-just have the file ~/.config/gdb/autoloads/nvim-gdb.py I would love to hear of
-it.
 
 '''
 import itertools as itt

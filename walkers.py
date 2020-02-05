@@ -154,11 +154,17 @@ class Walker(metaclass=WalkerMetaclass):
         return retval
 
     def format_command(self, element, args):
-        '''Does args.format(element) but ensures can use {} instead of {0}.'''
+        '''Returns a string which if evaluated directly after calling this
+        function uses `element` in the place of `$cur`.'''
         # Don't let the pipe element get removed.
         if element is None:
             element = 0
-        gdb.set_convenience_variable('cur', element)
+        try:
+            gdb.set_convenience_variable('cur', element)
+        except gdb.MemoryError:
+            print('When setting for the expression: ', args)
+            print('Error setting convenience variable:', element)
+            raise
         return args
 
     def eval_command(self, element, args=None):
@@ -169,17 +175,17 @@ class Walker(metaclass=WalkerMetaclass):
 
         Otherwise uses `args` instead of `self.cmd`
 
-         '''
+        '''
         args = args if args else self.cmd
         return self.calc(self.format_command(element, args))
 
-    def call_with(self, start, inpipe, helper):
-        if start is not None:
-            assert not inpipe
-            yield from helper(start)
+    def call_with(self, inpipe, helper, *helper_args):
+        if not inpipe:
+            yield from helper(*(self.calc(x) for x in helper_args))
         else:
             for element in inpipe:
-                yield from helper(element)
+                yield from helper(
+                    *(self.eval_command(element, x) for x in helper_args))
 
 
 def create_walker(walker_def, first=False, last=False):

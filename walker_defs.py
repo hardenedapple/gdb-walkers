@@ -7,6 +7,7 @@ registered, otherwise you must register them manually with
 walkers.register_walker().
 
 '''
+import os
 import re
 import operator
 import gdb
@@ -111,11 +112,12 @@ class Eval(walkers.Walker):
     def from_userstring(cls, args, first, last):
         return cls(args, first)
 
+    @staticmethod
+    def iter_helper(x):
+        yield x
+
     def iter_def(self, inpipe):
-        if self.first:
-            yield self.calc(self.cmd)
-        else:
-            yield from (self.eval_command(ele) for ele in inpipe)
+        yield from self.call_with(inpipe, self.iter_helper, self.cmd)
 
 
 class Show(walkers.Walker):
@@ -158,69 +160,61 @@ class Instruction(walkers.Walker):
     '''Next `count` instructions starting at `start-address`.
 
     Usage:
-        instructions [start-address]; [end-address]; [count]
+        instructions <start-address>; <end-address>; <count>
 
     See gdb info Architecture.disassemble() for the meaning of arguments.
-    `end-address` may be `None` to only use `count` as a limit on the number of
-    instructions.
-
-    If we're first in the pipeline, `start-address` is required, otherwise it
-    is assumed to be the address given to us in the previous pipeline.
+    `end-address` may be `0` to only use `count` as a limit on the number of
+    instructions.  Similarly, `count` may be `0` to only use `end-address` as a
+    limit.
 
     Example:
-        instructions main; main+10
-        instructions main; NULL; 100
+        instructions main; main+10; 0
+        instructions main; 0; 100
         // A pointless, buggy, reimplementation of `disassemble`
-        gdb-pipe instructions main; NULL; 10 \\
+        gdb-pipe instructions main; 0; 10 \\
             | take-while $_output_contains("x/i $cur", "main") \\
             | show x/i $cur
 
     '''
     name = 'instructions'
     tags = ['data']
-    __void_type = gdb.lookup_type('void').pointer()
 
-    def __init__(self, start_ele, end_addr, count):
+    def __init__(self, start_expr, end_expr, count_expr):
         self.arch = gdb.current_arch()
-        self.start_ele = start_ele
-        self.end_addr = end_addr
-        self.count = count
+        self.start_expr = start_expr
+        self.end_expr = end_expr
+        self.count_expr = count_expr
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [2, 3] if first else [1, 2], ';')
-
-        start_ele = cls.calc(cmd_parts.pop(0)) if first else None
+        cmd_parts = cls.parse_args(args, [3, 3], ';')
+        start_expr = cmd_parts.pop(0)
         end = cmd_parts.pop(0)
-        end_addr = None if end == 'NULL' else eval_uint(end)
-        count = eval_uint(cmd_parts.pop(0)) if cmd_parts else None
+        count = cmd_parts.pop(0)
+        return cls(start_expr, end, count)
 
-        return cls(start_ele, end_addr, count)
-
-    def disass(self, start_ele):
+    def disass(self, start, end, count):
         '''
         Helper function.
         '''
-        # TODO arch.disassemble default args.
-        start_addr = int(as_voidptr(start_ele))
-        if self.end_addr and self.count:
-            return self.arch.disassemble(start_addr,
-                                         self.end_addr,
-                                         self.count)
-        elif self.count:
-            return self.arch.disassemble(start_addr, count=self.count)
-        elif self.end_addr:
-            return self.arch.disassemble(start_addr, self.end_addr)
+        if end and count:
+            return self.arch.disassemble(start, end, count)
+        elif count:
+            return self.arch.disassemble(start, count=count)
+        elif end:
+            return self.arch.disassemble(start, end)
+        return self.arch.disassemble(start)
 
-        return self.arch.disassemble(start_addr)
-
-    def iter_helper(self, start_ele):
-        for instruction in self.disass(start_ele):
+    def iter_helper(self, start, end, count):
+        start, end, count = (int(as_voidptr(x)) for x in (start, end, count))
+        for instruction in self.disass(start, end, count):
             temp = gdb.Value(instruction['addr'])
             yield as_voidptr(temp)
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_ele, inpipe, self.iter_helper)
+        yield from self.call_with(inpipe, self.iter_helper,
+                                  self.start_expr, self.end_expr,
+                                  self.count_expr)
 
 
 class If(walkers.Walker):
@@ -258,6 +252,10 @@ class IfNth(walkers.Walker):
     '''Provides items where the Nth previous one satisfies a condition.
 
     Replaces occurances of `$cur` with the input.
+    NOTE:
+        The `count` can not use `$cur`, since it must be the same for each
+        element coming down the pipeline.  It is to be evaluated before
+        the pipeline starts.
 
     Usage:
         if-nth <condition>; <offset>
@@ -315,6 +313,7 @@ class Head(walkers.Walker):
     '''Only take first `N` items of the pipeline.
 
     Can use `head -N` to take all but the last N elements.
+    NOTE: The `N` can not use `$cur`.
 
     Usage:
        head <N>
@@ -352,6 +351,7 @@ class Tail(walkers.Walker):
     '''Limit walker to last `N` items of pipeline.
 
     Can use `tail -N` to pass all but the N first elements.
+    NOTE: The `N` can not use `$cur`.
 
     Usage:
         tail <N>
@@ -435,8 +435,8 @@ class Array(walkers.Walker):
         array start; count
 
         `start` and `count` are arbitrary expressions, if this walker is not
-        the first walker in the pipeline then $cur is replaced by the incoming
-        element.
+        the first walker in the pipeline then `$cur` is replaced by the
+        incoming element.
 
         `start` should be a pointer to the first element in the array.
 
@@ -465,15 +465,8 @@ class Array(walkers.Walker):
             cur_value = (cur_value + 1).cast(original_type)
 
     def iter_def(self, inpipe):
-        if self.first:
-            yield from self.__iter_single(
-                self.calc(self.start_expr),
-                self.calc(self.count_expr))
-        else:
-            for element in inpipe:
-                start = self.eval_command(element, self.start_expr)
-                count = self.eval_command(element, self.count_expr)
-                yield from self.__iter_single(start, count)
+        yield from self.call_with(inpipe, self.__iter_single,
+                                  self.start_expr, self.count_expr)
 
 
 # Probably should do something about the code duplication between Max and Min
@@ -691,33 +684,27 @@ class Terminated(walkers.Walker):
     returns true.
 
     Usage:
-        follow-until <test-expression>; <follow-expression>
-        follow-until start-addr; <test-expression>; <follow-expression>
+        follow-until <start-expr>; <test-expression>; <follow-expression>
 
     Example:
         follow-until argv; *$cur == 0; $cur + sizeof(char **)
         gdb-pipe eval *(char **)argv \\
-            | follow-until *(char *)$cur == 0; $cur + sizeof(char) \\
+            | follow-until $cur; *(char *)$cur == 0; $cur + sizeof(char) \\
             | show x/c $cur
 
     '''
     name = 'follow-until'
     tags = ['data']
 
-    def __init__(self, start_ele, test_expr, follow_expr):
-        self.start_ele = start_ele
+    def __init__(self, start_expr, test_expr, follow_expr):
+        self.start_expr = start_expr
         self.test_expr = test_expr
         self.follow_expr = follow_expr
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        if first:
-            start_expr, test_expr, follow_expr = cls.parse_args(args, [3, 3], ';')
-            start_ele = cls.calc(start_expr)
-        else:
-            test_expr, follow_expr = cls.parse_args(args, [2, 2], ';')
-            start_ele = None
-        return cls(start_ele, test_expr, follow_expr)
+        start_expr, test_expr, follow_expr = cls.parse_args(args, [3, 3], ';')
+        return cls(start_expr, test_expr, follow_expr)
 
     def follow_to_termination(self, start_ele):
         cur = start_ele
@@ -726,7 +713,9 @@ class Terminated(walkers.Walker):
             cur = self.eval_command(cur, self.follow_expr)
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_ele, inpipe, self.follow_to_termination)
+        yield from self.call_with(inpipe,
+                                  self.follow_to_termination,
+                                  self.start_expr)
 
 
 # TODO
@@ -737,10 +726,16 @@ class Terminated(walkers.Walker):
 class LinkedList(walkers.Walker):
     '''Convenience walker for a NULL terminated linked list.
 
+    NOTE:
+        The second argument to this walker needs the characters indicating a
+        selection in your source language.  This allows for the syntax to be
+        language agnostic -- or at least enforce the user (who knows what
+        language they're debugging) to set all language-specific information.
+
     The following walker
-        linked-list list_head; list_next
+        linked-list list_head; ->list_next
     is the equivalent of
-        follow-until list_head; $cur == 0; *$addr->list_next
+        follow-until list_head; $cur == 0; $cur->list_next
 
     Usage:
         linked-list <list head>; <next member>
@@ -750,19 +745,14 @@ class LinkedList(walkers.Walker):
     name = 'linked-list'
     tags = ['data']
 
-    def __init__(self, start_ele, next_member):
-        self.start_ele = start_ele
+    def __init__(self, start_expr, next_member):
+        self.start_expr = start_expr
         self.next_member = next_member
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        if first:
-            start_expr, next_member = cls.parse_args(args, [2, 2], ';')
-            start_ele = cls.calc(start_expr)
-        else:
-            next_member = cls.parse_args(args, [1, 1], ';')
-            start_ele = None
-        return cls(start_ele, next_member)
+        start_expr, next_member = cls.parse_args(args, [2, 2], ';')
+        return cls(start_expr, next_member)
 
     def __iter_helper(self, element):
         cur = element
@@ -772,10 +762,10 @@ class LinkedList(walkers.Walker):
             # gdb.Value attribute interface to allow the use of syntax such as
             # `linked-list list_head; direction.next` (i.e. more than one level
             # deep accesses).
-            cur = self.eval_command(cur, '$cur->{}'.format(self.next_member))
+            cur = self.eval_command(cur, '$cur{}'.format(self.next_member))
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_ele, inpipe, self.__iter_helper)
+        yield from self.call_with(inpipe, self.__iter_helper, self.start_expr)
 
 
 class Devnull(walkers.Walker):
@@ -828,6 +818,7 @@ class CalledFunctions(walkers.Walker):
 
     Given a function name/address, walk over all functions this function calls,
     and all functions called by those etc up to maxdepth.
+    NOTE: The `maxdepth` argument can not use `$cur`.
 
     It skips all functions defined in a file that doesn't match file-regexp.
     This part is very important as it avoids searching all functions in
@@ -850,7 +841,6 @@ class CalledFunctions(walkers.Walker):
         up.
 
     Usage:
-        ... | called-functions <file-regexp>; <maxdepth>; [unique]
         called-functions <funcname | funcaddr>; <file-regexp>; <maxdepth>; [unique]
 
     '''
@@ -876,14 +866,13 @@ class CalledFunctions(walkers.Walker):
         # hypothetical_stack checks for recursion, but also allows the
         # hypothetical-call-stack walker to see what the current stack is.
         type(self).hypothetical_stack = []
-        if start_expr:
-            self.__add_addr(eval_uint(start_expr), 0)
+        self.start_expr = start_expr
 
     # TODO
     #   Allow default arguments?
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [3,4] if first else [2,3], ';')
+        cmd_parts = cls.parse_args(args, [3,4], ';')
         if cmd_parts[-1] == 'unique':
             cmd_parts.pop()
             unique = True
@@ -891,7 +880,7 @@ class CalledFunctions(walkers.Walker):
             unique = False
         return cls(eval_uint(cmd_parts[-1]),
                    cmd_parts[-2].strip(),
-                   cmd_parts[0] if first else None,
+                   cmd_parts[0],
                    unique)
 
     def __add_addr(self, addr, depth):
@@ -900,8 +889,6 @@ class CalledFunctions(walkers.Walker):
         if addr in self.all_seen:
             return
         if self.unique_funcs:
-            if addr in self.all_seen:
-                return
             self.all_seen.add(addr)
         # Use reverse stack because recursion is more likely a short-term
         # thing (have not checked whether this speeds anything up).
@@ -964,13 +951,15 @@ class CalledFunctions(walkers.Walker):
 
     def iter_def(self, inpipe):
         if not inpipe:
+            self.__add_addr(eval_uint(self.start_expr), 0)
             yield from self.__iter_helper()
             return
 
         # Deal with each given function (and all their descendants) in turn.
-        for _, element in inpipe:
+        for element in inpipe:
             type(self).hypothetical_stack = []
-            self.__add_addr(element, 0)
+            self.__add_addr(int(as_voidptr(
+                self.eval_command(element, self.start_expr))), 0)
             yield from self.__iter_helper()
 
 
@@ -1049,7 +1038,7 @@ class File(walkers.Walker):
     tags = ['general']
 
     def __init__(self, filenames):
-        self.filenames = filenames
+        self.filenames = [os.path.expanduser(x) for x in filenames]
 
     @classmethod
     def from_userstring(cls, args, first, last):
@@ -1105,7 +1094,6 @@ class DefinedFunctions(walkers.Walker):
         # without debugging information.
         self.file_regexp = file_regexp if file_regexp is not None else '.+'
         self.func_regexp = func_regexp
-
 
     @classmethod
     def from_userstring(cls, args, first, last):
@@ -1166,9 +1154,11 @@ class PrettyPrinter(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [1, 2], ';') if first else [args]
-        container_desc = cmd_parts.pop(0) if first else None
-        return cls(container_desc, cmd_parts and cmd_parts[0] == 'values')
+        cmd_parts = cls.parse_args(args, [1, 2], ';')
+        container_desc = cmd_parts.pop(0)
+        if cmd_parts and cmd_parts[0] != 'values':
+            raise ValueError("pretty-printer second argument must be 'values'")
+        return cls(container_desc, bool(cmd_parts))
 
     @staticmethod
     def all_pretty_printers():
@@ -1198,17 +1188,7 @@ class PrettyPrinter(walkers.Walker):
                 yield i[1].address
 
     def iter_def(self, inpipe):
-        if not self.desc:
-            return []
-
-        if not inpipe:
-            yield from self.children_walker(
-                    self.find_pretty_printer(
-                        gdb.parse_and_eval(self.desc)))
-            return
-
-        for element in inpipe:
-            yield from self.children_walker(
-                    self.find_pretty_printer(
-                        gdb.parse_and_eval(
-                            self.format_command(element, self.desc))))
+        yield from self.call_with(
+            inpipe,
+            lambda x: self.children_walker(self.find_pretty_printer(x)),
+            self.desc)

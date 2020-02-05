@@ -36,7 +36,7 @@ class StdMap(walkers.Walker):
     name = 'std-map'
     tags = ['data']
 
-    def __init__(self, start_ele):
+    def __init__(self, start_expr):
         # TODO As of yet I haven't figured out exactly when the auto-load
         # python scripts are loaded, and when this script is loaded.
         # I do know that this file is loaded before the auto-load scripts,
@@ -47,11 +47,11 @@ class StdMap(walkers.Walker):
         # way around it.
         global StdMapPrinter
         from libstdcxx.v6.printers import StdMapPrinter
-        self.start_ele = start_ele
+        self.start_expr = start_expr
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        return cls(cls.calc(args.strip()) if first else None)
+        return cls(args.strip())
 
     def _childiter_to_nodes(self, children_iter):
         while True:
@@ -71,8 +71,5 @@ class StdMap(walkers.Walker):
         children_iter = printer.children()
         return self._childiter_to_nodes(children_iter)
 
-    def __iter_helper(self, element):
-        yield from self._iter_from_ele(element)
-
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_ele, inpipe, self.__iter_helper)
+        yield from self.call_with(inpipe, self._iter_from_ele, self.start_expr)

@@ -16,34 +16,29 @@ class Passes(walkers.Walker):
     gdb-pipe linked-list <head>; opt_pass; next
 
     NOTE:
-        When using $cur, this walker will give you the underlying `opt_pass`
-        object.  When using $addr then whether you access the `opt_pass` object
-        or the object of the child type is determined by `show print object`
-        (the GDB setting).
+        Whether you access the `opt_pass` object or the object of the child
+        type is determined by `show print object` (the GDB setting).
 
     Use:
         gdb-pipe gcc-passes <pass_array>
-        gdb-pipe eval <equation> | gcc-passes
+        gdb-pipe eval <equation> | gcc-passes $cur
 
     Example:
-        gdb-pipe gcc-passes rest_of_compilation | show print $cur.name
         set print object on
-        gdb-pipe gcc-passes rest_of_compilation | show print $addr->execute
+        gdb-pipe gcc-passes rest_of_compilation | show print $cur->execute
 
     """
     name = 'gcc-passes'
 
-    def __init__(self, start):
-        self.nested_offset = offsetof('opt_pass', 'sub')
-        self.start = start
+    def __init__(self, start_expr):
+        self.start_expr = start_expr
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        return cls(cls.calc(args) if first else None)
+        return cls(args)
 
     def iter_passes(self, init_addr):
-        gdb.set_convenience_variable('cur', init_addr)
-        list_walk = 'linked-list $cur; next'
+        list_walk = self.format_command(init_addr, 'linked-list $cur; ->next')
         for gcc_pass in walkers.create_pipeline(list_walk):
             yield gcc_pass
             sub_value = gcc_pass['sub']
@@ -51,17 +46,17 @@ class Passes(walkers.Walker):
                 yield from self.iter_passes(sub_value)
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start, inpipe, self.iter_passes)
+        yield from self.call_with(inpipe, self.iter_passes, self.start_expr)
 
 
-def expr_direction_parse(cls, args, first, last):
-    cmd_parts = cls.parse_args(args, [1,2] if first else [0,1], ';')
-    if len(cmd_parts) == 1 + first:
-        assert cmd_parts[-1] in ['forwards', 'backwards'], 'Direction must be one of "forwards" or "backwards".'
-        forwards = True if cmd_parts[-1] == 'forwards' else False
+def expr_direction_parse(cls, args):
+    cmd_parts = cls.parse_args(args, [1,2], ';')
+    if len(cmd_parts) == 2:
+        assert cmd_parts[1] in ['forwards', 'backwards'], 'Direction must be one of "forwards" or "backwards".'
+        forwards = True if cmd_parts[1] == 'forwards' else False
     else:
         forwards = True
-    expr = cls.calc(cmd_parts[0]) if first else None
+    expr = cmd_parts[0]
     return cls(expr, forwards)
 
 
@@ -70,33 +65,33 @@ class InsnChain(walkers.Walker):
 
     Follows the next/previous insn pointer in a chain.
     Is equivalent to
-        gdb-pipe linked-list <start_insn>; u.fld[<1|0>].rt_rtx
+        gdb-pipe linked-list <start_insn>; ->u.fld[<1|0>].rt_rtx
 
     Use:
         gdb-pipe gcc-insns <start_insn>; [forwards|backwards]
         gdb-pipe eval <equation> | gcc-insns [forwards|backwards]
 
     Example:
-        gdb-pipe gcc-insns *(x_rtl)->emit.seq->first | show call debug_rtx($addr)
+        gdb-pipe gcc-insns (x_rtl)->emit.seq->first | show call debug_rtx($cur)
 
     '''
     name = 'gcc-insns'
 
-    def __init__(self, start_ele, forwards=True):
-        self.start_ele = start_ele
+    def __init__(self, start_expr, forwards=True):
+        self.start_expr = start_expr
         self.forwards = forwards
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        return expr_direction_parse(cls, args, first, last)
+        return expr_direction_parse(cls, args)
 
     def iter_insns(self, init_addr):
         yield from walker_defs.LinkedList.single_iter(
-            start_ele=init_addr,
-            next_member='u.fld[{}].rt_rtx'.format(1 if self.forwards else 0))
+            start_expr=self.format_command(init_addr, '$cur'),
+            next_member='->u.fld[{}].rt_rtx'.format(1 if self.forwards else 0))
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_ele, inpipe, self.iter_insns)
+        yield from self.call_with(inpipe, self.iter_insns, self.start_expr)
 
 
 # TODO Handle CFG information as well.
@@ -125,33 +120,33 @@ class GimpleStatements(walkers.Walker):
     '''
     name = 'gcc-gimple'
 
-    def __init__(self, start_ele, forwards=True):
-        self.start_ele = start_ele
+    def __init__(self, start_expr, forwards=True):
+        self.start_expr = start_expr
         self.forwards = forwards
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        return expr_direction_parse(cls, args, first, last)
+        return expr_direction_parse(cls, args)
 
     def iter_stmts(self, init):
         if self.forwards:
             yield from walker_defs.LinkedList.single_iter(
-                start_ele=init,
-                next_member='next')
+                start_expr=self.format_command(init, '$cur'),
+                next_member='->next')
         else:
             # In the gimple structure, `prev` forms a loop.
             # Check for NULL init
-            start_addr = as_int(init.address)
+            start_addr = as_int(init)
             if not start_addr:
                 return
             yield init
             yield from walker_defs.Terminated.single_iter(
-                start_ele=self.eval_command(init, '*$cur.prev'),
-                test_expr='$addr == {}'.format(start_addr),
-                follow_expr='*$cur.prev')
+                start_expr=self.format_command(init, '$cur->prev'),
+                test_expr='$cur == (void*){}'.format(start_addr),
+                follow_expr='$cur->prev')
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_ele, inpipe, self.iter_stmts)
+        yield from self.call_with(inpipe, self.iter_stmts, self.start_expr)
 
 
 class GimpleBlocks(walkers.Walker):
@@ -164,36 +159,33 @@ class GimpleBlocks(walkers.Walker):
 
     Use:
         gdb-pipe gcc-bbs <start_stmt>; [forwards|backwards]
-        gdb-pipe eval <equation> | gcc-bbs [forwards|backwards]
 
     Example:
         gdb-pipe gcc-bbs cfun->cfg->x_entry_block_ptr->next_bb
-            | eval $addr->il.gimple.seq
-            | gcc-gimple
-            | show call debug($addr)
+            | gcc-gimple $cur->il.gimple.seq
+            | show call debug($cur)
         gdb-pipe gcc-bbs cfun->cfg->x_exit_block_ptr->prev_bb; backwards
-            | eval $addr->il.gimple.seq
-            | gcc-gimple
-            | show call debug($addr)
+            | gcc-gimple $cur->il.gimple.seq
+            | show call debug($cur)
 
     '''
     name = 'gcc-bbs'
 
-    def __init__(self, start_ele, forwards=True):
-        self.start_ele = start_ele
+    def __init__(self, start_expr, forwards=True):
+        self.start_expr = start_expr
         self.forwards = forwards
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        return expr_direction_parse(cls, args, first, last)
+        return expr_direction_parse(cls, args)
 
     def iter_bbs(self, init_addr):
         yield from walker_defs.LinkedList.single_iter(
-            start_ele=init_addr,
-            next_member='next_bb' if self.forwards else 'prev_bb')
+            start_expr=self.format_command(init_addr, '$cur'),
+            next_member='->next_bb' if self.forwards else '->prev_bb')
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_ele, inpipe, self.iter_bbs)
+        yield from self.call_with(inpipe, self.iter_bbs, self.start_expr)
 
 
 ## Stuff specifically for printing out RTX functions in the format ready for

@@ -18,18 +18,18 @@ class TreeElements(walkers.Walker):
     Example:
         // All pure leaf elements in the tree.
         gdb-pipe tree-elements tree_root | if $cur->children[0] == 0 && $cur->children[1] == 0
-        gdb-pipe eval tree_root | tree-elements | ...
+        gdb-pipe eval tree_root | tree-elements $cur | ...
 
     '''
     name = 'tree-elements'
     tags = ['tree-demo']
 
-    def __init__(self, start_addr):
-        self.start_addr = start_addr
+    def __init__(self, start_expr):
+        self.start_expr = start_expr
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        return cls(cls.calc(args) if first else None)
+        return cls(args)
 
     def iter_elements(self, init_addr):
         if not init_addr:
@@ -43,5 +43,5 @@ class TreeElements(walkers.Walker):
         yield init_addr
 
     def iter_def(self, inpipe):
-        yield from self.call_with(self.start_addr, inpipe, self.iter_elements)
+        yield from self.call_with(inpipe, self.iter_elements, self.start_expr)
 
