@@ -1,5 +1,9 @@
 # GDB extensions
 
+N.b. can view my talk from FOSDEM 2020 here which introduces a the concept
+including a few examples.
+https://www.youtube.com/watch?v=YHLiwvf28fQ
+
 Contains a few helper gdb functions and commands.
 Most notable are the addition of `walkers` (idea taken from `mdb`) over complex
 data structures, and `shellpipe` that pipes the output of a command to a shell
