@@ -19,6 +19,7 @@ import os
 import sys
 from contextlib import suppress
 import importlib
+import importlib.abc
 
 if os.getenv('TERM') == 'dumb':
     gdb.execute('set pagination off')
