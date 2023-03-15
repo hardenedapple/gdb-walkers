@@ -207,7 +207,7 @@ if not hasattr(gdb, 'search_symbols'):
                 raise e
         else:
             source_lines = source_files.splitlines()
-            loaded = source_lines[2]
+            loaded = source_lines[3]
             unloaded = source_lines[6]
             for filelist in loaded.split(', '), unloaded.split(', '):
                 for filename in (val for val in filelist if
