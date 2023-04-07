@@ -23,6 +23,7 @@ import importlib.abc
 
 if os.getenv('TERM') == 'dumb':
     gdb.execute('set pagination off')
+    gdb.execute('set width 0')
 
 # A little bit of hacking ...
 # I calculate an important variable in the "global" namespace so I can use
