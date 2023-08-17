@@ -414,7 +414,6 @@ class NvimMappings(walkers.Walker):
         start_ele = self.calc(map_array)
         yield from walkers.connect_pipe([
             walker_defs.Array(
-                first=True,
                 start=start_ele.v,
                 count=256,
                 typename=start_ele.t,
@@ -458,7 +457,6 @@ class NvimGarray(walkers.Walker):
     def iter_helper(self, arg):
         gar_ptr = '((garray_T *){})'.format(arg)
         yield from walker_defs.Array.single_iter(
-            first=True,
             start=eval_uint('{}->ga_data'.format(gar_ptr)),
             count=eval_uint('{}->ga_len'.format(gar_ptr)),
             typename=self.t,

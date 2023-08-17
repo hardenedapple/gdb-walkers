@@ -447,15 +447,14 @@ class Array(walkers.Walker):
     name = 'array'
     tags = ['data']
 
-    def __init__(self, first, start, count):
-        self.first = first
+    def __init__(self, start, count):
         self.start_expr = start
         self.count_expr = count
 
     @classmethod
     def from_userstring(cls, args, first, last):
         start, count = cls.parse_args(args, [2, 2], ';')
-        return cls(first, start, count)
+        return cls(start, count)
 
     def __iter_single(self, start, count):
         original_type = start.type
