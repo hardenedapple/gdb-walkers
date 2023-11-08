@@ -108,15 +108,15 @@ class GimpleStatements(walkers.Walker):
 
     Backwards direction is equivalent to the below (except that it still
     provides the first element)
-        gdb-pipe follow-until <start_stmt>; {} == <start_stmt>; {}->prev
+        gdb-pipe follow-until <start_stmt>; $cur == <start_stmt>; $cur->prev
 
     Use:
         gdb-pipe gcc-gimple <start_stmt>; [forwards|backwards]
         gdb-pipe eval <equation> | gcc-gimple [forwards|backwards]
 
     Example:
-        gdb-pipe gcc-gimple cfun->cfg->x_entry_block_ptr->next_bb->il.gimple.seq: \
-            forwards | show call debug({})
+        gdb-pipe gcc-gimple cfun->cfg->x_entry_block_ptr->next_bb->il.gimple.seq; forwards
+                | show call debug($cur)
     '''
     name = 'gcc-gimple'
 
