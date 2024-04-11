@@ -94,6 +94,101 @@ class InsnChain(walkers.Walker):
         yield from self.call_with(inpipe, self.iter_insns, self.start_expr)
 
 
+class GccHashMap(walkers.Walker):
+    '''Walk over all elements in a GCC hash_map data structure.
+
+    Is equivalent to
+        gdb-pipe array <hash-map>->m_table.m_entries; <hash-map>->m_table.m_size
+                | if !(<empty-expression>)
+    Where <empty-expression> defaults to `*$cur == 0x0`, but should be adjusted
+    depending on the type of the hash map value.
+
+    Use:
+        gdb-pipe gcc-hash-map <hash-map>[; <empty-expression>]
+
+    Example:
+        gdb-pipe gcc-hash-map &public_nonlocal
+        gdb-pipe gcc-hash-map &addressed_nonlocal; $cur->m_key == 0x0
+    '''
+    name = "gcc-hash-map"
+    def __init__(self, start_expr, empty_expr='*$cur == 0x0'):
+        self.start_expr = start_expr
+        self.empty_expr = empty_expr
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        cmd_parts = cls.parse_args(args, [1,2], ';')
+        if len(cmd_parts) == 2:
+            return cls(cmd_parts[0], cmd_parts[1])
+        else:
+            return cls(cmd_parts[0])
+
+    def __iter_single(self, init_addr):
+        yield from walkers.connect_pipe([
+            walker_defs.Array(
+                start=self.format_command(
+                    init_addr, '$cur->m_table.m_entries'),
+                count=self.format_command(
+                    init_addr, '$cur->m_table.m_size')),
+            walker_defs.If(cmd='!({})'.format(self.empty_expr))])
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(inpipe, self.__iter_single, self.start_expr)
+
+
+class GccVec(walkers.Walker):
+    '''Walk over all elements in a GCC vec data structure.
+
+    Is equivalent to
+        gdb-pipe array (<value-type> *)(<vec>->m_vec + 1); <vec>->m_vec.m_vecpfx.m_num
+
+    N.b. without a debug build the value type will not be automatically
+    identified and it would have to be manually specified on the command line.
+
+    Use:
+        gdb-pipe gcc-vec <vec>[; <value-type>]
+
+    '''
+    # TODO Would be really nice to automatically understand the type of the
+    # vector.  Should be able to do that in `__iter_single`.
+    name = "gcc-vec"
+    def __init__(self, start_expr, value_type):
+        self.start_expr = start_expr
+        self.value_type = value_type
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        cmd_parts = cls.parse_args(args, [1,2], ';')
+        return cls(cmd_parts[0], cmd_parts[1] if len(cmd_parts) == 2 else None)
+
+    def __iter_single(self, init_addr):
+        first_value = self.eval_command(init_addr, '$cur->m_vec')
+        # If this happens need to adjust code to handle such a thing.
+        assert(not first_value.type.dynamic)
+        # assert('vl_embed' in first_value.type)
+        # Would like to do the below, but the type has a Null type name in most
+        # builds.  Hence can't do it generally and in those cases have to use
+        # the type argument.
+        if first_value.type.name and not self.value_type:
+            value_type = first_value.type.template_argument(0)
+            value_type = value_type.name
+        elif not self.value_type:
+            raise ValueError('GDB does not fully understand type {}'
+                             ', please specify value type directly.'.format(
+                                 first_value.type))
+        else:
+            value_type = self.value_type
+
+        yield from walker_defs.Array.single_iter(
+                start=self.format_command(
+                    init_addr, '({} *)($cur->m_vec + 1)'.format(value_type)),
+                count=self.format_command(
+                    init_addr, '$cur->m_vec.m_vecpfx.m_num'))
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(inpipe, self.__iter_single, self.start_expr)
+
+
 # TODO Handle CFG information as well.
 # Currently don't know where this information is, but in the dumps we get
 # output around `goto` statements and `else` statements that we don't get
