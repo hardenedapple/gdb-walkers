@@ -2,7 +2,7 @@ set python print-stack full
 source ~/.config/gdb/basic_config.py
 source ~/.config/gdb/commands.py
 source ~/.config/gdb/functions.py
-add-auto-load-safe-path ~/.gdbinit
+source ~/.gdbinit
 
 # gdb puts strings into the inferior when printing them with printf.
 # It does this with malloc(3), and never frees them.
