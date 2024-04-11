@@ -188,42 +188,6 @@ class GimpleBlocks(walkers.Walker):
         yield from self.call_with(inpipe, self.iter_bbs, self.start_expr)
 
 
-class Vec(walkers.Walker):
-    '''Walk over elements in a GCC vec.
-
-    Convenience for:
-        gdb-pipe array &<vec-ptr>->m_vecdata[0]; <vec-ptr>->m_vecpfx.m_num
-
-    Use:
-        gdb-pipe gcc-vec <vec-ptr>
-
-    Example:
-        gdb-pipe gcc-vec bb->succs
-            | gcc-gimple $cur->il.gimple.seq
-            | show call debug($cur)
-
-        gdb-pipe gcc-bbs cfun->cfg->x_exit_block_ptr->prev_bb
-            | gcc-vec $cur->succs
-
-    '''
-    name = 'gcc-vec'
-
-    def __init__(self, start_expr):
-        self.start_expr = start_expr
-
-    @classmethod
-    def from_userstring(cls, args, first, last):
-        return cls(args)
-
-    def iter_vec(self, init_addr):
-        yield from walker_defs.Array.single_iter(
-                start=self.format_command(init_addr, '&$cur->m_vecdata[0]'),
-                count=self.format_command(init_addr, '$cur->m_vecpfx.m_num'))
-
-    def iter_def(self, inpipe):
-        yield from self.call_with(inpipe, self.iter_vec, self.start_expr)
-
-
 ## Stuff specifically for printing out RTX functions in the format ready for
 #  reading in as an __RTL testcase.
 class SetRTXFinishBreak(gdb.Command):
