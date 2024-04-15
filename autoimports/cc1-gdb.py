@@ -50,7 +50,7 @@ class Passes(walkers.Walker):
 
 
 def expr_direction_parse(cls, args):
-    cmd_parts = cls.parse_args(args, [1,2], ';')
+    cmd_parts = cls.parse_args(args, [1,2])
     if len(cmd_parts) == 2:
         assert cmd_parts[1] in ['forwards', 'backwards'], 'Direction must be one of "forwards" or "backwards".'
         forwards = True if cmd_parts[1] == 'forwards' else False
@@ -117,7 +117,7 @@ class GccHashMap(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [1,2], ';')
+        cmd_parts = cls.parse_args(args, [1,2])
         if len(cmd_parts) == 2:
             return cls(cmd_parts[0], cmd_parts[1])
         else:
@@ -158,7 +158,7 @@ class GccVec(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [1,2], ';')
+        cmd_parts = cls.parse_args(args, [1,2])
         return cls(cmd_parts[0], cmd_parts[1] if len(cmd_parts) == 2 else None)
 
     def __iter_single(self, init_addr):
@@ -207,7 +207,7 @@ class TreeChain(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [1, 1], ';')
+        cmd_parts = cls.parse_args(args, [1, 1])
         return cls(cmd_parts[0])
     
     def __iter_single(self, init_addr):

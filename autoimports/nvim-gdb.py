@@ -265,7 +265,7 @@ class NvimMultiQueues(walkers.Walker):
     @classmethod
     def from_userstring(cls, args, first, last):
         # Parse arguments
-        arg_list = cls.parse_args(args, [1, 2], ';')
+        arg_list = cls.parse_args(args, [1, 2])
         expr = arg_list[0]
         deref = len(arg_list) == 2
         return cls(expr, deref, first)
@@ -450,7 +450,7 @@ class NvimGarray(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [2, 2] if first else [1, 1], ';')
+        cmd_parts = cls.parse_args(args, [2, 2] if first else [1, 1])
         return cls(cmd_parts[-1],
                    eval_uint(cmd_parts[0]) if first else None)
 

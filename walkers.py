@@ -122,7 +122,7 @@ class Walker(metaclass=WalkerMetaclass):
         return cls(*args, **kwargs).iter_def(inpipe=[])
 
     @classmethod
-    def parse_args(cls, args, nargs=None, split_string=None,
+    def parse_args(cls, args, nargs=None, split_string=';',
                    strip_whitespace=True, maxsplit=-1):
         '''General function for parsing walker arguments.
 
@@ -143,7 +143,8 @@ class Walker(metaclass=WalkerMetaclass):
             return []
 
         # TODO Ignore escaped versions of split_string, then remove the escape
-        # characters (i.e. backslashes) after splitting.
+        # characters (i.e. backslashes) after splitting (i.e. write a real
+        # parser rather than just splitting based on `split_string`).
         retval = args.split(split_string, maxsplit)
         argc = len(retval)
         if nargs is not None and (argc < nargs[0] or argc > nargs[1]):

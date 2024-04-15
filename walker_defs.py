@@ -187,7 +187,7 @@ class Instruction(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [3, 3], ';')
+        cmd_parts = cls.parse_args(args, [3, 3])
         start_expr = cmd_parts.pop(0)
         end = cmd_parts.pop(0)
         count = cmd_parts.pop(0)
@@ -275,7 +275,7 @@ class IfNth(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [2, 2], ';')
+        cmd_parts = cls.parse_args(args, [2, 2])
         return cls(cmd_parts[0], int(cmd_parts[1]))
 
     def positive_offset_ifn(self, inpipe):
@@ -453,7 +453,7 @@ class Array(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        start, count = cls.parse_args(args, [2, 2], ';')
+        start, count = cls.parse_args(args, [2, 2])
         return cls(start, count)
 
     def __iter_single(self, start, count):
@@ -702,7 +702,7 @@ class Terminated(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        start_expr, test_expr, follow_expr = cls.parse_args(args, [3, 3], ';')
+        start_expr, test_expr, follow_expr = cls.parse_args(args, [3, 3])
         return cls(start_expr, test_expr, follow_expr)
 
     def follow_to_termination(self, start_ele):
@@ -750,7 +750,7 @@ class LinkedList(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        start_expr, next_member = cls.parse_args(args, [2, 2], ';')
+        start_expr, next_member = cls.parse_args(args, [2, 2])
         return cls(start_expr, next_member)
 
     def __iter_helper(self, element):
@@ -871,7 +871,7 @@ class CalledFunctions(walkers.Walker):
     #   Allow default arguments?
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [3,4], ';')
+        cmd_parts = cls.parse_args(args, [3,4])
         if cmd_parts[-1] == 'unique':
             cmd_parts.pop()
             unique = True
@@ -1153,7 +1153,7 @@ class PrettyPrinter(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [1, 2], ';')
+        cmd_parts = cls.parse_args(args, [1, 2])
         container_desc = cmd_parts.pop(0)
         if cmd_parts and cmd_parts[0] != 'values':
             raise ValueError("pretty-printer second argument must be 'values'")
