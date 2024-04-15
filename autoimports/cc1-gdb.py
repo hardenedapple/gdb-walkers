@@ -188,6 +188,36 @@ class GccVec(walkers.Walker):
     def iter_def(self, inpipe):
         yield from self.call_with(inpipe, self.__iter_single, self.start_expr)
 
+class TreeChain(walkers.Walker):
+    '''Walk over TREE nodes in a TREE_CHAIN.
+
+    Is a convenience wrapper around the below:
+        gdb-pipe linked-list <chain-head>; ->common.chain 
+
+    Use:
+        gdb-pipe gcc-tree-chain <chain-head>
+
+    Example;
+        gdb-pipe gcc-tree-chain fndecl->decl_common.attributes 
+            | show call debug_tree($cur->list.value)
+    '''
+    name = 'gcc-tree-chain'
+    def __init__(self, start_expr):
+        self.start_expr = start_expr
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        cmd_parts = cls.parse_args(args, [1, 1], ';')
+        return cls(cmd_parts[0])
+    
+    def __iter_single(self, init_addr):
+        yield from walker_defs.LinkedList.single_iter(
+                start_expr = self.format_command(init_addr, '$cur'),
+                next_member = '->common.chain')
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(inpipe, self.__iter_single, self.start_expr)
+
 
 # TODO Handle CFG information as well.
 # Currently don't know where this information is, but in the dumps we get
