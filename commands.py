@@ -26,6 +26,9 @@ class ShellPipe(gdb.Command):
     If the shell command prints to stdout or stderr that is printed to the
     screen.
 
+    N.B. in recent versions of GDB this is superceded by the in-built `pipe`
+    command.
+
     It hence allows commands along the lines of
         (gdb) shellpipe disassemble main ! grep mov
 
