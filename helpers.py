@@ -375,7 +375,7 @@ def function_disassembly(func_addr, arch=None, use_fallback=True):
     # Avoid the 'End of assembler dump.' line that is actually last.
     start_addr = int(lines[1].split()[0], base=16)
     last_pos = int(lines[-2].split()[0], base=16)
-    function_name = re.search('Dump of assembler code for function (\S+):',
+    function_name = re.search(r'Dump of assembler code for function (\S+):',
                               lines[0])
     function_name = function_name.groups()[0] if function_name else None
     return arch.disassemble(start_addr, last_pos), function_name, None
@@ -416,7 +416,7 @@ def func_and_offset(addr):
         # find any way to change this, so I believe there isn't one.
         # If this isn't the case, then I hopefully will notice the problem when
         # this function fails.
-        sym_match = re.match('(\S+)( \+ (\d+))? in section .text', retval)
+        sym_match = re.match(r'(\S+)( \+ (\d+))? in section .text', retval)
         if not sym_match:
             print('Cannot parse output from command `info symbol {}`.'.format(
                 addr))
