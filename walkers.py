@@ -301,6 +301,8 @@ class Pipeline(gdb.Command):
             gdb.execute('echo \\n')
 
     def complete(self, _, word):
+        if not word:
+            return []
         return [key for key in walkers if key.startswith(word)]
 
 
