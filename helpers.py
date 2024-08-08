@@ -5,6 +5,10 @@ import gdb
 import re
 import contextlib
 import collections
+import logging
+import sys
+logger = logging.getLogger(__name__)
+logging.basicConfig(stream=sys.stdout, level=logging.ERROR)
 
 def file_func_split(regexp):
     '''Split  file_regexp:func_regexp  into its component parts.
@@ -21,7 +25,6 @@ def file_func_split(regexp):
 
     return file_regex, func_regex
 
-
 def find_uintptr_t():
     '''Find a uintptr_t equivalent and store it in the global namespace.'''
     voidptr_t = gdb.lookup_type('void').pointer()
@@ -32,7 +35,6 @@ def find_uintptr_t():
         return size_and_types[voidptr_t.sizeof]
     except KeyError:
         raise RuntimeError('Failed to find size of pointer type')
-
 
 # First guess -- on starting the program we update this.
 # This is because we don't actually know the size of a pointer type until we
@@ -119,9 +121,9 @@ if not hasattr(gdb, 'current_arch'):
 
             This only works if the program is currently running.
 
-            If the gdb.current_arch() function is defined, then it's much better
-            than this mock because it works even when the current process isn't
-            running.
+            If the gdb.current_arch() function is defined, then it's much
+            better than this mock because it works even when the current
+            process isn't running.
 
             '''
             return gdb.selected_frame().architecture()
@@ -137,27 +139,30 @@ class FakeSymbol():
     attribute.
 
     '''
-    pointless_symtab = collections.namedtuple('symtab', ['filename'])
-    symtab = pointless_symtab('')
-    def __init__(self, name, value):
+    fake_symtab = collections.namedtuple('symtab', ['filename'])
+    def __init__(self, name, value, filename=''):
         self.name = name
-        self._value = gdb.parse_and_eval(value)
+        self._value = value
+        self.symtab = self.fake_symtab(filename)
 
-    def value(self):
-        return self._value
+    @classmethod
+    def from_valuestring(cls, name, value):
+        return cls(name, gdb.parse_and_eval(value))
 
+    @classmethod
+    def from_valueint(cls, name, value):
+        return cls(name, gdb.Value(value))
 
-if not hasattr(gdb, 'search_symbols'):
-    def file_symbols(filename, regexp):
-        '''Iterate over all symbols defined in a file.'''
-        if not filename:
-            return
-
+    @classmethod
+    def from_debugsym_mi(cls, symdict, filename):
+        # Ignoring `fullname'.  Don't know of any reason to use it or not in
+        # this case.
         try:
-            unparsed, sal_options = gdb.decode_line("'{}':1".format(filename))
+            unparsed, sal_options = gdb.decode_line("'{}':{}".format(
+                filename, symdict['line']))
         except gdb.error as e:
-            # n.b. This is very brittle -- nothing in gdb specifies these error
-            # strings, so they could easily change.
+            # n.b. This seems like it's brittle -- nothing in gdb specifies
+            # these error strings, so they could easily change.
             # Until I find a better way, I'm simply adding each exception I
             # come across that I know is fine to ignore.
             # The only real way to get this is to add search_symbols as a
@@ -167,98 +172,52 @@ if not hasattr(gdb, 'search_symbols'):
             if e.args[0].startswith('No source file named '):
                 return
             raise
-
         if unparsed:
             raise ValueError('Failed to parse {} as filename'.format(filename))
+        # N.b. I don't know if this is likely or not in the way that I'm using
+        # this function.  However it seems plausible given the API.
+        # TODO I probably should re-work this to iterate over all sources and
+        # find all symbols in those sources (in the same way that I did
+        # before, but using the MI interface for robustness), will try this for
+        # the moment.
+        if len(sal_options) != 1:
+            raise RuntimeError('Multiple locations for given symbol')
+        return cls(symdict['name'], gdb.Value(sal_options[0].pc), filename)
 
-        # TODO Check source code and see if this is always the case.
-        # NOTE: When there are more than one symbol and file options given from
-        # the same source file, they all have the same set of symbol names.
-        #   (as far as I can tell -- haven't yet looked at the gdb source).
-        # Hence ignore any extra ones.
-        sal = sal_options[0]
-        for block in (sal.symtab.global_block(), sal.symtab.static_block()):
-            yield from (sym for sym in block
-                        if sym.is_function and re.match(regexp, sym.name))
-
-
-    def search_symbols(regexp, file_regex, include_dynlibs=False):
-        '''Return symbols matching REGEXP defined in files matching FILE_REGEXP
-
-        If FILE_REGEXP matches the empty string, include Non-debug functions.
-
-        '''
-        include_non_debugging = re.search(file_regex, '') is not None
-        try:
-            # TODO substitute with
-            # interpreter-exec mi -file-list-exec-source-files ?
-            # This should have a well defined output, so I would have to worry
-            # less about the output changing in the future.
-            # Unfortunately, the output isn't nearly as simple to parse, and as
-            # long as the output stays the same, this is both easy and robust
-            # against strange filenames.
-            #
-            # I could use pygdbmi, but I really don't want to add a dependency
-            # for this.
-            # https://github.com/cs01/pygdbmi
-            source_files = gdb.execute('info sources', False, True)
-        except gdb.error as e:
-            if e.args != ('No symbol table is loaded.  Use the "file" command.',):
-                raise e
-        else:
-            source_lines = source_files.splitlines()
-            loaded = source_lines[3]
-            unloaded = source_lines[6]
-            for filelist in loaded.split(', '), unloaded.split(', '):
-                for filename in (val for val in filelist if
-                                 re.search(file_regex, val)):
-                    yield from file_symbols(filename, regexp)
-
-        if include_non_debugging:
-            # TODO not really sure whether this is a safe way of making sure we
-            # only get the main program. Read the gdb source and see what's
-            # actually happening.
-            cur_progfile = gdb.current_progspace().filename
-
-            # Don't filter functions directly with regexp because we want to
-            # use python rexexp (to match the filter done above).
-            all_symbols = gdb.execute('info functions', False, True)
-            non_debug_start = all_symbols.find('Non-debugging symbols:')
-            all_non_debugging = all_symbols[non_debug_start:].splitlines()[1:]
-            # Just because it makes me feel better to let python free the big
-            # string -- probably doesn't matter.
-            del all_symbols
-            for line in all_non_debugging:
-                # If ValueError() is raised here, then my assumptions are
-                # incorrect -- I need to know about it.
-                # For example, `info functions` on $(which nvim) gives me the
-                # lines
-                # 0x00007ffff7bbb310  uv(float, long double,...)(...)@plt
-                # 0x00007ffff7bbcd50  uv(float, long double,...)(...)
-                # and others.
-                # I don't know what to do with these, so I ignore them.
-                # TODO Figure out what to do with these.
-                try:
-                    addr, name = line.split()
-                except ValueError as e:
-                    if e.args == ('too many values to unpack (expected 2)',):
-                        continue
-                    raise e
-
-                # Assume users don't care about the indirection functions.
-                if not re.match(regexp, name) or name.endswith('@plt'):
-                    continue
-                if not include_dynlibs:
-                    sym_objfile = gdb.execute('info symbol {}'.format(addr),
-                                              False, True).split()[-1]
-                    if sym_objfile != cur_progfile:
-                        continue
-
-                yield FakeSymbol(name, addr)
+    def value(self):
+        return self._value
 
 
-    gdb.search_symbols = search_symbols
+# Ways that we use the returned values:
+#   call-graph add_tracer:
+#       addr -> symbol.value()
+#       name -> symbol.name()
+#       filename -> symbol.symtab.filename()
+#
+#   defined-functions:
+#       addr -> symbol.value()
+def search_symbol_wrapper(regexp, file_regex, include_dynlibs=False):
+    '''Return symbols matching REGEXP defined in files matching FILE_REGEXP
 
+    If FILE_REGEXP matches the empty string, include Non-debug functions.
+
+    '''
+    args = ['-symbol-info-functions', '--name', regexp]
+    include_non_debugging = re.search(file_regex, '') is not None
+    if include_non_debugging:
+        args.append('--include-nondebug')
+    result = gdb.execute_mi(*args)
+    assert('symbols' in result)
+    function_syms = result['symbols']
+    debug_syms = function_syms['debug'] if 'debug' in function_syms else []
+    for file_list in debug_syms:
+        yield from (FakeSymbol.from_debugsym_mi(x, file_list['filename'])
+                    for x in file_list['symbols'])
+
+    if include_non_debugging and 'nondebug' in function_syms:
+        yield from (
+                FakeSymbol.from_valueint(s['name'], int(s['address'], 16))
+                for s in function_syms['nondebug'])
 
 def get_function_block(addr):
     '''Does gdb.block_for_pc(addr) but raises the same exception if object file
@@ -287,7 +246,7 @@ def enumdesc_from_enumvalue(enumvalue):
     for name, field in enum_type.iteritems():
         if field.enumval == enum_intval:
             return name
-    raise ValueError('Given value is not in the valid range of enum type {}'.format(test_val.type.name))
+    raise ValueError('Given value is not in the valid range of enum type {}'.format(enumvalue.type.name))
 
 
 def function_disassembly(func_addr, arch=None, use_fallback=True):
@@ -398,17 +357,17 @@ def func_and_offset(addr):
 
         # Attempt to work with symbols that don't have debugging information.
         retval = gdb.execute('info symbol {}'.format(addr),
-                            False, True)
+                             False, True)
         # Checking for section ".text" removes @plt stubs and variables.
         if 'in section .text' not in retval:
             print('{} is not a .text location'.format(addr))
             return (None, None)
 
         # At the moment I believe that all awkward output (i.e. of the form
-        # funcname(function, argument, types) in section .text of /home/matthew/temp_dir/gdb/gdb/gdb
-        # are avoided because when there is debug info we've used the alternate
-        # method. Hence, the output should be of the form
-        # <funcname> + <offset> in section .text of <objfile>
+        # funcname(function, argument, types)) in section .text of
+        # /home/matthew/temp_dir/gdb/gdb/gdb are avoided because when there is
+        # debug info we've used the alternate method. Hence, the output should
+        # be of the form <funcname> + <offset> in section .text of <objfile>
         # If this isn't the case, alert user so I know there's a problem and
         # can investigate what I've missed.
         #
@@ -430,7 +389,7 @@ def func_and_offset(addr):
             block = block.superblock
         else:
             raise gdb.GdbError('Could not find enclosing function of '
-                                '{}'.format(addr))
+                               '{}'.format(addr))
 
     offset = addr - block.start
     return (block.function.name, offset)

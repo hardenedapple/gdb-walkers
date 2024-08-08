@@ -14,7 +14,8 @@ import operator
 import re
 import gdb
 from helpers import (eval_uint, function_disassembly, func_and_offset,
-                     file_func_split, as_uintptr, FakeSymbol)
+                     file_func_split, as_uintptr, FakeSymbol,
+                     search_symbol_wrapper)
 
 
 class ShellPipe(gdb.Command):
@@ -759,8 +760,8 @@ def trace_matching_functions(regexp):
     # In order to have nice output, we create a string that describes the
     # function for a human -- though symbols with the same name will have the
     # same output for entry tracepoints.
-    for symbol in gdb.search_symbols(func_regex, file_regex,
-                                     gdb.parameter('call-graph-dynlibs')):
+    for symbol in search_symbol_wrapper(func_regex, file_regex,
+                                        gdb.parameter('call-graph-dynlibs')):
         add_tracer(symbol, arch)
 
 
@@ -941,7 +942,7 @@ class CallGraphUpdate(gdb.Command):
 
         if direction == '+':
             arch = gdb.current_arch()
-            return add_tracer(FakeSymbol(func_name, addr), arch)
+            return add_tracer(FakeSymbol.from_valuestring(func_name, addr), arch)
 
         remove_addr_trace(int(addr, 0))
 

@@ -12,7 +12,7 @@ import re
 import operator
 import gdb
 from helpers import (eval_uint, function_disassembly, as_voidptr,
-                     file_func_split, search_symbols, find_type_size)
+                     file_func_split, find_type_size, search_symbol_wrapper)
 import walkers
 import itertools as itt
 import sys
@@ -1110,8 +1110,8 @@ class DefinedFunctions(walkers.Walker):
     # NOTE, name unused argument `inpipe` so that connect_pipe() can pass the
     # argument via keyword.
     def iter_def(self, inpipe):
-        for symbol in search_symbols(self.func_regexp, self.file_regexp,
-                                     self.include_dynlibs):
+        for symbol in search_symbol_wrapper(self.func_regexp, self.file_regexp,
+                                            self.include_dynlibs):
             # TODO For some very strange reason, assigning a symbol.value()
             # this to a convenience variable ends up with the convenience
             # variable set to NULL.
