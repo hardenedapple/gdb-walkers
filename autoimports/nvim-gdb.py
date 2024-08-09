@@ -6,7 +6,7 @@ of {}).
 
 To have this file autoloaded when inspecting a newly built version of nvim, put
 a small file containing just the line `import neovim_walkers` in the file
-~/.config/gdb/autoloads/<full/path/to/nvim/binary>-gdb.py
+~/.config/gdb-walkers/autoloads/<full/path/to/nvim/binary>-gdb.py
 
 '''
 import itertools as itt

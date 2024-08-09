@@ -1,7 +1,7 @@
 set python print-stack full
-source ~/.config/gdb/basic_config.py
-source ~/.config/gdb/commands.py
-source ~/.config/gdb/functions.py
+source ~/.config/gdb-walkers/basic_config.py
+source ~/.config/gdb-walkers/commands.py
+source ~/.config/gdb-walkers/functions.py
 source ~/.gdbinit
 
 # gdb puts strings into the inferior when printing them with printf.

@@ -33,7 +33,7 @@ if os.getenv('TERM') == 'dumb':
 # pollute the "global" namespace.
 # There's a bit of interplay between that module and this file, but it's fine,
 # just think of them as the same package.
-confdir = os.path.expanduser('~/.config/gdb')
+confdir = os.path.expanduser('~/.config/gdb-walkers')
 if confdir not in sys.path:
     sys.path.append(confdir)
 
