@@ -2,7 +2,6 @@ set python print-stack full
 source ~/.config/gdb-walkers/basic_config.py
 source ~/.config/gdb-walkers/commands.py
 source ~/.config/gdb-walkers/functions.py
-source ~/.gdbinit
 
 # gdb puts strings into the inferior when printing them with printf.
 # It does this with malloc(3), and never frees them.
