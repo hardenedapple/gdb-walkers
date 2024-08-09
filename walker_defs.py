@@ -716,6 +716,40 @@ class Terminated(walkers.Walker):
                                   self.follow_to_termination,
                                   self.start_expr)
 
+class ForLoop(walkers.Walker):
+    '''For loop similar to C for loop.
+
+    Usage:
+        for-loop <start-expr>; <test-expression>; <change-expression>
+
+    Example:
+        for-loop container.begin(); $cur != container.end(); $cur++
+
+    '''
+    name = 'for-loop'
+    tags = ['data']
+
+    def __init__(self, start_expr, test_expr, follow_expr):
+        self.start_expr = start_expr
+        self.test_expr = test_expr
+        self.follow_expr = follow_expr
+
+    @classmethod
+    def from_userstring(cls, args, first, last):
+        start_expr, test_expr, follow_expr = cls.parse_args(args, [3, 3])
+        return cls(start_expr, test_expr, follow_expr)
+
+    def follow_to_termination(self, start_ele):
+        cur = start_ele
+        while self.eval_command(cur, self.test_expr):
+            yield cur
+            self.eval_command(cur, self.follow_expr)
+            cur = gdb.convenience_variable('cur')
+
+    def iter_def(self, inpipe):
+        yield from self.call_with(inpipe,
+                                  self.follow_to_termination,
+                                  self.start_expr)
 
 # TODO
 #   Need to figure out how to handle multiple levels of fetching.
