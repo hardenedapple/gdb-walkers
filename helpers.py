@@ -196,28 +196,283 @@ class FakeSymbol():
 #
 #   defined-functions:
 #       addr -> symbol.value()
-def search_symbol_wrapper(regexp, file_regex, include_dynlibs=False):
-    '''Return symbols matching REGEXP defined in files matching FILE_REGEXP
+if hasattr(gdb, 'execute_mi'):
+    def search_symbol_wrapper(regexp, file_regex, include_dynlibs=False):
+        '''Return symbols matching REGEXP defined in files matching FILE_REGEXP
 
-    If FILE_REGEXP matches the empty string, include Non-debug functions.
+        If FILE_REGEXP matches the empty string, include Non-debug functions.
 
-    '''
-    args = ['-symbol-info-functions', '--name', regexp]
-    include_non_debugging = re.search(file_regex, '') is not None
-    if include_non_debugging:
-        args.append('--include-nondebug')
-    result = gdb.execute_mi(*args)
-    assert('symbols' in result)
-    function_syms = result['symbols']
-    debug_syms = function_syms['debug'] if 'debug' in function_syms else []
-    for file_list in debug_syms:
-        yield from (FakeSymbol.from_debugsym_mi(x, file_list['filename'])
-                    for x in file_list['symbols'])
+        '''
+        args = ['-symbol-info-functions', '--name', regexp]
+        include_non_debugging = re.search(file_regex, '') is not None
+        if include_non_debugging:
+            args.append('--include-nondebug')
+        result = gdb.execute_mi(*args)
+        assert('symbols' in result)
+        function_syms = result['symbols']
+        debug_syms = function_syms['debug'] if 'debug' in function_syms else []
+        for file_list in debug_syms:
+            yield from (FakeSymbol.from_debugsym_mi(x, file_list['filename'])
+                        for x in file_list['symbols'])
 
-    if include_non_debugging and 'nondebug' in function_syms:
-        yield from (
-                FakeSymbol.from_valueint(s['name'], int(s['address'], 16))
-                for s in function_syms['nondebug'])
+        if include_non_debugging and 'nondebug' in function_syms:
+            yield from (
+                    FakeSymbol.from_valueint(s['name'], int(s['address'], 16))
+                    for s in function_syms['nondebug'])
+else:
+    import functools
+    import string
+    import itertools as itt
+    def file_symbols(filename, regexp):
+        '''Iterate over all symbols defined in a file.'''
+        if not filename:
+            return
+
+        try:
+            unparsed, sal_options = gdb.decode_line("'{}':1".format(filename))
+        except gdb.error as e:
+            # n.b. This is very brittle -- nothing in gdb specifies these error
+            # strings, so they could easily change.
+            # Until I find a better way, I'm simply adding each exception I
+            # come across that I know is fine to ignore.
+            # The only real way to get this is to add search_symbols as a
+            # function into the gdb python interface.
+            if e.args[0].startswith('No line 1 in file "'):
+                return
+            if e.args[0].startswith('No source file named '):
+                return
+            raise
+
+        if unparsed:
+            raise ValueError('Failed to parse {} as filename'.format(filename))
+        # TODO Check source code and see if this is always the case.
+        # NOTE: When there are more than one symbol and file options given from
+        # the same source file, they all have the same set of symbol names.
+        #   (as far as I can tell -- haven't yet looked at the gdb source).
+        # Hence ignore any extra ones.
+        sal = sal_options[0]
+        for block in (sal.symtab.global_block(), sal.symtab.static_block()):
+            yield from (sym for sym in block
+                        if sym.is_function and re.match(regexp, sym.name))
+
+    def get_sources_from_output(cmd_output):
+        # CombinatorRet is a monad, with `return` being `parser_return` and
+        # `bind` being `parser_bind`.
+        CombinatorRet = collections.namedtuple('CombinatorRet', \
+                ['success', 'value', 'remaining'])
+        # Format is:
+        #   ENTRY -> OBJFILE_NAME OBJFILE_INFO
+        #   OBJFILE_NAME -> FILENAME ":" NL
+        #   OBJFILE_INFO -> DEBUG_INFO | NONDEBUG_INFO
+        #   NONDEBUG_INFO -> NONDEBUG_ALERT NL
+        #   NONDEBUG_ALERT -> "(Objfile has no debug information.)" NL
+        #   DEBUG_INFO -> [ NOTYET_READ ] NL FILELIST NL
+        #   NOTYET_READ -> "(Full debug information has not yet been read for this file.)" NL
+        #   FILELIST -> FILENAME ( ", " FILENAME)*
+        #
+        # Data type of wrapped information only matters in two places (and it
+        # is asserted in both of these places):
+        #   1) When parsing OBJFILE_NAME (when it must be a dictionary).
+        #   2) When parsing FILELIST (when it must be a tuple of filename and
+        #      dictionary).
+        # In order to have a bit more of a stable definition, data type of
+        # wrapped information is ensured of correct type at two places:
+        #   1) At end of parsing OBJFILE_INFO.
+        #   2) At end of parsing OBJFILE_NAME.
+        objfile_str = '(Objfile has no debug information.)'
+        notyet_read_str = '(Full debug information has not yet been read for this file.)'
+        # Return value is dictionary of object filenames to source filenames.
+        def parser_return(old_value):
+            return CombinatorRet(success=False, value=old_value.value,
+                                 remaining=old_value.remaining)
+        def parser_bind(prev_result, next_parser):
+            if not prev_result.success:
+                return prev_result
+            return next_parser(prev_result)
+
+        def zero_or_one(parser):
+            def retfunc(old_value):
+                attempt = parser(old_value)
+                if not attempt.success:
+                    return old_value
+                return attempt
+            return retfunc
+        def one_or_more(parser):
+            def retfunc(old_value):
+                attempt = parser(old_value)
+                if not attempt.success:
+                    return attempt
+                while attempt.success:
+                    old_value = attempt
+                    attempt = parser(old_value)
+                return old_value
+            return retfunc
+
+        def parse_object_name(prev_value):
+            assert(type(prev_value.value) == dict)
+            first_line, _, remaining = prev_value.remaining.partition('\n')
+            if first_line.endswith(':'):
+                filename = first_line[:-1]
+                assert (filename not in prev_value.value)
+                prev_value.value[filename] = []
+                logger.debug(f'parse_object_name saw filename {filename}')
+                return CombinatorRet(True, (filename, prev_value.value), remaining)
+            return parser_return(prev_value)
+
+        def parse_known_string(text_to_match, logmsg):
+            def retfunc(prev_value):
+                cur, _, remaining = prev_value.remaining.partition('\n')
+                if cur == text_to_match:
+                    logger.debug('saw ' + logmsg)
+                    return CombinatorRet(True, prev_value.value, remaining)
+                return parser_return(prev_value)
+            return retfunc
+        parse_blank_line = parse_known_string('', 'blank line')
+        parse_nondebug_alert = parse_known_string(
+                objfile_str, 'file no debug info')
+        parse_notyet_read = parse_known_string(
+                notyet_read_str, 'partial debug info')
+
+        def parse_filelist(prev_value):
+            assert (type(prev_value.value) == tuple)
+            assert (type(prev_value.value[0]) == str)
+            assert (type(prev_value.value[1]) == dict)
+            cur, _, next_remaining = prev_value.remaining.partition('\n')
+            source_files = []
+            while cur and cur[-1] != ':' and \
+                    cur not in (objfile_str, notyet_read_str):
+                remaining = next_remaining
+                source_files.extend(cur.split(', '))
+                cur, _, next_remaining = remaining.partition('\n')
+            logger.debug(f'In parse_filelist parsed {repr(source_files)}')
+            if source_files:
+                prev_value.value[1][prev_value.value[0]] = source_files
+                return CombinatorRet(True, prev_value.value[1], remaining)
+            return parser_return(prev_value)
+
+        def parser_combine(eachfunc, *args):
+            def retfunc(prev_value):
+                eachfunc(prev_value)
+                return functools.reduce(parser_bind, args, prev_value)
+            return retfunc
+        parse_debuginfo_entry = parser_combine(
+                lambda x: x,
+                zero_or_one(parse_notyet_read),
+                parse_blank_line,
+                parse_filelist,
+                parse_blank_line)
+        def parse_nondebug_entry(prev_value):
+            ret = parser_combine(
+                lambda x: x,
+                parse_nondebug_alert,
+                parse_blank_line)(prev_value)
+            if ret.success:
+                return CombinatorRet(True, ret.value[1], ret.remaining)
+            return ret
+        def parse_blank_entry(prev_value):
+            ret = parse_blank_line(prev_value)
+            if ret.success:
+                return CombinatorRet(True, ret.value[1], ret.remaining)
+            return ret
+
+        def or_combine(eachfunc, *args):
+            if not args:
+                return lambda x: x
+            def retfunc(prev_value):
+                for parser in args:
+                    next_value = parser_bind(prev_value, parser)
+                    if next_value.success:
+                        return next_value
+                return prev_value
+            return retfunc
+        parse_objfile_info = or_combine(
+                lambda x: logger.debug(f'parse_objfile_info: {repr(x)}'),
+                parse_debuginfo_entry,
+                parse_nondebug_entry,
+                parse_blank_entry)
+
+        parse_entry = parser_combine(
+                lambda x: logger.debug(f'parse_entry: {repr(x)}'),
+                parse_object_name,
+                parse_objfile_info)
+
+        parse_output = one_or_more(parse_entry)
+
+        def parse_sources_output(text):
+            initial = CombinatorRet(True, {}, text)
+            result = parse_output(initial)
+            logger.debug(f'Returning from parse_sources_output {repr(result)}')
+            if any(x not in string.whitespace for x in result.remaining):
+                logger.debug(f'parse_sources_output remaining text: {result.remaining}')
+                raise RuntimeError('Failed to parse output of `info sources`')
+            return result
+        
+        return parse_sources_output(cmd_output).value
+
+
+    def search_symbol_wrapper(regexp, file_regex, include_dynlibs=False):
+        '''Return symbols matching REGEXP defined in files matching FILE_REGEXP
+
+        If FILE_REGEXP matches the empty string, include Non-debug functions.
+
+        '''
+        include_non_debugging = re.search(file_regex, '') is not None
+        try:
+            cmd_output = gdb.execute('info sources', False, True)
+        except gdb.error as e:
+            if e.args != ('No symbol table is loaded.  Use the "file" command.',):
+                raise e
+            print('Can not find debug symbols:', e.args)
+        else:
+            parsed_output = get_sources_from_output(cmd_output)
+            for filename in set(x for x in 
+                                itt.chain.from_iterable(parsed_output.values())
+                                if re.search(file_regex, x)):
+                yield from file_symbols(filename, regexp)
+
+        if include_non_debugging:
+            # TODO not really sure whether this is a safe way of making sure we
+            # only get the main program. Read the gdb source and see what's
+            # actually happening.
+            cur_progfile = gdb.current_progspace().filename
+
+            # Don't filter functions directly with regexp because we want to
+            # use python rexexp (to match the filter done above).
+            all_symbols = gdb.execute('info functions', False, True)
+            non_debug_start = all_symbols.find('Non-debugging symbols:')
+            all_non_debugging = all_symbols[non_debug_start:].splitlines()[1:]
+            # Just because it makes me feel better to let python free the big
+            # string -- probably doesn't matter.
+            del all_symbols
+            for line in all_non_debugging:
+                # If ValueError() is raised here, then my assumptions are
+                # incorrect -- I need to know about it.
+                # For example, `info functions` on $(which nvim) gives me the
+                # lines
+                # 0x00007ffff7bbb310  uv(float, long double,...)(...)@plt
+                # 0x00007ffff7bbcd50  uv(float, long double,...)(...)
+                # and others.
+                # I don't know what to do with these, so I ignore them.
+                # TODO Figure out what to do with these.
+                try:
+                    addr, name = line.split()
+                except ValueError as e:
+                    if e.args == ('too many values to unpack (expected 2)',):
+                        continue
+                    raise e
+
+                # Assume users don't care about the indirection functions.
+                if not re.match(regexp, name) or name.endswith('@plt'):
+                    continue
+                logger.debug(f'nondebug symbol search: {name}:{addr}')
+                if not include_dynlibs:
+                    sym_objfile = gdb.execute('info symbol {}'.format(addr),
+                                              False, True).split()[-1]
+                    if sym_objfile != cur_progfile:
+                        continue
+
+                yield FakeSymbol.from_valuestring(name, addr)
+
 
 def get_function_block(addr):
     '''Does gdb.block_for_pc(addr) but raises the same exception if object file
