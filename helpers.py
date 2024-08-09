@@ -208,7 +208,7 @@ if hasattr(gdb, 'execute_mi'):
         if include_non_debugging:
             args.append('--include-nondebug')
         result = gdb.execute_mi(*args)
-        assert('symbols' in result)
+        assert ('symbols' in result)
         function_syms = result['symbols']
         debug_syms = function_syms['debug'] if 'debug' in function_syms else []
         for file_list in debug_syms:
@@ -258,8 +258,8 @@ else:
     def get_sources_from_output(cmd_output):
         # CombinatorRet is a monad, with `return` being `parser_return` and
         # `bind` being `parser_bind`.
-        CombinatorRet = collections.namedtuple('CombinatorRet', \
-                ['success', 'value', 'remaining'])
+        CombinatorRet = collections.namedtuple(
+                'CombinatorRet', ['success', 'value', 'remaining'])
         # Format is:
         #   ENTRY -> OBJFILE_NAME OBJFILE_INFO
         #   OBJFILE_NAME -> FILENAME ":" NL
@@ -309,7 +309,7 @@ else:
             return retfunc
 
         def parse_object_name(prev_value):
-            assert(type(prev_value.value) == dict)
+            assert (isinstance(prev_value.value, dict))
             first_line, _, remaining = prev_value.remaining.partition('\n')
             if first_line.endswith(':'):
                 filename = first_line[:-1]
@@ -334,9 +334,9 @@ else:
                 notyet_read_str, 'partial debug info')
 
         def parse_filelist(prev_value):
-            assert (type(prev_value.value) == tuple)
-            assert (type(prev_value.value[0]) == str)
-            assert (type(prev_value.value[1]) == dict)
+            assert (isinstance(prev_value.value, tuple))
+            assert (isinstance(prev_value.value[0], str))
+            assert (isinstance(prev_value.value[1], dict))
             cur, _, next_remaining = prev_value.remaining.partition('\n')
             source_files = []
             while cur and cur[-1] != ':' and \

@@ -164,8 +164,8 @@ class GccVec(walkers.Walker):
     def __iter_single(self, init_addr):
         first_value = self.eval_command(init_addr, '$cur->m_vec')
         # If this happens need to adjust code to handle such a thing.
-        assert(not first_value.type.dynamic)
-        # assert('vl_embed' in first_value.type)
+        assert (not first_value.type.dynamic)
+        # assert ('vl_embed' in first_value.type)
         # Would like to do the below, but the type has a Null type name in most
         # builds.  Hence can't do it generally and in those cases have to use
         # the type argument.

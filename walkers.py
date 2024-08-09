@@ -205,7 +205,7 @@ def create_walker(walker_def, first=False, last=False):
     '''
     command_split = walker_def.strip().split(None, maxsplit=1)
 
-    assert(1 <= len(command_split) <= 2)
+    assert (1 <= len(command_split) <= 2)
     walker_name = command_split[0]
     args = command_split[1] if len(command_split) == 2 else ''
 

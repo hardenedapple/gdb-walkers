@@ -62,7 +62,7 @@ def non_quote_char():
             if char == '"' and not ret:
                 return no_match_value(line)
             return CombinatorRet(True, ret+char, line[len(ret)+1:])
-        assert(not ret and not line)
+        assert (not ret and not line)
         return no_match_value('')
     return retfunc
 
@@ -415,16 +415,16 @@ def mi_result_record():
     def retfunc(line):
         tmp = starttok(line)
         logger.debug(f'temp: mi_result_record: {repr(tmp)}')
-        assert(tmp.success)
+        assert (tmp.success)
         tmp = res_class(tmp.remaining)
         logger.debug(f'temp: mi_result_record: {repr(tmp)}')
-        assert(tmp.success)
+        assert (tmp.success)
         if tmp.value != 'done':
             raise RuntimeError(f'Failed to run GDB MI command.  Result-Class: {tmp.value}')
         ret = res_parser(tmp.remaining)
         logger.debug(f'mi_result_record: {repr(ret)}')
         tmp = eol(ret.remaining)
-        assert(tmp.success)
+        assert (tmp.success)
         return CombinatorRet(True, ret.value, tmp.remaining)
     return retfunc
 
@@ -528,7 +528,7 @@ def mi_oob_record():
 #    def retfunc(line):
 #        x = oobs(line)
 #        logger.debug(f'mi_result_from_output: {repr(x)}')
-#        assert(x.success)
+#        assert (x.success)
 #        ret = res(x.remaining)
 #        logger.debug(f'mi_result_from_output: {repr(ret)}')
 #        if not ret.success:
@@ -634,10 +634,10 @@ def mi_result_from_output():
 #            logger.debug('Send function query')
 #            returned_data = self.read_one_output()
 #            result = mip.mi_result_from_output()(returned_data)
-#            assert(not result.remaining)
-#            assert(result.success)
-#            assert(len(result.value) == 1)
-#            assert(result.value[0][0] == 'symbols')
+#            assert (not result.remaining)
+#            assert (result.success)
+#            assert (len(result.value) == 1)
+#            assert (result.value[0][0] == 'symbols')
 #            return result.value[0][1]
 #
 #
