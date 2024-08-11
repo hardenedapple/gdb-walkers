@@ -153,6 +153,6 @@ def do_autoimport(progname):
 
 gdb.events.new_objfile.connect(importer)
 
-gdb.execute('source {}/gdb_syntax'.format(walkers.confdir))
 gdb.execute('source {}/commands.py'.format(walkers.confdir))
 gdb.execute('source {}/functions.py'.format(walkers.confdir))
+gdb.execute('source {}/gdb_syntax'.format(walkers.confdir))
