@@ -20,11 +20,7 @@ import sys
 from contextlib import suppress
 import importlib
 import importlib.abc
-
-if os.getenv('TERM') == 'dumb':
-    gdb.execute('set pagination off')
-    gdb.execute('set width 0')
-    gdb.execute('set max-completions 0')
+import pathlib
 
 # A little bit of hacking ...
 # I calculate an important variable in the "global" namespace so I can use
@@ -33,7 +29,7 @@ if os.getenv('TERM') == 'dumb':
 # pollute the "global" namespace.
 # There's a bit of interplay between that module and this file, but it's fine,
 # just think of them as the same package.
-confdir = os.path.expanduser('~/.config/gdb-walkers')
+confdir = str(pathlib.Path(__file__).parent.resolve())
 if confdir not in sys.path:
     sys.path.append(confdir)
 
@@ -156,3 +152,7 @@ def do_autoimport(progname):
 
 
 gdb.events.new_objfile.connect(importer)
+
+gdb.execute('source {}/gdb_syntax'.format(walkers.confdir))
+gdb.execute('source {}/commands.py'.format(walkers.confdir))
+gdb.execute('source {}/functions.py'.format(walkers.confdir))

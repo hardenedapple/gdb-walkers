@@ -1,8 +1,3 @@
-set python print-stack full
-source ~/.config/gdb-walkers/basic_config.py
-source ~/.config/gdb-walkers/commands.py
-source ~/.config/gdb-walkers/functions.py
-
 # gdb puts strings into the inferior when printing them with printf.
 # It does this with malloc(3), and never frees them.
 # https://sourceware.org/ml/gdb/2017-02/msg00046.html
@@ -33,12 +28,21 @@ source ~/.config/gdb-walkers/functions.py
 define whereis
     print-string $_function_of($arg0); " "; $_whereis($arg0); "\n";
 end
+document whereis
+Print function name and source location of argument.
+end
 
 define whereami
     whereis $pc
+end
+document whereis
+Print function name and source location of current position.
 end
 
 define outputnl
   output $arg0
   print-string "\n"
+end
+document whereis
+Print argument as if for `print`, but without putting the result in history.
 end

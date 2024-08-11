@@ -21,14 +21,14 @@ This is usually the last value that has come down the pipeline.
 
 ## Installation
 
-To install, simply clone this repo to `~/.config/gdb/` and put the line
-`source ~/.config/gdb/gdbinit` in your `~/.gdbinit` file.
+To install, clone this repo and put the line
+`source /install/path/gdb_walker_setup.py` in your `~/.gdbinit` file.
 
 ## Examples
 There is a demo walker `tree-elements` walking over all elements in a tree
 structure defined in `demo_structure.py` (the tree structure is defined in
 `tree.c`).
-This can be sourced and tested with `source ~/.config/gdb/demos/tree_walker.py`
+This can be sourced and tested with `source /install/path/demos/tree_walker.py`
 and `gdb-pipe tree-elements tree_root` respectively.
 ```
 (gdb) gdb demos/tree_debug
@@ -73,7 +73,7 @@ To automatically load your walkers when a given object file is loaded in gdb
 put the python source file in the autoimports/ directory under the name
 `<basename-of-program>-gdb.py`.
 To load the walker definitions on startup put `source <your-file>` in
-`~/.gdbinit` after sourcing `~/.config/gdb/gdbinit`.
+`~/.gdbinit` after sourcing `/install/path/gdb_walker_setup.py`.
 Alternatively, you can put `import <pathname>` in a python module that you are
 sourceing yourself.
 
@@ -90,7 +90,7 @@ Use `$count += 3, true` as one expression in `follow-until` (or `eval`, or
 `show` ...) to get useful side-affects.
 This is why it splits on the semi-colon (that, and to emphasise how it's pretty
 much just a for loop).
-NOTE: This does not work when the side-effect is use either side of a walker
+NOTE: This does not work when the side-effect is used either side of a walker
 that buffers its inputs (see the section "NOTES / Warnings" below).
 
 ## Many ways of counting to ten

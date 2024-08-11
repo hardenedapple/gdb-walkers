@@ -682,6 +682,9 @@ class Terminated(walkers.Walker):
     The terminating value is determined by checking if a `test-expression`
     returns true.
 
+    For a walker with a more intuitive syntax to a C programmer, see the
+    `for-loop` walker.
+
     Usage:
         follow-until <start-expr>; <test-expression>; <follow-expression>
 
