@@ -24,6 +24,19 @@ This is usually the last value that has come down the pipeline.
 To install, clone this repo and put the line
 `source /install/path/gdb_walker_setup.py` in your `~/.gdbinit` file.
 
+N.b. if building GDB from source I'd suggest considering (depending on how you
+built and installed it) adding `set data-directory /usr/share/gdb` into your
+`~/.gdbinit` file as well.
+
+AFAIK Most system-wide installs have the value of `show data-directory` as
+`/usr/share/gdb`.  Some packages install debugging helper scripts in this
+directory when installed (e.g. `libstdc++`).  Having `data-directory` point at
+this place means they can be used almost seamlessly.
+Many of the package-distributed helper scripts include `pretty-printers`.  These
+can be used by the walkers of this plugin with
+`gdb-pipe pretty-printer <whatever>`.  This is particularly useful for things
+like libstdc++ containers -- e.g. `gdb-pipe pretty-printer myvector`.
+
 ## Examples
 There is a demo walker `tree-elements` walking over all elements in a tree
 structure defined in `demo_structure.py` (the tree structure is defined in
