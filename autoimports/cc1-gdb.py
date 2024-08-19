@@ -8,6 +8,9 @@ import gdb
 from helpers import as_int, offsetof, eval_uint, uintptr_size, find_type_size
 import walkers
 import walker_defs
+import logging
+logger = logging.getLogger(__name__)
+logger.debug('Loading')
 
 class Passes(walkers.Walker):
     """Walk over all passes and subpasses from an `opt_pass *`.

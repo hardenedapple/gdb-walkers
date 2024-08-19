@@ -8,7 +8,6 @@ import collections
 import logging
 import sys
 logger = logging.getLogger(__name__)
-logging.basicConfig(stream=sys.stdout, level=logging.ERROR)
 
 def file_func_split(regexp):
     '''Split  file_regexp:func_regexp  into its component parts.

@@ -21,6 +21,9 @@ from contextlib import suppress
 import importlib
 import importlib.abc
 import pathlib
+import re
+import logging
+logger = logging.getLogger(__name__)
 
 # A little bit of hacking ...
 # I calculate an important variable in the "global" namespace so I can use
@@ -39,6 +42,16 @@ import walker_defs
 walkers.confdir = confdir
 del confdir
 
+
+def abstract_basename(fullname):
+    # To handle `rr` https://rr-project.org/ having special names.
+    basename = os.path.basename(fullname)
+    if 'rr' in pathlib.PurePath(fullname).parts:
+        basename = re.sub(r'mmap_hardlink_\d+_', '', basename)
+        logger.debug(f'lookup against {basename}')
+    return basename
+
+
 class AutoImportsFinder(importlib.abc.PathEntryFinder):
     '''A Finder for the import protocol.
 
@@ -54,7 +67,8 @@ class AutoImportsFinder(importlib.abc.PathEntryFinder):
     def __get_filename():
         if walkers.objfile_name is None:
             raise ImportError
-        matchname = os.path.basename(walkers.objfile_name) + '-gdb.py'
+        matchname = abstract_basename(walkers.objfile_name) + '-gdb.py'
+        logger.debug(f'Translated to open filename: {matchname}')
         return '{}/autoimports/{}'.format(walkers.confdir, matchname)
 
     def find_spec(self, fullname, target=None):
@@ -117,12 +131,12 @@ def do_autoimport(progname):
     TODO Make this an actual user command rather than a python function.
 
     '''
-
     # Would like to use the gdb.current_objfile() function, but since I can't
     # use autoloading (because I need the entire filename instead of just the
     # basename), I have to manually store the current program file somewhere.
+    logger.debug(f'autoimporting {progname}')
     walkers.objfile_name = progname
-    basename = os.path.basename(progname)
+    basename = abstract_basename(progname)
     # I believe a unique name is required ... in PEP302 it lists the
     # responsibilities of load_module(), which icludes checking for an
     # existing module object in sys.modules
@@ -138,8 +152,8 @@ def do_autoimport(progname):
     # Python process.
     # This isn't to allow anything in particular, but simply because that seems
     # like the most intuitive behaviour when loading an object file twice.
-
     if basename in autoimports.imported:
+        logger.debug(f'{basename} already loaded')
         load_name = autoimports.imported[basename]
     else:
         load_name = 'autoimports.' + str(autoimports.index)
