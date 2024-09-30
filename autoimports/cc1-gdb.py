@@ -3,12 +3,30 @@ Define walkers over GCC data structures.
 
 '''
 
-import itertools as itt
 import gdb
-from helpers import as_int, offsetof, eval_uint, uintptr_size, find_type_size
+from helpers import as_int
 import walkers
 import walker_defs
 import logging
+# N.b. if wanting to use the logging after having loaded and started to use
+# this script in GDB can use the following:
+# vshcmd: > pi
+# vshcmd: > autoimports.__dict__['0'].logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+# >>> >>>
+#
+# Where the number to use when accessing this module could be found by looking
+# for the `cc1*` entry in the output of the below
+# vshcmd: > pi
+# vshcmd: > autoimports.imported
+# >>> {'cc1plus': 'autoimports.0', 'ld-linux-x86-64.so.2': 'autoimports.1', 'system-supplied DSO at 0x6fffd000': 'autoimports.2', 'librrpreload.so': 'autoimports.3', 'libdl.so.2': 'autoimports.4', 'libzstd.so.1': 'autoimports.5', 'libm.so.6': 'autoimports.6', 'libc.so.6': 'autoimports.7'}
+# >>>
+#
+# Once the logging has been initialised pointing at sys.stdout one would then
+# use the below to change the log level.
+# vshcmd: > autoimports.__dict__['0'].logger.setLevel(logging.ERROR)
+#
+# Could certainly make this smoother, but for the moment this is working well
+# enough.
 logger = logging.getLogger(__name__)
 logger.debug('Loading')
 
@@ -145,8 +163,10 @@ class GccVec(walkers.Walker):
     Is equivalent to
         gdb-pipe array (<value-type> *)(<vec>->m_vec + 1); <vec>->m_vec.m_vecpfx.m_num
 
-    N.b. without a debug build the value type will not be automatically
+    N.b. without a debug build the value type may not be automatically
     identified and it would have to be manually specified on the command line.
+
+    N.b. must pass the address to a vector rather than a vector value itself.
 
     Use:
         gdb-pipe gcc-vec <vec>[; <value-type>]
@@ -161,32 +181,48 @@ class GccVec(walkers.Walker):
 
     @classmethod
     def from_userstring(cls, args, first, last):
-        cmd_parts = cls.parse_args(args, [1,2])
+        cmd_parts = cls.parse_args(args, [1, 2])
         return cls(cmd_parts[0], cmd_parts[1] if len(cmd_parts) == 2 else None)
 
     def __iter_single(self, init_addr):
-        first_value = self.eval_command(init_addr, '$cur->m_vec')
+        first_ptr = self.eval_command(init_addr, '$cur')
+        # TODO Maybe references as well.
+        assert (first_ptr.type.code == gdb.TYPE_CODE_PTR)
+        vec_type = first_ptr.type.target()
+        # TODO Using this for the moment.  If this turns out to work in a
+        # different set of situations than the below then should attempt one
+        # and the other if that fails.
+        #       'm_vec' in [field.name for field in vec_type.fields()]
+        is_embed = vec_type.template_argument(2).name == 'vl_embed'
+        logger.debug('Identified vector as {}embedded'.format(
+            '' if is_embed else 'not '))
+        # Embedded vectors have actual data stored directly after this
+        # structure instead of on the heap.
+        vec_str = '$cur' if is_embed else '$cur->m_vec'
+        first_value = self.eval_command(init_addr, vec_str)
+
         # If this happens need to adjust code to handle such a thing.
         assert (not first_value.type.dynamic)
         # assert ('vl_embed' in first_value.type)
         # Would like to do the below, but the type has a Null type name in most
         # builds.  Hence can't do it generally and in those cases have to use
         # the type argument.
-        if first_value.type.name and not self.value_type:
-            value_type = first_value.type.template_argument(0)
-            value_type = value_type.name
+        if first_value.type.target().name and not self.value_type:
+            value_type = first_value.type.target().template_argument(0)
+            value_type = str(value_type)
         elif not self.value_type:
             raise ValueError('GDB does not fully understand type {}'
                              ', please specify value type directly.'.format(
                                  first_value.type))
         else:
             value_type = self.value_type
+        logger.debug('Identified value_type as: {}'.format(value_type))
 
         yield from walker_defs.Array.single_iter(
                 start=self.format_command(
-                    init_addr, '({} *)($cur->m_vec + 1)'.format(value_type)),
+                    init_addr, '({} *)({} + 1)'.format(value_type, vec_str)),
                 count=self.format_command(
-                    init_addr, '$cur->m_vec.m_vecpfx.m_num'))
+                    init_addr, '{}.m_vecpfx.m_num'.format(vec_str)))
 
     def iter_def(self, inpipe):
         yield from self.call_with(inpipe, self.__iter_single, self.start_expr)
