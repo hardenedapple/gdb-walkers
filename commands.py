@@ -9,7 +9,7 @@ The commands defined here are:
 
 '''
 import subprocess as sp
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 import operator
 import re
 import gdb
