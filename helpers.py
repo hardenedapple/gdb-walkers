@@ -6,7 +6,8 @@ import re
 import contextlib
 import collections
 import logging
-import sys
+import itertools as itt
+
 logger = logging.getLogger(__name__)
 
 def file_func_split(regexp):
@@ -153,12 +154,13 @@ class FakeSymbol():
         return cls(name, gdb.Value(value))
 
     @classmethod
-    def from_debugsym_mi(cls, symdict, filename):
+    def debugsym_mi_all(cls, symdict, filename):
         # Ignoring `fullname'.  Don't know of any reason to use it or not in
         # this case.
+        line = "'{}':{}".format(filename, symdict['line'])
+        logger.debug('Decoding: {}'.format(line))
         try:
-            unparsed, sal_options = gdb.decode_line("'{}':{}".format(
-                filename, symdict['line']))
+            unparsed, sal_options = gdb.decode_line(line)
         except gdb.error as e:
             # n.b. This seems like it's brittle -- nothing in gdb specifies
             # these error strings, so they could easily change.
@@ -173,15 +175,8 @@ class FakeSymbol():
             raise
         if unparsed:
             raise ValueError('Failed to parse {} as filename'.format(filename))
-        # N.b. I don't know if this is likely or not in the way that I'm using
-        # this function.  However it seems plausible given the API.
-        # TODO I probably should re-work this to iterate over all sources and
-        # find all symbols in those sources (in the same way that I did
-        # before, but using the MI interface for robustness), will try this for
-        # the moment.
-        if len(sal_options) != 1:
-            raise RuntimeError('Multiple locations for given symbol')
-        return cls(symdict['name'], gdb.Value(sal_options[0].pc), filename)
+        for sal in sal_options:
+            yield cls(symdict['name'], gdb.Value(sal.pc), filename)
 
     def value(self):
         return self._value
@@ -211,8 +206,10 @@ if hasattr(gdb, 'execute_mi'):
         function_syms = result['symbols']
         debug_syms = function_syms['debug'] if 'debug' in function_syms else []
         for file_list in debug_syms:
-            yield from (FakeSymbol.from_debugsym_mi(x, file_list['filename'])
-                        for x in file_list['symbols'])
+            yield from itt.chain.from_iterable(
+                    FakeSymbol.debugsym_mi_all(x, file_list['filename'])
+                    for x in file_list['symbols']
+                    if re.match(file_regex, file_list['filename']))
 
         if include_non_debugging and 'nondebug' in function_syms:
             yield from (
@@ -221,7 +218,6 @@ if hasattr(gdb, 'execute_mi'):
 else:
     import functools
     import string
-    import itertools as itt
     def file_symbols(filename, regexp):
         '''Iterate over all symbols defined in a file.'''
         if not filename:

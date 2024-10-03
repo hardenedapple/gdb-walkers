@@ -24,6 +24,7 @@ import pathlib
 import re
 import logging
 logger = logging.getLogger(__name__)
+logging.basicConfig(stream=sys.stdout, level=logging.ERROR)
 
 # A little bit of hacking ...
 # I calculate an important variable in the "global" namespace so I can use
