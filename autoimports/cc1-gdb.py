@@ -172,8 +172,8 @@ class GccVec(walkers.Walker):
         gdb-pipe gcc-vec <vec>[; <value-type>]
 
     '''
-    # TODO Would be really nice to automatically understand the type of the
-    # vector.  Should be able to do that in `__iter_single`.
+    # TODO Would be really nice to handle `auto_vec` as well.
+    # Should be something like the current 
     name = "gcc-vec"
     def __init__(self, start_expr, value_type):
         self.start_expr = start_expr
@@ -193,7 +193,8 @@ class GccVec(walkers.Walker):
         # different set of situations than the below then should attempt one
         # and the other if that fails.
         #       'm_vec' in [field.name for field in vec_type.fields()]
-        is_embed = vec_type.template_argument(2).name == 'vl_embed'
+        is_embed = (False if vec_type.name.startswith('auto_vec') else
+                    vec_type.template_argument(2).name == 'vl_embed')
         logger.debug('Identified vector as {}embedded'.format(
             '' if is_embed else 'not '))
         # Embedded vectors have actual data stored directly after this
